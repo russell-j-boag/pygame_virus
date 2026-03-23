@@ -24,39 +24,38 @@ from datetime import datetime
 run_ts = int(time.time())   # unix format
 run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 
-
 # -----------------------------
 # Block definitions
 # -----------------------------
 BLOCKS = [
     # dict(
     #     name="TRAINING",
-    #     N_TRIALS=2,
-    #     AUTOMATION_ON=False,
-    #     AID_ACCURACY=0.90,
-    #     STAIRCASE_ON=True,
-    #     TARGET_ACC=0.80,
-    #     FIXED_DELTA_ON=False,
+    #     N_TRIALS=1,
+    #     AUTOMATION_ON=False,      # automation off
+    #     AID_ACCURACY=0.90,        # not used (automation off), but harmless
+    #     STAIRCASE_ON=True,        # staircase on
+    #     TARGET_ACC=0.80,          # target accuracy for adaptive staircase
+    #     FIXED_DELTA_ON=False,     # fixed delta off because using staircase
     #     FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
     #     TRIAL_FEEDBACK_ON=True,
     # ),
     dict(
         name="CALIBRATION",
-        N_TRIALS=200,
-        AUTOMATION_ON=False,
-        AID_ACCURACY=0.90,
-        STAIRCASE_ON=True,
-        TARGET_ACC=0.80,
-        FIXED_DELTA_ON=False,
+        N_TRIALS=300,
+        AUTOMATION_ON=False,      # automation off
+        AID_ACCURACY=0.90,        # not used (automation off), but harmless
+        STAIRCASE_ON=True,        # staircase on
+        TARGET_ACC=0.80,          # target accuracy for adaptive staircase
+        FIXED_DELTA_ON=False,     # fixed delta off because using staircase
         FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
         TRIAL_FEEDBACK_ON=True,
     ),
     dict(
         name="MANUAL",
-        N_TRIALS=200,
-        AUTOMATION_ON=False,
+        N_TRIALS=500,
+        AUTOMATION_ON=False,      # automation off
         AID_ACCURACY=0.90,        # not used (automation off), but harmless
-        STAIRCASE_ON=False,
+        STAIRCASE_ON=False,       # staircase off
         TARGET_ACC=0.80,          # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
@@ -65,10 +64,10 @@ BLOCKS = [
     ),
     dict(
         name="AUTOMATION1",
-        N_TRIALS=2,
-        AUTOMATION_ON=True,
+        N_TRIALS=500,
+        AUTOMATION_ON=True,       # automation on
         AID_ACCURACY=0.95,        # high reliability block
-        STAIRCASE_ON=False,
+        STAIRCASE_ON=False,       # staircase off
         TARGET_ACC=0.80,          # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
@@ -76,10 +75,10 @@ BLOCKS = [
     ),
     dict(
         name="AUTOMATION2",
-        N_TRIALS=2,
-        AUTOMATION_ON=True,
+        N_TRIALS=500,
+        AUTOMATION_ON=True,       # automation on
         AID_ACCURACY=0.65,        # low reliability block
-        STAIRCASE_ON=False,
+        STAIRCASE_ON=False,       # staircase off
         TARGET_ACC=0.80,          # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
@@ -219,6 +218,7 @@ BG_INSTRUCTIONS = (40, 40, 40)    # darker instruction screen
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 LIGHT_GREY = (170, 170, 170)
+DARK_GREY = (60, 60, 60)
 FIX_COLOR = LIGHT_GREY      # fixation cross colour
 
 # V-BLACK cell colour
@@ -248,9 +248,14 @@ DELTA_INIT = 0.20            # starting distance from 0.5 (e.g., 0.20 -> 0.30/0.
 DELTA_SD   = 0.01            # sampling SD for trial-wise delta in staircase mode
 DELTA_MIN  = 1/N_DOTS        # hardest allowed (closest to 0.5)
 DELTA_MAX  = 0.25            # easiest allowed
-DELTA_STEP_DOWN = 0.02       # starting (large) down-step
+DELTA_STEP_DOWN = 0.01       # starting (large) down-step
 DELTA_STEP_DOWN_MIN = 0.001  # target min down-step by trial 50
+# Burn-in period with annealing
 BURNIN_TRIALS = 50           # reach DELTA_STEP_DOWN_MIN at trial 50 (inclusive)
+# Calibration summary window
+# None = use all eligible trials after burn-in exclusion
+# int  = use only the most recent N eligible trials after burn-in exclusion
+CALIB_SUMMARY_LAST_N = 150
 
 # -----------------------------
 # Fixed-delta mode (works for automation and manual blocks)
@@ -695,7 +700,7 @@ def run_postblock_questionnaire(
             "participant_id": participant_id,
             "block": block_name,
             "block_idx": block_idx,
-            "question_index": idx,
+            "question_idx": idx,
             "question": item["question"],
             "left_anchor": item["left_anchor"],
             "right_anchor": item["right_anchor"],
@@ -1304,7 +1309,7 @@ def run_postblock_slider_questions(
             "run_timestamp": run_ts,
             "block": block_name,
             "block_idx": block_idx,
-            "question_index": i,
+            "question_idx": i,
             "question_key": it["key"],
             "question": it["question"],
             "response_percent": int(resp),
@@ -2092,10 +2097,10 @@ def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name: str, ke
     screen.blit(rb_img, (right_x + (right_w - rb_img.get_width()) // 2, y_bottom))
 
 
-def make_aid_recommendation(true_label, accuracy):
+def make_aid_recommendation(stimulus, accuracy):
     if random.random() < accuracy:
-        return true_label, True
-    other = "WHITE" if true_label == "BLACK" else "BLACK"
+        return stimulus, True
+    other = "WHITE" if stimulus == "BLACK" else "BLACK"
     return other, False
 
 
@@ -2117,7 +2122,7 @@ def draw_aid_recommendation_top_center(
     # Line 2: only if allowed
     if show_value:
         phrase = f"{rec_label}"
-        col = COLOR_TOKENS_AID.get(rec_label, WHITE)
+        col = WHITE if rec_label == "#####" else COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
         screen.blit(
             img_main,
@@ -2410,16 +2415,16 @@ def main():
                 vblack_prop = pick_vblack_prop_from_delta(delta_realised_this_trial)
 
             dots, n_vblack, n_vwhite = make_trial_dots(N_DOTS, vblack_prop, center, DISH_RADIUS)
-            true_label = "BLACK" if n_vblack > n_vwhite else "WHITE"
+            stimulus = "BLACK" if n_vblack > n_vwhite else "WHITE"
 
             if AUTOMATION_ON:
-                aid_label, aid_correct = make_aid_recommendation(true_label, accuracy=AID_ACCURACY)
+                aid_label, aid_correct = make_aid_recommendation(stimulus, accuracy=AID_ACCURACY)
             else:
                 aid_label = None
                 aid_correct = None
 
             responded = False
-            resp_label = None
+            response = None
             rt_ms = None
 
             stim_onset_perf = None
@@ -2479,17 +2484,17 @@ def main():
                             quit_clean()
                         if ev.key == KEY_BLACK:
                             responded = True
-                            resp_label = "BLACK"
+                            response = "BLACK"
                             resp_perf = time.perf_counter()
                         elif ev.key == KEY_WHITE:
                             responded = True
-                            resp_label = "WHITE"
+                            response = "WHITE"
                             resp_perf = time.perf_counter()
 
 
                 if TRIAL_DEADLINE_MS is not None and (now - trial_start_ticks) >= TRIAL_DEADLINE_MS:
                     responded = True
-                    resp_label = "TIMEOUT"
+                    response = "TIMEOUT"
                     rt_ms = None
 
                 update_dots(dots, center, DISH_RADIUS)
@@ -2565,12 +2570,12 @@ def main():
             else:
                 aid_onset_ms_rel = None
 
-            correct = (resp_label == true_label)
+            correct = (response == stimulus)
 
             # Feedback (per-block)
             fb_msg = None
             if TRIAL_FEEDBACK_ON:
-                if resp_label == "TIMEOUT":
+                if response == "TIMEOUT":
                     fb_msg = "TOO SLOW"
                     fb_col = FEEDBACK_SLOW_COLOR
                 elif correct:
@@ -2605,7 +2610,7 @@ def main():
                 )
                 step_up_now = step_down_now * (TARGET_ACC / (1.0 - TARGET_ACC))
 
-                is_correct = (resp_label == true_label)
+                is_correct = (response == stimulus)
                 if is_correct:
                     delta_mean = max(DELTA_MIN, delta_mean - step_down_now)
                 else:
@@ -2640,15 +2645,16 @@ def main():
                 "auto_on": 1 if AUTOMATION_ON else 0,
                 "aid_accuracy_setting": AID_ACCURACY if AUTOMATION_ON else None,
 
-                "true_label": true_label,
+                "stimulus": stimulus,
                 "aid_label": aid_label,
                 "aid_correct": aid_correct,
                 "aid_onset_ms": AID_ONSET_MS,
                 "aid_onset_ms_rel": aid_onset_ms_rel,
 
-                "resp_label": resp_label,
-                "correct": correct if resp_label in ("BLACK", "WHITE") else None,
+                "response": response,
+                "correct": correct if response in ("BLACK", "WHITE") else None,
                 "feedback": fb_msg if TRIAL_FEEDBACK_ON else None,
+                "rt_s": (rt_ms / 1000.0) if rt_ms is not None else None,
                 "rt_ms": rt_ms,
             }
 
@@ -2700,10 +2706,20 @@ def main():
                 f"delta_p{participant_id:03d}_{run_ts}_b{b_idx:02d}_{block_name}.csv"
             )
 
-            # --- EXCLUDE burn-in trials from summary stats ---
+            # --- Step 1: apply burn-in exclusion (if any) ---
             burn = int(BURNIN_TRIALS) if BURNIN_TRIALS is not None else 0
-            deltas_summary = deltas_realised[burn:] if burn > 0 else deltas_realised
+            deltas_post_burnin = deltas_realised[burn:] if burn > 0 else deltas_realised[:]
 
+            # --- Step 2: optionally keep only the most recent N eligible trials ---
+            if CALIB_SUMMARY_LAST_N is None:
+                deltas_summary = deltas_post_burnin
+                summary_last_n_used = None
+            else:
+                n_last = max(1, int(CALIB_SUMMARY_LAST_N))
+                deltas_summary = deltas_post_burnin[-n_last:]
+                summary_last_n_used = n_last
+
+            # --- Summary stats ---
             if deltas_summary:
                 m = sum(deltas_summary) / len(deltas_summary)
                 if len(deltas_summary) > 1:
@@ -2722,6 +2738,9 @@ def main():
 
                 "n_trials_total": len(deltas_realised),
                 "burnin_trials_excluded": burn,
+                "n_trials_post_burnin": len(deltas_post_burnin),
+
+                "summary_last_n_setting": summary_last_n_used,
                 "n_trials_summarised": len(deltas_summary),
 
                 "delta_init": DELTA_INIT,
@@ -2731,7 +2750,7 @@ def main():
                 "delta_min": DELTA_MIN,
                 "delta_max": DELTA_MAX,
 
-                # summary stats (post burn-in only)
+                # summary stats used by later blocks
                 "delta_block_mean": m,
                 "delta_block_sd": sd,
 
@@ -2743,7 +2762,10 @@ def main():
                 writer.writeheader()
                 writer.writerow(row)
 
-            print(f"[{block_name}] Staircase delta summary saved to: {delta_out_path}")
+            print(
+                f"[{block_name}] Staircase delta summary saved to: {delta_out_path} "
+                f"(post-burnin n={len(deltas_post_burnin)}, summarised n={len(deltas_summary)})"
+            )
 
             # If this was the CALIBRATION block, cache its delta distribution for later blocks
             if block_name == "CALIBRATION":
@@ -2754,7 +2776,7 @@ def main():
         # End-of-block feedback screen
         # Treat TIMEOUT as incorrect (a miss)
         n_trials_total = len(block_results)
-        n_correct = sum(1 for r in block_results if r["resp_label"] in ("BLACK", "WHITE") and r["correct"] is True)
+        n_correct = sum(1 for r in block_results if r["response"] in ("BLACK", "WHITE") and r["correct"] is True)
         acc = (n_correct / n_trials_total) if n_trials_total > 0 else 0.0
 
         aid_vals = [r["aid_correct"] for r in block_results if r.get("aid_correct") is not None]

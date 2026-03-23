@@ -4,6 +4,7 @@ library("dplyr")
 library("ggplot2")
 library("broom")
 library("zoo")
+library("readr")
 
 files <- list.files(
   "output",
@@ -20,7 +21,7 @@ str(dat)
 
 # Keep only calibration staircase trials
 cal <- dat %>%
-  filter(block == "CALIBRATION", difficulty_mode == "staircase") %>%
+  filter(block == "CALIBRATION") %>%
   arrange(global_trial) %>%
   mutate(
     correct_num = as.integer(correct),
@@ -29,7 +30,7 @@ cal <- dat %>%
   )
 
 # Define burn-in period
-burn_in <- floor(0.50 * nrow(cal))
+burn_in <- floor(2/3 * nrow(cal))
 cal_post <- cal %>%
   filter(stair_trial > burn_in)
 
@@ -121,7 +122,7 @@ binom.test(
 )$conf.int
 
 # Example write-up:
-# After excluding the first 50% of calibration trials as burn-in, 
+# After excluding the first 2/3 of calibration trials as burn-in, 
 # we tested whether the staircase had stabilized. A linear model 
 # showed no reliable remaining trend in staircase difficulty over 
 # trial number. A logistic regression likewise showed no remaining 

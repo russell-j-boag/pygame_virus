@@ -1,5 +1,7 @@
+# Clear workspace
 rm(list = ls())
 
+# Load libraries
 library("dplyr")
 library("readr")
 library("stringr")
@@ -7,6 +9,7 @@ library("tidyverse")
 library("zoo")
 library("patchwork")
 
+# Load latest complete results file
 files <- list.files(
   "output",
   pattern = "^results_.*_b00_ALL\\.csv$",
@@ -16,14 +19,17 @@ files <- list.files(
 latest_file <- files[which.max(file.info(files)$mtime)]
 print(latest_file)
 
+# Inspect data
 dat <- read_csv(latest_file)
 head(dat)
 str(dat)
 
-WINDOW <- 25
-burn_in_trials <- 50
-target_acc <- 0.80
-
+# Calibration settings
+WINDOW <- 25                 # sliding accuracy window size
+TARGET_ACC <- 0.80           # target accuracy in calibration block
+BURN_IN_TRIALS <- 50         # burn-in period in calibration block
+CALIB_SUMMARY_LAST_N = 150   # last N trials used in calibration block
+DELTA_SD <- 0.01             # delta SD used in calibration block
 
 # Calibration block -------------------------------------------------------
 
@@ -43,44 +49,54 @@ dat_calib <- dat %>%
     )
   )
 
-# burn-in–excluded data for summaries
+# burn-in–excluded data
 dat_calib_post <- dat_calib %>%
-  filter(trial > burn_in_trials)
+  filter(trial > BURN_IN_TRIALS)
 
-t(dat_calib_post %>%
-       summarise(
-         mean_delta_stair_mean  = mean(delta_stair_mean,  na.rm=TRUE),
-         sd_delta_stair_mean    = sd(delta_stair_mean,    na.rm=TRUE),
-         mean_delta_stair_realised = mean(delta_stair_realised, na.rm=TRUE),
-         sd_delta_stair_realised   = sd(delta_stair_realised,   na.rm=TRUE),
-         mean_realised    = mean(abs(0.5 - vblack_prop), na.rm=TRUE),
-         sd_realised      = sd(abs(0.5 - vblack_prop),   na.rm=TRUE)
-       ))
+# use only the last N post-burn-in trials for calibration summary
+n_last <- min(CALIB_SUMMARY_LAST_N, nrow(dat_calib_post))
 
+dat_calib_lastN <- dat_calib_post %>%
+  slice_tail(n = n_last)
 
-# global observed accuracy (post burn-in)
-acc_global <- mean(dat_calib_post$correct_num, na.rm = TRUE)
+t(dat_calib_lastN %>%
+    summarise(
+      mean_delta_stair_mean       = mean(delta_stair_mean,      na.rm = TRUE),
+      sd_delta_stair_mean         = sd(delta_stair_mean,        na.rm = TRUE),
+      mean_delta_stair_realised   = mean(delta_stair_realised,  na.rm = TRUE),
+      sd_delta_stair_realised     = sd(delta_stair_realised,    na.rm = TRUE),
+      mean_realised               = mean(abs(0.5 - vblack_prop), na.rm = TRUE),
+      sd_realised                 = sd(abs(0.5 - vblack_prop),   na.rm = TRUE)
+      )
+  )
 
-# across-trial mean and sd of delta_stair_realised (post burn-in)
-delta_mean_global <- mean(dat_calib_post$delta_stair_realised, na.rm = TRUE)
-delta_sd_global   <- sd(dat_calib_post$delta_stair_realised, na.rm = TRUE)
+# calibration accuracy based on all post burn-in trials
+acc_mean_postburn <- mean(dat_calib_post$correct_num, na.rm = TRUE)
 
+# calibration accuracy based on based on last N post-burn-in trials
+acc_mean_lastN <- mean(dat_calib_lastN$correct_num, na.rm = TRUE)
 
-SD_FIXED <- 0.01
+# calibration difficulty summary based on last N post-burn-in trials
+delta_mean_global <- mean(dat_calib_lastN$delta_stair_realised, na.rm = TRUE)
+delta_sd_global   <- sd(dat_calib_lastN$delta_stair_realised,   na.rm = TRUE)
+
+# first trial included in the last-N summary window
+lastN_start_trial <- min(dat_calib_lastN$trial, na.rm = TRUE)
 
 p_delta <- ggplot(dat_calib, aes(x = trial)) +
+  # RED ribbon: burn-in region
   geom_ribbon(
-    data = dat_calib %>% filter(trial <= burn_in_trials),
+    data = dat_calib %>% filter(trial <= BURN_IN_TRIALS),
     aes(
       ymin = 0,
-      ymax = ceiling(max(delta_stair_mean + SD_FIXED, na.rm = TRUE) * 100) / 100
+      ymax = ceiling(max(delta_stair_mean + DELTA_SD, na.rm = TRUE) * 100) / 100
     ),
     fill  = "red",
     alpha = 0.15
   ) +
-  # ORANGE ribbon: starts after burn-in
+  # ORANGE ribbon: only over the last-N summary window
   geom_ribbon(
-    data = dat_calib %>% filter(trial > burn_in_trials),
+    data = dat_calib %>% filter(trial >= lastN_start_trial),
     aes(
       ymin = delta_mean_global - delta_sd_global,
       ymax = delta_mean_global + delta_sd_global
@@ -91,43 +107,61 @@ p_delta <- ggplot(dat_calib, aes(x = trial)) +
   # PURPLE ribbon: full trial range
   geom_ribbon(
     aes(
-      ymin = delta_stair_mean - SD_FIXED,
-      ymax = delta_stair_mean + SD_FIXED
+      ymin = delta_stair_mean - DELTA_SD,
+      ymax = delta_stair_mean + DELTA_SD
     ),
     fill  = "purple",
     alpha = 0.2
   ) +
-  geom_point(aes(y = delta_stair_realised),
-             colour = "orange", size = 1, alpha = 1) +
-  geom_hline(yintercept = delta_mean_global,
-             linetype = "dashed",
-             colour = "orange",
-             alpha = 1) +
-  # geom_vline(xintercept = burn_in_trials,
-  #            linetype = 1,
-  #            colour = "red",
-  #            alpha = 0.5) +
-  geom_line(aes(y = delta_stair_mean),
-            colour = "purple", linewidth = 0.75) +
+  geom_point(
+    aes(y = delta_stair_realised),
+    colour = "orange", size = 1, alpha = 1
+  ) +
+  # dashed mean line only over last-N summary window
+  annotate(
+    "segment",
+    x        = lastN_start_trial,
+    xend     = max(dat_calib$trial, na.rm = TRUE),
+    y        = delta_mean_global,
+    yend     = delta_mean_global,
+    linetype = "dashed",
+    colour   = "orange",
+    alpha    = 1
+  ) +
+  geom_line(
+    aes(y = delta_stair_mean),
+    colour = "purple", linewidth = 0.75
+  ) +
   scale_y_continuous(
     breaks = seq(
       0,
       ceiling(max(dat_calib$delta_stair_realised, na.rm = TRUE) * 100) / 100,
       by = 0.02
     ),
-    limits = c(0, ceiling(max(dat_calib$delta_stair_mean + SD_FIXED, na.rm = TRUE) * 100) / 100)
+    limits = c(
+      0,
+      ceiling(max(dat_calib$delta_stair_mean + DELTA_SD, na.rm = TRUE) * 100) / 100
+    )
   ) +
   labs(
     x = NULL,
     y = "Delta"
   ) +
   theme_classic() +
-  ggtitle("Calibration block", subtitle = "Staircase-adjusted difficulty (dot prop. difference from 0.50)")
+  ggtitle(
+    "Calibration block",
+    subtitle = paste0(
+      "Staircase-adjusted difficulty (dot prop. difference from 0.50)\n",
+      "Summary uses last ", nrow(dat_calib_lastN), " post-burn-in calibration trials"
+    )
+  )
+
+p_delta
 
 
 p_acc <- ggplot(dat_calib, aes(x = trial)) +
   geom_ribbon(
-    data = dat_calib %>% filter(trial <= burn_in_trials),
+    data = dat_calib %>% filter(trial <= BURN_IN_TRIALS),
     aes(
       ymin = 0,
       ymax = 1
@@ -148,10 +182,10 @@ p_acc <- ggplot(dat_calib, aes(x = trial)) +
   #           size = 0.5, colour = "black", alpha = 0.5, linetype = 1) +
   geom_line(aes(y = acc_running),
             linewidth = 0.75, colour = "orange", alpha = 1, linetype = 1) +
-  # geom_vline(xintercept = burn_in_trials, linetype = 1, colour = "red", alpha = 0.5) +
-  geom_hline(yintercept = target_acc, linetype = 2, colour = "purple") +
+  # geom_vline(xintercept = BURN_IN_TRIALS, linetype = 1, colour = "red", alpha = 0.5) +
+  geom_hline(yintercept = TARGET_ACC, linetype = 2, colour = "purple") +
   geom_hline(
-    yintercept = acc_global,
+    yintercept = acc_mean_lastN,
     linetype   = 1,
     linewidth  = 0.5,
     colour     = "orange",
@@ -166,7 +200,7 @@ p_acc <- ggplot(dat_calib, aes(x = trial)) +
     vjust  = -5.0,
     size   = 3.5,
     colour = "black",
-    label  = sprintf("Target acc = %.2f", target_acc)
+    label  = sprintf("Target acc = %.2f", TARGET_ACC)
   ) +
   # annotation: observed global accuracy
   annotate(
@@ -177,7 +211,7 @@ p_acc <- ggplot(dat_calib, aes(x = trial)) +
     vjust  = -3.0,
     size   = 3.5,
     colour = "black",
-    label  = sprintf("Observed acc = %.2f", acc_global)
+    label  = sprintf("Observed acc = %.2f", acc_mean_postburn)
   ) +
   scale_y_continuous(
     limits = c(0, 1),
@@ -232,7 +266,7 @@ dat_manual <- dat %>%
     )
   )
 
-acc_global <- mean(dat_manual$correct_num, na.rm = TRUE)
+acc_mean_global <- mean(dat_manual$correct_num, na.rm = TRUE)
 
 delta_mean_global <- dat_manual$delta_fixed_mean[1]
 delta_sd_global   <- dat_manual$delta_fixed_sd[1]
@@ -259,14 +293,16 @@ p_delta <- ggplot(dat_manual, aes(x = trial)) +
       ceiling(max(dat_calib$delta_stair_realised, na.rm = TRUE) * 100) / 100,
       by = 0.02
     ),
-    limits = c(0, ceiling(max(dat_calib$delta_stair_mean + SD_FIXED, na.rm = TRUE) * 100) / 100)
+    limits = c(0, ceiling(max(dat_calib$delta_stair_mean + DELTA_SD, na.rm = TRUE) * 100) / 100)
   ) +
   labs(
     x = NULL,
     y = "Delta"
   ) +
   theme_classic() +
-  ggtitle("Manual block", subtitle = "Difficulty sampled from calibration-block mean and sd")
+  ggtitle("Manual block", 
+          subtitle = paste0("Difficulty sampled from calibration mean and sd\n",
+                            "Summary uses last ", nrow(dat_calib_lastN), " post-burn-in calibration trials"))
 
 
 p_acc <- ggplot(dat_manual, aes(x = trial)) +
@@ -283,9 +319,9 @@ p_acc <- ggplot(dat_manual, aes(x = trial)) +
   #           size = 0.5, colour = "black", alpha = 0.5, linetype = 1) +
   geom_line(aes(y = acc_running),
             linewidth = 0.75, colour = "orange", alpha = 1, linetype = 1) +
-  geom_hline(yintercept = target_acc, linetype = 2, colour = "purple") +
+  geom_hline(yintercept = TARGET_ACC, linetype = 2, colour = "purple") +
   geom_hline(
-    yintercept = acc_global,
+    yintercept = acc_mean_global,
     linetype   = 1,
     linewidth  = 0.5,
     colour     = "orange",
@@ -300,7 +336,7 @@ p_acc <- ggplot(dat_manual, aes(x = trial)) +
     vjust  = -5.0,
     size   = 3.5,
     colour = "black",
-    label  = sprintf("Target acc = %.2f", target_acc)
+    label  = sprintf("Target acc = %.2f", TARGET_ACC)
   ) +
   # annotation: observed global accuracy
   annotate(
@@ -311,7 +347,7 @@ p_acc <- ggplot(dat_manual, aes(x = trial)) +
     vjust  = -3.0,
     size   = 3.5,
     colour = "black",
-    label  = sprintf("Observed acc = %.2f", acc_global)
+    label  = sprintf("Observed acc = %.2f", acc_mean_global)
   ) +
   scale_y_continuous(
     limits = c(0, 1),
@@ -360,12 +396,12 @@ ggsave(
   height   = 9,
   units    = "in"
 )
-# 
+
 # ggsave(
 #   filename = "plots/combined_manual.png",
 #   plot     = p_combo,
-#   width    = 15,
-#   height   = 6,
+#   width    = 16,
+#   height   = 9,
 #   units    = "in"
 # )
 
@@ -388,7 +424,7 @@ dat_auto1 <- dat %>%
     )
   )
 
-acc_global <- mean(dat_auto1$correct_num, na.rm = TRUE)
+acc_mean_global <- mean(dat_auto1$correct_num, na.rm = TRUE)
 
 delta_mean_global <- dat_auto1$delta_fixed_mean[1]
 delta_sd_global   <- dat_auto1$delta_fixed_sd[1]
@@ -418,14 +454,16 @@ p_delta <- ggplot(dat_auto1, aes(x = trial)) +
       ceiling(max(dat_calib$delta_stair_realised, na.rm = TRUE) * 100) / 100,
       by = 0.02
     ),
-    limits = c(0, ceiling(max(dat_calib$delta_stair_mean + SD_FIXED, na.rm = TRUE) * 100) / 100)
+    limits = c(0, ceiling(max(dat_calib$delta_stair_mean + DELTA_SD, na.rm = TRUE) * 100) / 100)
   ) +
   labs(
     x = NULL,
     y = "Delta"
   ) +
   theme_classic() +
-  ggtitle("Automation block (high reliability)", subtitle = "Difficulty sampled from calibration-block mean and sd")
+  ggtitle("Automation block (high reliability)", 
+          subtitle = paste0("Difficulty sampled from calibration mean and sd\n",
+                            "Summary uses last ", nrow(dat_calib_lastN), " post-burn-in calibration trials"))
 
 
 p_acc <- ggplot(dat_auto1, aes(x = trial)) +
@@ -455,13 +493,13 @@ p_acc <- ggplot(dat_auto1, aes(x = trial)) +
   ) +
   # target accuracy
   geom_hline(
-    yintercept = target_acc,
+    yintercept = TARGET_ACC,
     linetype   = 2,
     colour     = "purple"
   ) +
   # observed global accuracy
   geom_hline(
-    yintercept = acc_global,
+    yintercept = acc_mean_global,
     linetype   = 1,
     linewidth  = 0.5,
     colour     = "orange",
@@ -487,7 +525,7 @@ p_acc <- ggplot(dat_auto1, aes(x = trial)) +
     vjust  = -3.0,
     size   = 3.5,
     colour = "black",
-    label  = sprintf("Observed acc = %.2f", acc_global)
+    label  = sprintf("Observed acc = %.2f", acc_mean_global)
   ) +
 
   scale_y_continuous(
@@ -547,7 +585,7 @@ dat_auto2 <- dat %>%
     )
   )
 
-acc_global <- mean(dat_auto2$correct_num, na.rm = TRUE)
+acc_mean_global <- mean(dat_auto2$correct_num, na.rm = TRUE)
 
 delta_mean_global <- dat_auto2$delta_fixed_mean[1]
 delta_sd_global   <- dat_auto2$delta_fixed_sd[1]
@@ -577,14 +615,16 @@ p_delta <- ggplot(dat_auto2, aes(x = trial)) +
       ceiling(max(dat_calib$delta_stair_realised, na.rm = TRUE) * 100) / 100,
       by = 0.02
     ),
-    limits = c(0, ceiling(max(dat_calib$delta_stair_mean + SD_FIXED, na.rm = TRUE) * 100) / 100)
+    limits = c(0, ceiling(max(dat_calib$delta_stair_mean + DELTA_SD, na.rm = TRUE) * 100) / 100)
   ) +
   labs(
     x = NULL,
     y = "Delta"
   ) +
   theme_classic() +
-  ggtitle("Automation block (low reliability)", subtitle = "Difficulty sampled from calibration-block mean and sd")
+  ggtitle("Automation block (low reliability)", 
+          subtitle = paste0("Difficulty sampled from calibration mean and sd\n",
+                            "Summary uses last ", nrow(dat_calib_lastN), " post-burn-in calibration trials"))
 
 
 p_acc <- ggplot(dat_auto2, aes(x = trial)) +
@@ -614,13 +654,13 @@ p_acc <- ggplot(dat_auto2, aes(x = trial)) +
   ) +
   # target accuracy
   geom_hline(
-    yintercept = target_acc,
+    yintercept = TARGET_ACC,
     linetype   = 2,
     colour     = "purple"
   ) +
   # observed global accuracy
   geom_hline(
-    yintercept = acc_global,
+    yintercept = acc_mean_global,
     linetype   = 1,
     linewidth  = 0.5,
     colour     = "orange",
@@ -646,7 +686,7 @@ p_acc <- ggplot(dat_auto2, aes(x = trial)) +
     vjust  = -3.0,
     size   = 3.5,
     colour = "black",
-    label  = sprintf("Observed acc = %.2f", acc_global)
+    label  = sprintf("Observed acc = %.2f", acc_mean_global)
   ) +
   scale_y_continuous(
     limits = c(0, 1),
@@ -703,7 +743,7 @@ ggsave(
 # ggsave(
 #   filename = "plots/combined_auto.png",
 #   plot     = p_combo,
-#   width    = 15,
-#   height   = 6,
+#   width    = 16,
+#   height   = 9,
 #   units    = "in"
 # )
