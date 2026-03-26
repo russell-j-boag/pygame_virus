@@ -88,7 +88,7 @@ write_csv(dat, "data/data_virus.csv")
 
 # Find all complete post-block results files
 files <- list.files(
-  "data",
+  "output",
   pattern = "^results_.*_b00_POSTBLOCK_ALL\\.csv$",
   full.names = TRUE
 )
@@ -130,7 +130,7 @@ write_csv(dat, "data/data_virus_postblock_all.csv")
 
 # Find all complete post-block results files
 files <- list.files(
-  "data",
+  "output",
   pattern = "^results_.*_b00_POSTBLOCK_SLIDERS_ALL\\.csv$",
   full.names = TRUE
 )
