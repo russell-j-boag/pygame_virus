@@ -11,7 +11,7 @@ library("patchwork")
 
 # Load latest complete results file
 files <- list.files(
-  "data",
+  "output",
   pattern = "^results_.*_b00_ALL\\.csv$",
   full.names = TRUE
 )

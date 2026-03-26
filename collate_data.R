@@ -14,7 +14,7 @@ library("patchwork")
 
 # Find all complete results files
 files <- list.files(
-  "data",
+  "output",
   pattern = "^results_.*_b00_ALL\\.csv$",
   full.names = TRUE
 )
