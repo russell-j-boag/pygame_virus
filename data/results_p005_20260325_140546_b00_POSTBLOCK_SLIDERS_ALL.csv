@@ -1,0 +1,7 @@
+participant_id,run_timestamp,block,block_idx,question_idx,question_key,question,response_percent
+5,20260325_140546,CALIBRATION,1,1,perc_self_correct,"For your responses, what percentage do you think were correct in the preceding block of trials?",78
+5,20260325_140546,AUTOMATION2,2,1,perc_auto_correct,"For the automation's recommendations, what percentage do you think were correct in the preceding block of trials?",86
+5,20260325_140546,AUTOMATION2,2,2,perc_self_correct,"For your responses, what percentage do you think were correct in the preceding block of trials?",88
+5,20260325_140546,MANUAL,3,1,perc_self_correct,"For your responses, what percentage do you think were correct in the preceding block of trials?",74
+5,20260325_140546,AUTOMATION1,4,1,perc_auto_correct,"For the automation's recommendations, what percentage do you think were correct in the preceding block of trials?",77
+5,20260325_140546,AUTOMATION1,4,2,perc_self_correct,"For your responses, what percentage do you think were correct in the preceding block of trials?",87

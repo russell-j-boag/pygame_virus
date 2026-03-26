@@ -11,7 +11,7 @@ library("patchwork")
 
 # Load latest complete results file
 files <- list.files(
-  "output",
+  "data",
   pattern = "^results_.*_b00_ALL\\.csv$",
   full.names = TRUE
 )
@@ -37,8 +37,8 @@ dat_calib <- dat %>%
   filter(block == "CALIBRATION") %>%
   arrange(trial) %>%
   mutate(
-    correct_num = as.numeric(correct),
-    acc_running = cummean(correct),
+    correct_num = if_else(is.na(correct), 0, as.numeric(correct)),
+    acc_running = cumsum(correct_num) / row_number(),
     acc_slide   = rollapply(
       correct_num,
       width   = WINDOW,
@@ -254,8 +254,8 @@ dat_manual <- dat %>%
   filter(block == "MANUAL") %>%
   arrange(trial) %>%
   mutate(
-    correct_num = as.numeric(correct),
-    acc_running = cummean(correct),
+    correct_num = if_else(is.na(correct), 0, as.numeric(correct)),
+    acc_running = cumsum(correct_num) / row_number(),
     acc_slide   = rollapply(
       correct_num,
       width   = WINDOW,
@@ -412,8 +412,8 @@ dat_auto1 <- dat %>%
   filter(block == "AUTOMATION1") %>%
   arrange(trial) %>%
   mutate(
-    correct_num = as.numeric(correct),
-    acc_running = cummean(correct),
+    correct_num = if_else(is.na(correct), 0, as.numeric(correct)),
+    acc_running = cumsum(correct_num) / row_number(),
     acc_slide   = rollapply(
       correct_num,
       width   = WINDOW,
@@ -527,12 +527,10 @@ p_acc <- ggplot(dat_auto1, aes(x = trial)) +
     colour = "black",
     label  = sprintf("Observed acc = %.2f", acc_mean_global)
   ) +
-
   scale_y_continuous(
     limits = c(0, 1),
     breaks = c(0, 0.5, 1)
   ) +
-
   labs(
     x = "Trial",
     y = "Running accuracy"
@@ -573,8 +571,8 @@ dat_auto2 <- dat %>%
   filter(block == "AUTOMATION2") %>%
   arrange(trial) %>%
   mutate(
-    correct_num = as.numeric(correct),
-    acc_running = cummean(correct),
+    correct_num = if_else(is.na(correct), 0, as.numeric(correct)),
+    acc_running = cumsum(correct_num) / row_number(),
     acc_slide   = rollapply(
       correct_num,
       width   = WINDOW,
@@ -692,7 +690,6 @@ p_acc <- ggplot(dat_auto2, aes(x = trial)) +
     limits = c(0, 1),
     breaks = c(0, 0.5, 1)
   ) +
-  
   labs(
     x = "Trial",
     y = "Running accuracy"
@@ -739,7 +736,7 @@ ggsave(
   height   = 9,
   units    = "in"
 )
-# 
+
 # ggsave(
 #   filename = "plots/combined_auto.png",
 #   plot     = p_combo,

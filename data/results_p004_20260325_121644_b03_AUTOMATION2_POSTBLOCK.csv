@@ -1,0 +1,7 @@
+participant_id,block,block_idx,question_idx,question,left_anchor,right_anchor,response,scale_min,scale_max
+4,AUTOMATION2,3,1,I believe the automated decision aid is a competent performer.,Strongly disagree,Strongly agree,2,1,5
+4,AUTOMATION2,3,2,I trust the automated decision aid.,Strongly disagree,Strongly agree,2,1,5
+4,AUTOMATION2,3,3,I have confidence in the advice given by the automated decision aid. ,Strongly disagree,Strongly agree,2,1,5
+4,AUTOMATION2,3,4,I can depend on the automated decision aid.,Strongly disagree,Strongly agree,2,1,5
+4,AUTOMATION2,3,5,I can rely on the automated decision aid to behave in consistent ways.,Strongly disagree,Strongly agree,2,1,5
+4,AUTOMATION2,3,6,I can rely on the automated decision aid to do its best every time I take its advice.,Strongly disagree,Strongly agree,3,1,5
