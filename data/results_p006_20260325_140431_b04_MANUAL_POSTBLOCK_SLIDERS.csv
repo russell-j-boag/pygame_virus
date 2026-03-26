@@ -1,2 +1,0 @@
-participant_id,run_timestamp,block,block_idx,question_idx,question_key,question,response_percent
-6,20260325_140431,MANUAL,4,1,perc_self_correct,"For your responses, what percentage do you think were correct in the preceding block of trials?",91

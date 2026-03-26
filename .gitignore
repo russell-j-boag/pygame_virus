@@ -13,6 +13,8 @@ __pycache__/
 # Output data
 output/*
 plots/*
+data/*
 
 !output/.gitkeep
 !plots/.gitkeep
+!data/.gitkeep

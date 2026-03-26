@@ -1,3 +1,0 @@
-participant_id,run_timestamp,block,block_idx,question_idx,question_key,question,response_percent
-7,20260325_141148,AUTOMATION1,3,1,perc_auto_correct,"For the automation's recommendations, what percentage do you think were correct in the preceding block of trials?",83
-7,20260325_141148,AUTOMATION1,3,2,perc_self_correct,"For your responses, what percentage do you think were correct in the preceding block of trials?",59
