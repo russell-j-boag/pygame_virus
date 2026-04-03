@@ -67,6 +67,7 @@ BLOCKS = [
         N_TRIALS=500,
         AUTOMATION_ON=True,       # automation on
         AID_ACCURACY=0.95,        # high reliability block
+        AID_TRANSPARENCY="none",
         STAIRCASE_ON=False,       # staircase off
         TARGET_ACC=0.80,          # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
@@ -78,6 +79,7 @@ BLOCKS = [
         N_TRIALS=500,
         AUTOMATION_ON=True,       # automation on
         AID_ACCURACY=0.65,        # low reliability block
+        AID_TRANSPARENCY="none",
         STAIRCASE_ON=False,       # staircase off
         TARGET_ACC=0.80,          # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
@@ -164,6 +166,31 @@ BLOCK_INSTRUCTIONS = {
 }
 
 
+def transparency_instruction_slide(transparency_level: str) -> str:
+    if transparency_level == "none":
+        return (
+            "In this block, the automated decision aid will display only its recommendation. "
+            "No additional explanation will be shown."
+        )
+
+    if transparency_level == "low":
+        return (
+            "In this block, the automated decision aid will display its recommendation and a brief reason. "
+            "The reason line will state which category the available evidence favors."
+        )
+
+    if transparency_level == "high":
+        return (
+            "In this block, the automated decision aid will display its recommendation, a brief reason, "
+            "a summary of the estimated BLACK and WHITE evidence, and the decision rule used to make the recommendation."
+        )
+
+    raise ValueError(
+        f"Unsupported transparency level '{transparency_level}'. "
+        f"Valid values: {sorted(AID_TRANSPARENCY_LEVELS)}"
+    )
+
+
 # -----------------------------
 # Config
 # -----------------------------
@@ -240,6 +267,7 @@ VBLACK_PROPORTION_LEVELS = [0.40, 0.42, 0.44, 0.46, 0.48, 0.52, 0.54, 0.56, 0.58
 # >0  = aid delayed (ms after dot onset)
 # <0  = aid advanced (ms before dot onset)
 AID_ONSET_MS = 0
+AID_TRANSPARENCY_LEVELS = {"none", "low", "high"}
 
 # -----------------------------
 # Adaptive staircase (manual-only)
@@ -669,7 +697,6 @@ def run_postblock_questionnaire(
     screen,
     clock,
     font,
-    base_name=None,
     participant_id=None,
     block_name=None,
     block_idx=None,
@@ -1079,6 +1106,19 @@ def draw_button(surface, rect, label, font, enabled=True,
     surface.blit(img, (rect.centerx - img.get_width() // 2, rect.centery - img.get_height() // 2))
 
 
+def draw_samples_left_label(surface, font, trials_left):
+    label = f"Samples left: {trials_left}"
+    image = font.render(label, True, WHITE)
+    surface.blit(image, (WIDTH - PB_PAD - PB_W, PB_PAD + PB_H + 6))
+
+
+def write_csv_rows(path, rows):
+    with open(path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def run_slider_question_screen(
     screen,
     clock,
@@ -1258,7 +1298,6 @@ def run_postblock_slider_questions(
     run_ts,
     block_name,
     block_idx,
-    automation_on: bool,
     output_dir="output",
 ):
     """
@@ -1322,10 +1361,7 @@ def run_postblock_slider_questions(
             output_dir,
             f"results_p{participant_id:03d}_{run_ts}_b{block_idx:02d}_{block_name}_POSTBLOCK_SLIDERS.csv"
         )
-        with open(path, "w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=rows[0].keys())
-            w.writeheader()
-            w.writerows(rows)
+        write_csv_rows(path, rows)
         print(f"[{block_name}] Post-block slider responses saved to: {path}")
 
     return rows
@@ -1758,50 +1794,30 @@ def run_instructions(screen, font_title, font_body, font_body_bold, clock,
         pygame.display.flip()
   
   
-def get_block_instruction_payload(block_name: str) -> dict:
+def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
     """
     Returns {"title": str, "slides": list[str]}
     """
     if block_name in BLOCK_INSTRUCTIONS:
-        payload = BLOCK_INSTRUCTIONS[block_name]
+        payload = dict(BLOCK_INSTRUCTIONS[block_name])
+        slides = list(payload.get("slides", [payload.get("body", "")]))
 
-        if "slides" not in payload:
-            payload["slides"] = [payload.get("body", "")]
+        if block_name.startswith("AUTOMATION"):
+            transparency_level = "none"
+            if block_cfg is not None:
+                transparency_level = block_cfg.get("AID_TRANSPARENCY", "none")
+            slides = slides[:1] + [transparency_instruction_slide(transparency_level)] + slides[1:]
+
+        payload["slides"] = slides
 
         return payload
 
     return {"title": f"{block_name} BLOCK", "slides": ["Instructions"]}
   
   
-def block_title(block_name: str) -> str:
-    return get_block_instruction_payload(block_name)["title"]
+def block_title(block_name: str, block_cfg=None) -> str:
+    return get_block_instruction_payload(block_name, block_cfg=block_cfg)["title"]
   
-
-def wait_for_continue_button(clock, button_rect, min_show_ms=250):
-    """
-    Wait until the user clicks the Continue button.
-    Window close is ignored.
-    Hard-quit (Option/Alt+Q) still works.
-    """
-    t0 = pygame.time.get_ticks()
-
-    while True:
-        clock.tick(FPS)
-        elapsed = pygame.time.get_ticks() - t0
-        enabled = elapsed >= min_show_ms
-
-        for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
-                pass
-
-            if ev.type == pygame.KEYDOWN:
-                if is_hard_quit_event(ev):
-                    quit_clean()
-
-            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
-                if enabled and button_rect.collidepoint(ev.pos):
-                    return
-
 
 def run_block_instructions(
     screen,
@@ -1809,9 +1825,10 @@ def run_block_instructions(
     font_body,
     clock,
     block_name: str,
+    block_cfg=None,
     min_show_ms=250
 ):
-    payload = get_block_instruction_payload(block_name)
+    payload = get_block_instruction_payload(block_name, block_cfg=block_cfg)
     title = payload["title"]
     slides = payload["slides"]
 
@@ -2000,38 +2017,6 @@ def fixation_cross_screen(screen, clock, ms):
         pygame.display.flip()
 
 
-def draw_trial_prompt_colored(screen, font_small, y_pos):
-    # tokens = ["C", "=", "BLACK", "dominant", "|SPACER|", "N", "=", "WHITE", "dominant"]
-    tokens = ["D", "=", "V-BLACK", " ", "|SPACER|", "J", "=", "V-WHITE", " "]
-    space_w = font_small.size(" ")[0]
-    spacer_w = space_w * 5
-
-    token_widths = []
-    for t in tokens:
-        token_widths.append(spacer_w if t == "|SPACER|" else font_small.size(t)[0])
-
-    total_w = 0
-    for i, t in enumerate(tokens):
-        total_w += token_widths[i]
-        if i < len(tokens) - 1 and t != "|SPACER|" and tokens[i + 1] != "|SPACER|":
-            total_w += space_w
-
-    x = WIDTH // 2 - total_w // 2
-
-    for i, t in enumerate(tokens):
-        if t == "|SPACER|":
-            x += spacer_w
-            continue
-
-        col = COLOR_TOKENS_UI.get(t, WHITE)
-        img = font_small.render(t, True, col)
-        screen.blit(img, (x, y_pos))
-        x += img.get_width()
-
-        if i < len(tokens) - 1 and tokens[i + 1] != "|SPACER|":
-            x += space_w
-
-
 def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name: str, key_white_name: str):
     """
     Bottom prompt, always laid out as:
@@ -2109,25 +2094,74 @@ def draw_aid_recommendation_top_center(
     font_label,   # small font for "RECOMMENDATION:"
     font_main,    # large font for recommendation
     rec_label,
-    show_value=True
+    show_value=True,
+    transparency_level="none",
+    evidence_black_pct=None,
+    evidence_white_pct=None,
+    dish_top_limit=None,
 ):
     cx = WIDTH // 2
-    y0 = PB_PAD + PB_H + S(22)
-    line_gap = 4
+    top_padding = S(8)
+    line_gap = max(1, S(4))
+    detail_font = load_font(FONT_LIGHT, max(10, S(FONT_SMALL_BASE - 1)))
 
-    # Line 1: always visible
     img_label = font_label.render("AID JUDGES:", True, WHITE)
-    screen.blit(img_label, (cx - img_label.get_width() // 2, y0))
+    img_main = None
+    detail_imgs = []
 
-    # Line 2: only if allowed
     if show_value:
         phrase = f"{rec_label}"
         col = WHITE if rec_label == "#####" else COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
-        screen.blit(
-            img_main,
-            (cx - img_main.get_width() // 2, y0 + img_label.get_height() + line_gap)
-        )
+
+        detail_lines = []
+        if transparency_level in ("low", "high"):
+            detail_lines.append(f"Reason: The available evidence favors {rec_label}")
+
+        if transparency_level == "high":
+            detail_lines.append(
+                f"Basis: Stimulus scan estimates {evidence_black_pct:.1f}% BLACK and {evidence_white_pct:.1f}% WHITE"
+            )
+            detail_lines.append("Decision rule: Choose the higher-evidence category")
+
+        detail_imgs = [detail_font.render(line, True, WHITE) for line in detail_lines]
+
+    total_height = img_label.get_height()
+    if img_main is not None:
+        total_height += line_gap + img_main.get_height()
+    if detail_imgs:
+        total_height += len(detail_imgs) * line_gap + sum(img.get_height() for img in detail_imgs)
+
+    y0 = top_padding
+    if dish_top_limit is not None:
+        max_bottom = dish_top_limit - S(18)
+        y0 = min(y0, max_bottom - total_height)
+        y0 = max(S(4), y0)
+
+    screen.blit(img_label, (cx - img_label.get_width() // 2, y0))
+
+    value_rect = None
+    detail_rects = []
+    if img_main is not None:
+        current_y = y0 + img_label.get_height() + line_gap
+        value_rect = img_main.get_rect(midtop=(cx, current_y))
+        screen.blit(img_main, value_rect)
+        current_y = value_rect.bottom + line_gap
+
+        for detail_img in detail_imgs:
+            if transparency_level == "low":
+                detail_rect = detail_img.get_rect(midtop=(cx, current_y))
+            else:
+                detail_rect = detail_img.get_rect(midtop=(cx, current_y))
+            screen.blit(detail_img, detail_rect)
+            detail_rects.append(detail_rect)
+            current_y = detail_rect.bottom + line_gap
+
+    return {
+        "label_rect": img_label.get_rect(midtop=(cx, y0)),
+        "value_rect": value_rect,
+        "detail_rects": detail_rects,
+    }
 
 
 def parse_cli_args():
@@ -2160,6 +2194,698 @@ def select_single_block(block_name: str, blocks_template):
         )
 
     return matches
+
+
+def create_display_surface():
+    flags = pygame.FULLSCREEN if FULLSCREEN else 0
+    if FULLSCREEN and USE_DESKTOP_RES:
+        return pygame.display.set_mode((0, 0), flags)
+    return pygame.display.set_mode((BASE_W, BASE_H))
+
+
+def initialize_ui_metrics(screen):
+    global WIDTH, HEIGHT
+    WIDTH, HEIGHT = screen.get_size()
+
+    global UI_SCALE
+    UI_SCALE = compute_ui_scale(WIDTH, HEIGHT)
+    print("[UI_SCALE]", UI_SCALE, "for", WIDTH, "x", HEIGHT)
+
+    global DISH_RADIUS, DOT_RADIUS, VEL_WANDER_SD, VEL_MAX, VEL_INIT_RANGE
+    DISH_RADIUS = S(DISH_RADIUS_BASE)
+    DOT_RADIUS = max(1, S(DOT_RADIUS_BASE))
+    VEL_WANDER_SD = SF(VEL_WANDER_SD_BASE)
+    VEL_MAX = SF(VEL_MAX_BASE)
+    VEL_INIT_RANGE = SF(VEL_INIT_RANGE_BASE)
+
+    global FIX_SIZE, FIX_THICKNESS, PB_W, PB_H, PB_PAD
+    FIX_SIZE = S(FIX_SIZE_BASE)
+    FIX_THICKNESS = max(1, S(FIX_THICKNESS_BASE))
+    PB_W = S(PB_W_BASE)
+    PB_H = S(PB_H_BASE)
+    PB_PAD = S(PB_PAD_BASE)
+
+
+def load_ui_fonts():
+    return {
+        "title": load_font(FONT_LIGHT, max(12, S(FONT_TITLE_BASE))),
+        "body": load_font(FONT_LIGHT, max(10, S(FONT_BODY_BASE))),
+        "body_bold": load_font(FONT_BOLD, max(10, S(FONT_BODY_BASE))),
+        "small": load_font(FONT_LIGHT, max(9, S(FONT_SMALL_BASE))),
+        "aid_label": load_font(FONT_LIGHT, max(9, S(FONT_AID_LABEL_BASE))),
+        "aid": load_font(FONT_BOLD, max(10, S(FONT_AID_BASE))),
+    }
+
+
+def choose_blocks_to_run(args, participant_id):
+    if args.block is not None:
+        blocks_to_run = select_single_block(args.block, BLOCKS)
+        print("[SINGLE BLOCK MODE]", participant_id, "->", [b["name"] for b in blocks_to_run])
+        return blocks_to_run
+
+    blocks_to_run = build_blocks_for_participant(participant_id, BLOCKS)
+    print("[BLOCK ORDER]", participant_id, "->", [b["name"] for b in blocks_to_run])
+    return blocks_to_run
+
+
+def resolve_difficulty_mode(block_cfg):
+    if block_cfg["FIXED_DELTA_ON"]:
+        return "fixed_delta"
+    if (not block_cfg["AUTOMATION_ON"]) and block_cfg["STAIRCASE_ON"]:
+        return "staircase"
+    return "fixed_props"
+
+
+def resolve_fixed_delta_source(block_name, participant_id, fixed_delta_value, current_calibration, previous_calibration):
+    calib_delta_mean, calib_delta_sd = current_calibration
+    prev_calib_delta_mean, prev_calib_delta_sd, prev_calib_delta_path = previous_calibration
+
+    if calib_delta_mean is not None and calib_delta_sd is not None:
+        print(
+            f"[{block_name}] Using CALIBRATION delta from current run "
+            f"(mean={calib_delta_mean}, sd={calib_delta_sd})"
+        )
+        return calib_delta_mean, calib_delta_sd
+
+    if prev_calib_delta_mean is not None and prev_calib_delta_sd is not None:
+        print(
+            f"[{block_name}] Using most recent prior CALIBRATION delta for participant "
+            f"{participant_id} from {prev_calib_delta_path} "
+            f"(mean={prev_calib_delta_mean}, sd={prev_calib_delta_sd})"
+        )
+        return prev_calib_delta_mean, prev_calib_delta_sd
+
+    print(
+        f"[{block_name}] No CALIBRATION delta found for participant {participant_id}; "
+        f"falling back to FIXED_DELTA_VALUE={fixed_delta_value}, sd=0.0"
+    )
+    return fixed_delta_value, 0.0
+
+
+def prepare_block_state(block_cfg, participant_id, current_calibration, previous_calibration):
+    difficulty_mode = resolve_difficulty_mode(block_cfg)
+    transparency = block_cfg.get("AID_TRANSPARENCY", "none")
+    if transparency not in AID_TRANSPARENCY_LEVELS:
+        raise ValueError(
+            f"Unsupported AID_TRANSPARENCY '{transparency}' for block '{block_cfg['name']}'. "
+            f"Valid values: {sorted(AID_TRANSPARENCY_LEVELS)}"
+        )
+    fixed_delta_mean = None
+    fixed_delta_sd = None
+
+    if difficulty_mode == "fixed_delta":
+        fixed_delta_mean, fixed_delta_sd = resolve_fixed_delta_source(
+            block_name=block_cfg["name"],
+            participant_id=participant_id,
+            fixed_delta_value=block_cfg["FIXED_DELTA_VALUE"],
+            current_calibration=current_calibration,
+            previous_calibration=previous_calibration,
+        )
+
+    if difficulty_mode == "fixed_props":
+        vblack_props = [random.choice(VBLACK_PROPORTION_LEVELS) for _ in range(block_cfg["N_TRIALS"])]
+        random.shuffle(vblack_props)
+    else:
+        vblack_props = None
+
+    delta_step_up = DELTA_STEP_DOWN * (block_cfg["TARGET_ACC"] / (1.0 - block_cfg["TARGET_ACC"]))
+
+    return {
+        "difficulty_mode": difficulty_mode,
+        "fixed_delta_mean": fixed_delta_mean,
+        "fixed_delta_sd": fixed_delta_sd,
+        "aid_transparency": transparency,
+        "vblack_props": vblack_props,
+        "delta_mean": DELTA_INIT,
+        "deltas_realised": [],
+        "delta_step_up_setting": delta_step_up,
+    }
+
+
+def show_block_intro(screen, clock, fonts, block_cfg, key_black_name, key_white_name):
+    run_instructions(
+        screen,
+        fonts["title"],
+        fonts["body"],
+        fonts["body_bold"],
+        clock,
+        key_black_name,
+        key_white_name,
+        min_show_ms=250,
+    )
+
+    run_block_instructions(
+        screen=screen,
+        font_title=fonts["title"],
+        font_body=fonts["body"],
+        clock=clock,
+        block_name=block_cfg["name"],
+        block_cfg=block_cfg,
+        min_show_ms=250,
+    )
+
+    screen.fill(BG_INSTRUCTIONS)
+    draw_center_lines(
+        screen,
+        [block_title(block_cfg["name"], block_cfg=block_cfg), "Press any key to begin"],
+        fonts["body"],
+        WHITE,
+        rect=(0, 0, WIDTH, HEIGHT),
+        line_spacing=S(14),
+        vert_center=True,
+    )
+    pygame.display.flip()
+    wait_for_keypress(clock, min_show_ms=250)
+    fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+
+
+def pick_trial_vblack_prop(block_state, trial_index):
+    difficulty_mode = block_state["difficulty_mode"]
+    if difficulty_mode == "fixed_props":
+        return block_state["vblack_props"][trial_index], None
+
+    if difficulty_mode == "fixed_delta":
+        delta_realised = sample_delta_from_mean(
+            block_state["fixed_delta_mean"],
+            block_state["fixed_delta_sd"],
+        )
+        return pick_vblack_prop_from_delta(delta_realised), delta_realised
+
+    delta_realised = sample_delta_from_mean(block_state["delta_mean"], DELTA_SD)
+    block_state["deltas_realised"].append(delta_realised)
+    return pick_vblack_prop_from_delta(delta_realised), delta_realised
+
+
+def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, ms_left=None):
+    fonts = ui_payload["fonts"]
+    key_names = ui_payload["key_names"]
+
+    screen.fill(BG)
+    if ms_left is not None:
+        draw_countdown_timer(
+            surface=screen,
+            font=fonts["body"],
+            ms_left=ms_left,
+            x=PB_PAD,
+            y=PB_PAD,
+            color=WHITE,
+        )
+
+    draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
+    draw_samples_left_label(screen, fonts["small"], ui_payload["trials_left"])
+    draw_petri_dish(screen, center, DISH_RADIUS)
+
+    dot_layer.fill((0, 0, 0, 0))
+    for dot in dots:
+        x = int(dot["x"])
+        y = int(dot["y"])
+        r, g, b = dot["col"]
+        pygame.draw.circle(dot_layer, (r, g, b, DOT_ALPHA), (x, y), DOT_RADIUS)
+    screen.blit(dot_layer, (0, 0))
+
+    draw_trial_prompt_stacked(
+        screen,
+        fonts["small"],
+        HEIGHT - S(80),
+        key_names["black"],
+        key_names["white"],
+    )
+
+    if aid_payload["mode"] == "automation":
+        draw_aid_recommendation_top_center(
+            screen,
+            fonts["aid_label"],
+            fonts["aid"],
+            aid_payload["label"],
+            show_value=aid_payload["visible"],
+            transparency_level=aid_payload["transparency_level"],
+            evidence_black_pct=aid_payload["evidence_black_pct"],
+            evidence_white_pct=aid_payload["evidence_white_pct"],
+            dish_top_limit=center[1] - DISH_RADIUS,
+        )
+    elif aid_payload["mode"] == "masked":
+        draw_aid_recommendation_top_center(
+            screen,
+            fonts["aid_label"],
+            fonts["aid"],
+            rec_label="#####",
+            show_value=True,
+            transparency_level="none",
+            dish_top_limit=center[1] - DISH_RADIUS,
+        )
+
+
+def maybe_run_advanced_aid_phase(screen, clock, aid_payload, ui_payload):
+    if AID_ONSET_MS >= 0:
+        return False, None
+
+    pre_ms = abs(AID_ONSET_MS)
+    pre_start_perf = time.perf_counter()
+    pre_aid_onset_perf = None
+
+    while (time.perf_counter() - pre_start_perf) * 1000.0 < pre_ms:
+        clock.tick(FPS)
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                pass
+            if ev.type == pygame.KEYDOWN and is_hard_quit_event(ev):
+                quit_clean()
+
+        screen.fill(BG)
+        draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
+        draw_samples_left_label(screen, ui_payload["fonts"]["small"], ui_payload["trials_left"])
+        draw_aid_recommendation_top_center(
+            screen,
+            ui_payload["fonts"]["aid_label"],
+            ui_payload["fonts"]["aid"],
+            aid_payload["label"],
+            show_value=True,
+            transparency_level=aid_payload["transparency_level"],
+            evidence_black_pct=aid_payload["evidence_black_pct"],
+            evidence_white_pct=aid_payload["evidence_white_pct"],
+        )
+
+        if pre_aid_onset_perf is None:
+            pre_aid_onset_perf = time.perf_counter()
+
+        pygame.display.flip()
+
+    return True, pre_aid_onset_perf
+
+
+def update_staircase_state(block_state, is_correct, trial_in_block, target_acc):
+    if block_state["difficulty_mode"] != "staircase":
+        return None, None
+
+    step_down_now = burnin_step_down(
+        trial_in_block_1based=trial_in_block,
+        step_start=DELTA_STEP_DOWN,
+        step_min=DELTA_STEP_DOWN_MIN,
+        burnin_trials=BURNIN_TRIALS,
+    )
+    step_up_now = step_down_now * (target_acc / (1.0 - target_acc))
+
+    if is_correct:
+        block_state["delta_mean"] = max(DELTA_MIN, block_state["delta_mean"] - step_down_now)
+    else:
+        block_state["delta_mean"] = min(DELTA_MAX, block_state["delta_mean"] + step_up_now)
+
+    return step_down_now, step_up_now
+
+
+def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx, trial_number,
+                    global_trial_index, block_cfg, block_state, trial_data, feedback_msg,
+                    delta_realised, step_down_now, step_up_now):
+    difficulty_mode = block_state["difficulty_mode"]
+    rt_ms = trial_data["rt_ms"]
+    response = trial_data["response"]
+
+    return {
+        "participant_id": participant_id,
+        "run_timestamp": run_timestamp,
+        "key_black": keymap["key_black_name"],
+        "key_white": keymap["key_white_name"],
+        "keymap_flip": keymap["flip"],
+        "block": block_name,
+        "block_idx": block_idx,
+        "trial": trial_number,
+        "global_trial": global_trial_index,
+        "difficulty_mode": difficulty_mode,
+        "delta_fixed_mean": block_state["fixed_delta_mean"] if difficulty_mode == "fixed_delta" else None,
+        "delta_fixed_sd": block_state["fixed_delta_sd"] if difficulty_mode == "fixed_delta" else None,
+        "delta_stair_realised": delta_realised if difficulty_mode == "staircase" else None,
+        "delta_stair_mean": block_state["delta_mean"] if difficulty_mode == "staircase" else None,
+        "delta_step_down_used": step_down_now if difficulty_mode == "staircase" else None,
+        "delta_step_up_used": step_up_now if difficulty_mode == "staircase" else None,
+        "vblack_prop": trial_data["vblack_prop"],
+        "n_vblack": trial_data["n_vblack"],
+        "n_vwhite": trial_data["n_vwhite"],
+        "auto_on": 1 if block_cfg["AUTOMATION_ON"] else 0,
+        "aid_accuracy_setting": block_cfg["AID_ACCURACY"] if block_cfg["AUTOMATION_ON"] else None,
+        "aid_transparency_level": block_state["aid_transparency"] if block_cfg["AUTOMATION_ON"] else None,
+        "stimulus": trial_data["stimulus"],
+        "aid_label": trial_data["aid_label"],
+        "aid_correct": trial_data["aid_correct"],
+        "aid_onset_ms": AID_ONSET_MS,
+        "aid_onset_ms_rel": trial_data["aid_onset_ms_rel"],
+        "response": response,
+        "correct": trial_data["correct"] if response in ("BLACK", "WHITE") else None,
+        "feedback": feedback_msg if block_cfg["TRIAL_FEEDBACK_ON"] else None,
+        "rt_s": (rt_ms / 1000.0) if rt_ms is not None else None,
+        "rt_ms": rt_ms,
+    }
+
+
+def maybe_show_feedback(screen, clock, fonts, response, correct, feedback_on):
+    if not feedback_on:
+        return None
+
+    if response == "TIMEOUT":
+        feedback_msg = "TOO SLOW"
+        feedback_color = FEEDBACK_SLOW_COLOR
+    elif correct:
+        feedback_msg = "CORRECT"
+        feedback_color = FEEDBACK_CORRECT_COLOR
+    else:
+        feedback_msg = "INCORRECT"
+        feedback_color = FEEDBACK_ERROR_COLOR
+
+    show_feedback_screen(
+        screen=screen,
+        clock=clock,
+        font=fonts["title"],
+        msg=feedback_msg,
+        bg_color=BG,
+        text_color=feedback_color,
+        prompt_text="Press any key to continue",
+        prompt_font=fonts["body"],
+        prompt_color=WHITE,
+        min_show_ms=250,
+    )
+    return feedback_msg
+
+
+def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg, block_state,
+                     trials_left, trial_number, global_trial_index, run_timestamp):
+    vblack_prop, delta_realised = pick_trial_vblack_prop(block_state, trial_number - 1)
+    dots, n_vblack, n_vwhite = make_trial_dots(N_DOTS, vblack_prop, center, DISH_RADIUS)
+    stimulus = "BLACK" if n_vblack > n_vwhite else "WHITE"
+
+    if block_cfg["AUTOMATION_ON"]:
+        aid_label, aid_correct = make_aid_recommendation(stimulus, accuracy=block_cfg["AID_ACCURACY"])
+    else:
+        aid_label, aid_correct = None, None
+
+    evidence_black_pct = (n_vblack / N_DOTS) * 100.0
+    evidence_white_pct = (n_vwhite / N_DOTS) * 100.0
+
+    ui_payload = {
+        "fonts": fonts,
+        "key_names": {"black": keymap["key_black_name"], "white": keymap["key_white_name"]},
+        "trials_left": trials_left,
+        "n_trials": block_cfg["N_TRIALS"],
+    }
+    aid_render_payload = {
+        "label": aid_label,
+        "visible": False,
+        "transparency_level": block_state["aid_transparency"],
+        "evidence_black_pct": evidence_black_pct,
+        "evidence_white_pct": evidence_white_pct,
+    }
+
+    aid_visible = False
+    aid_onset_perf = None
+    if block_cfg["AUTOMATION_ON"]:
+        aid_visible, pre_aid_onset_perf = maybe_run_advanced_aid_phase(
+            screen,
+            clock,
+            aid_render_payload,
+            ui_payload,
+        )
+    else:
+        pre_aid_onset_perf = None
+
+    responded = False
+    response = None
+    stim_onset_perf = None
+    resp_perf = None
+    trial_start_ticks = pygame.time.get_ticks()
+
+    while not responded:
+        clock.tick(FPS)
+        now = pygame.time.get_ticks()
+
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                pass
+            if ev.type == pygame.KEYDOWN:
+                if is_hard_quit_event(ev):
+                    quit_clean()
+                if ev.key == keymap["key_black"]:
+                    responded = True
+                    response = "BLACK"
+                    resp_perf = time.perf_counter()
+                elif ev.key == keymap["key_white"]:
+                    responded = True
+                    response = "WHITE"
+                    resp_perf = time.perf_counter()
+
+        if TRIAL_DEADLINE_MS is not None and (now - trial_start_ticks) >= TRIAL_DEADLINE_MS:
+            responded = True
+            response = "TIMEOUT"
+
+        update_dots(dots, center, DISH_RADIUS)
+
+        if stim_onset_perf is None:
+            stim_onset_perf = time.perf_counter()
+            if pre_aid_onset_perf is not None:
+                aid_onset_perf = pre_aid_onset_perf
+
+        if block_cfg["AUTOMATION_ON"] and AID_ONSET_MS >= 0 and stim_onset_perf is not None:
+            elapsed_ms = (time.perf_counter() - stim_onset_perf) * 1000.0
+            if (not aid_visible) and (elapsed_ms >= AID_ONSET_MS):
+                aid_visible = True
+                aid_onset_perf = time.perf_counter()
+
+        aid_mode = "none"
+        if block_cfg["AUTOMATION_ON"]:
+            aid_mode = "automation"
+        elif block_cfg["SHOW_AID_MASKED"]:
+            aid_mode = "masked"
+
+        ms_left = None
+        if TRIAL_DEADLINE_MS is not None:
+            ms_left = TRIAL_DEADLINE_MS - (now - trial_start_ticks)
+
+        draw_trial_frame(
+            screen,
+            dot_layer,
+            dots,
+            center,
+            {
+                "mode": aid_mode,
+                "label": aid_label,
+                "visible": aid_visible,
+                "transparency_level": block_state["aid_transparency"],
+                "evidence_black_pct": evidence_black_pct,
+                "evidence_white_pct": evidence_white_pct,
+            },
+            ui_payload,
+            ms_left=ms_left,
+        )
+        pygame.display.flip()
+
+    rt_ms = None
+    if stim_onset_perf is not None and resp_perf is not None:
+        rt_ms = (resp_perf - stim_onset_perf) * 1000.0
+
+    aid_onset_ms_rel = None
+    if stim_onset_perf is not None and aid_onset_perf is not None:
+        aid_onset_ms_rel = (aid_onset_perf - stim_onset_perf) * 1000.0
+
+    correct = response == stimulus
+    feedback_msg = maybe_show_feedback(screen, clock, fonts, response, correct, block_cfg["TRIAL_FEEDBACK_ON"])
+    step_down_now, step_up_now = update_staircase_state(
+        block_state,
+        correct,
+        trial_number,
+        block_cfg["TARGET_ACC"],
+    )
+
+    row = build_trial_row(
+        participant_id=block_cfg["participant_id"],
+        run_timestamp=run_timestamp,
+        keymap=keymap,
+        block_name=block_cfg["name"],
+        block_idx=block_cfg["block_idx"],
+        trial_number=trial_number,
+        global_trial_index=global_trial_index,
+        block_cfg=block_cfg,
+        block_state=block_state,
+        trial_data={
+            "vblack_prop": vblack_prop,
+            "n_vblack": n_vblack,
+            "n_vwhite": n_vwhite,
+            "stimulus": stimulus,
+            "aid_label": aid_label,
+            "aid_correct": aid_correct,
+            "aid_onset_ms_rel": aid_onset_ms_rel,
+            "response": response,
+            "correct": correct,
+            "rt_ms": rt_ms,
+        },
+        feedback_msg=feedback_msg,
+        delta_realised=delta_realised,
+        step_down_now=step_down_now,
+        step_up_now=step_up_now,
+    )
+
+    return row
+
+
+def write_delta_summary(output_dir, participant_id, run_timestamp, block_name, block_idx, deltas_realised,
+                        delta_mean, delta_step_up):
+    delta_out_path = os.path.join(
+        output_dir,
+        f"delta_p{participant_id:03d}_{run_timestamp}_b{block_idx:02d}_{block_name}.csv"
+    )
+
+    burn = int(BURNIN_TRIALS) if BURNIN_TRIALS is not None else 0
+    deltas_post_burnin = deltas_realised[burn:] if burn > 0 else deltas_realised[:]
+
+    if CALIB_SUMMARY_LAST_N is None:
+        deltas_summary = deltas_post_burnin
+        summary_last_n_used = None
+    else:
+        n_last = max(1, int(CALIB_SUMMARY_LAST_N))
+        deltas_summary = deltas_post_burnin[-n_last:]
+        summary_last_n_used = n_last
+
+    if deltas_summary:
+        mean_delta = sum(deltas_summary) / len(deltas_summary)
+        if len(deltas_summary) > 1:
+            var = sum((x - mean_delta) ** 2 for x in deltas_summary) / (len(deltas_summary) - 1)
+            sd_delta = math.sqrt(var)
+        else:
+            sd_delta = 0.0
+    else:
+        mean_delta, sd_delta = None, None
+
+    row = {
+        "participant_id": participant_id,
+        "run_timestamp": run_timestamp,
+        "block": block_name,
+        "block_idx": block_idx,
+        "n_trials_total": len(deltas_realised),
+        "burnin_trials_excluded": burn,
+        "n_trials_post_burnin": len(deltas_post_burnin),
+        "summary_last_n_setting": summary_last_n_used,
+        "n_trials_summarised": len(deltas_summary),
+        "delta_init": DELTA_INIT,
+        "delta_sd_setting": DELTA_SD,
+        "delta_step_down": DELTA_STEP_DOWN,
+        "delta_step_up": delta_step_up,
+        "delta_min": DELTA_MIN,
+        "delta_max": DELTA_MAX,
+        "delta_block_mean": mean_delta,
+        "delta_block_sd": sd_delta,
+        "delta_mean_final": delta_mean,
+    }
+
+    with open(delta_out_path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=row.keys())
+        writer.writeheader()
+        writer.writerow(row)
+
+    print(
+        f"[{block_name}] Staircase delta summary saved to: {delta_out_path} "
+        f"(post-burnin n={len(deltas_post_burnin)}, summarised n={len(deltas_summary)})"
+    )
+
+    return mean_delta, sd_delta, delta_out_path
+
+
+def show_block_complete_screen(screen, clock, font_body, block_name):
+    end_lines = [
+        f"{block_title(block_name)} COMPLETE",
+        "Press any key to continue",
+    ]
+
+    screen.fill(BG_INSTRUCTIONS)
+    draw_center_lines(
+        screen,
+        end_lines,
+        font_body,
+        WHITE,
+        rect=(0, 0, WIDTH, HEIGHT),
+        line_spacing=S(14),
+        vert_center=True,
+    )
+    pygame.display.flip()
+    wait_for_keypress(clock, min_show_ms=250)
+
+
+def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp, block_cfg, output_dir,
+                            all_postblock_slider_rows, all_questionnaire_rows):
+    block_name = block_cfg["name"]
+    block_idx = block_cfg["block_idx"]
+
+    if ENABLE_POSTBLOCK_SLIDERS and block_name in ("CALIBRATION", "MANUAL", "AUTOMATION1", "AUTOMATION2"):
+        slider_rows = run_postblock_slider_questions(
+            screen=screen,
+            clock=clock,
+            font_title=fonts["title"],
+            font_body=fonts["body"],
+            participant_id=participant_id,
+            run_ts=run_timestamp,
+            block_name=block_name,
+            block_idx=block_idx,
+            output_dir=output_dir,
+        )
+        if isinstance(slider_rows, dict) and slider_rows.get("quit"):
+            quit_clean()
+        if slider_rows:
+            all_postblock_slider_rows.extend(slider_rows)
+
+    if block_name in ("AUTOMATION1", "AUTOMATION2") and ENABLE_POSTBLOCK_QUESTIONS:
+        run_questionnaire_intro_screen(
+            screen=screen,
+            clock=clock,
+            font_title=fonts["title"],
+            font_body=fonts["body"],
+            min_show_ms=250,
+        )
+
+        questionnaire_rows = run_postblock_questionnaire(
+            screen,
+            clock,
+            fonts["body"],
+            participant_id=participant_id,
+            block_name=block_name,
+            block_idx=block_idx,
+        )
+        if isinstance(questionnaire_rows, dict) and questionnaire_rows.get("quit"):
+            quit_clean()
+        if questionnaire_rows:
+            q_path = os.path.join(
+                output_dir,
+                f"results_p{participant_id:03d}_{run_timestamp}_b{block_idx:02d}_{block_name}_POSTBLOCK.csv"
+            )
+            write_csv_rows(q_path, questionnaire_rows)
+            print(f"[{block_name}] Questionnaire saved to: {q_path}")
+            all_questionnaire_rows.extend(questionnaire_rows)
+
+
+def save_combined_outputs(output_dir, participant_id, run_timestamp, all_results,
+                          all_postblock_slider_rows, all_questionnaire_rows):
+    os.makedirs(output_dir, exist_ok=True)
+
+    if all_postblock_slider_rows:
+        sliders_all_path = os.path.join(
+            output_dir,
+            f"results_p{participant_id:03d}_{run_timestamp}_b00_POSTBLOCK_SLIDERS_ALL.csv"
+        )
+        write_csv_rows(sliders_all_path, all_postblock_slider_rows)
+        print(f"[ALL] Post-block sliders saved to: {sliders_all_path}")
+
+    all_csv_path = os.path.join(output_dir, f"results_p{participant_id:03d}_{run_timestamp}_b00_ALL.csv")
+    write_csv_rows(all_csv_path, all_results)
+    print(f"[ALL] Results saved to: {all_csv_path}")
+
+    if all_questionnaire_rows:
+        q_all_path = os.path.join(output_dir, f"results_p{participant_id:03d}_{run_timestamp}_b00_POSTBLOCK_ALL.csv")
+        write_csv_rows(q_all_path, all_questionnaire_rows)
+        print(f"[ALL] Questionnaire saved to: {q_all_path}")
+
+
+def compute_performance_score(all_results):
+    score_blocks = {"MANUAL", "AUTOMATION1", "AUTOMATION2"}
+    scored_trials = [row for row in all_results if row["block"] in score_blocks]
+    if not scored_trials:
+        return 0.0
+
+    n_correct = sum(1 for row in scored_trials if row["correct"] is True)
+    return (n_correct / len(scored_trials)) * 100.0
   
   
 # -----------------------------
@@ -2169,53 +2895,13 @@ def main():
     args = parse_cli_args()
     pygame.init()
     pygame.display.set_caption("Virus Detection Task")
-
-    flags = 0
-    if FULLSCREEN:
-        flags |= pygame.FULLSCREEN
-
-    # Option A (recommended): let pygame pick the current display mode in fullscreen
-    if FULLSCREEN and USE_DESKTOP_RES:
-        screen = pygame.display.set_mode((0, 0), flags)
-    else:
-        # fallback: windowed / fixed
-        screen = pygame.display.set_mode((BASE_W, BASE_H))
+    screen = create_display_surface()
 
     # Hide mouse cursor
     pygame.event.set_grab(True)
     pygame.mouse.set_visible(True)  # Set 'False' to hide cursor
-    
-    # --- Auto-detect actual size from the created display surface ---
-    global WIDTH, HEIGHT
-    WIDTH, HEIGHT = screen.get_size()
-    
-    global UI_SCALE
-    UI_SCALE = compute_ui_scale(WIDTH, HEIGHT)
-    print("[UI_SCALE]", UI_SCALE, "for", WIDTH, "x", HEIGHT)
-    
-    global DISH_RADIUS, DOT_RADIUS, VEL_WANDER_SD, VEL_MAX, VEL_INIT_RANGE
-    DISH_RADIUS    = S(DISH_RADIUS_BASE)
-    DOT_RADIUS     = max(1, S(DOT_RADIUS_BASE))
-    VEL_WANDER_SD  = SF(VEL_WANDER_SD_BASE)  # px/frame scaled
-    VEL_MAX        = SF(VEL_MAX_BASE)        # px/frame scaled
-    VEL_INIT_RANGE = SF(VEL_INIT_RANGE_BASE)
-    
-    global FIX_SIZE, FIX_THICKNESS, PB_W, PB_H, PB_PAD
-    FIX_SIZE      = S(FIX_SIZE_BASE)
-    FIX_THICKNESS = max(1, S(FIX_THICKNESS_BASE))
-    PB_W  = S(PB_W_BASE)
-    PB_H  = S(PB_H_BASE)
-    PB_PAD = S(PB_PAD_BASE)
-    
-    # Fonts
-    font_title = load_font(FONT_LIGHT, max(12, S(FONT_TITLE_BASE)))
-    font_body  = load_font(FONT_LIGHT, max(10, S(FONT_BODY_BASE)))
-    font_body_bold  = load_font(FONT_BOLD, max(10, S(FONT_BODY_BASE)))
-    font_small = load_font(FONT_LIGHT, max(9,  S(FONT_SMALL_BASE)))
-    
-    # Automated aid recommendation fonts
-    font_aid_label = load_font(FONT_LIGHT, max(9,  S(FONT_AID_LABEL_BASE)))
-    font_aid       = load_font(FONT_BOLD, max(10, S(FONT_AID_BASE)))
+    initialize_ui_metrics(screen)
+    fonts = load_ui_fonts()
 
     # Alpha dot layer (draw dots here, then blit to screen)
     dot_layer = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -2223,7 +2909,7 @@ def main():
     clock = pygame.time.Clock()
 
     # ---- Participant ID screen (BEFORE instructions) ----
-    res = run_participant_number_screen(screen, clock, font_body)  # or whichever font you use for UI screens
+    res = run_participant_number_screen(screen, clock, fonts["body"])
     if res.get("quit", False):
         quit_clean()
 
@@ -2246,8 +2932,6 @@ def main():
         
     # ---- key counterbalancing (every 2 participants) ----
     km = key_mapping_for_participant(participant_id)
-    KEY_BLACK = km["key_black"]
-    KEY_WHITE = km["key_white"]
     KEY_BLACK_NAME = km["key_black_name"]
     KEY_WHITE_NAME = km["key_white_name"]
 
@@ -2256,678 +2940,107 @@ def main():
           "(reversed)" if km["flip"] else "(standard)")
 
     center = (WIDTH // 2, HEIGHT // 2 + S(20))
-
-    # run_instructions(screen, font_title, font_body, font_body_bold, clock,
-    #                       KEY_BLACK_NAME, KEY_WHITE_NAME, min_show_ms=250)
-    
-    # ---------------------------------------------------------
-    # Run all blocks
-    # ---------------------------------------------------------
-    
-    # Cache calibration delta distribution for later blocks
     calib_delta_mean = None
-    calib_delta_sd   = None
-    calib_delta_path = None
-
+    calib_delta_sd = None
     all_results = []
     all_postblock_slider_rows = []
     all_questionnaire_rows = []
-
     global_trial_index = 0
+    output_dir = "output"
 
-    # ---------------------------------------------------------
-    # Decide which blocks to run
-    # ---------------------------------------------------------
-    if args.block is not None:
-        blocks_to_run = select_single_block(args.block, BLOCKS)
-        print("[SINGLE BLOCK MODE]", participant_id, "->", [b["name"] for b in blocks_to_run])
-    else:
-        blocks_to_run = build_blocks_for_participant(participant_id, BLOCKS)
-        print("[BLOCK ORDER]", participant_id, "->", [b["name"] for b in blocks_to_run])
+    blocks_to_run = choose_blocks_to_run(args, participant_id)
 
     for b_idx, blk in enumerate(blocks_to_run, start=1):
-        block_name   = blk["name"]
-        N_TRIALS     = blk["N_TRIALS"]
-        AUTOMATION_ON = blk["AUTOMATION_ON"]
-        AID_ACCURACY  = blk["AID_ACCURACY"]
-        STAIRCASE_ON  = blk["STAIRCASE_ON"]
-        TARGET_ACC    = blk["TARGET_ACC"]
-        FIXED_DELTA_ON = blk["FIXED_DELTA_ON"]
-        FIXED_DELTA_VALUE = blk["FIXED_DELTA_VALUE"]
-        TRIAL_FEEDBACK_ON   = blk["TRIAL_FEEDBACK_ON"]
-        SHOW_AID_MASKED = bool(blk.get("SHOW_AID_MASKED", False))
-
-        # Show the general task instructions before every block
-        run_instructions(
-            screen,
-            font_title,
-            font_body,
-            font_body_bold,
-            clock,
-            KEY_BLACK_NAME,
-            KEY_WHITE_NAME,
-            min_show_ms=250,
+        block_cfg = dict(blk)
+        block_cfg["block_idx"] = b_idx
+        block_cfg["participant_id"] = participant_id
+        show_block_intro(screen, clock, fonts, block_cfg, KEY_BLACK_NAME, KEY_WHITE_NAME)
+        block_state = prepare_block_state(
+            block_cfg,
+            participant_id,
+            current_calibration=(calib_delta_mean, calib_delta_sd),
+            previous_calibration=(prev_calib_delta_mean, prev_calib_delta_sd, prev_calib_delta_path),
         )
-
-        # IMPORTANT: step sizes depend on TARGET_ACC
-        DELTA_STEP_UP = DELTA_STEP_DOWN * (TARGET_ACC / (1.0 - TARGET_ACC))
-        
-        run_block_instructions(
-            screen=screen,
-            font_title=font_title,
-            font_body=font_body,
-            clock=clock,
-            block_name=block_name,
-            min_show_ms=250
-        )
-
-        # Block start screen
-        screen.fill(BG_INSTRUCTIONS)
-        draw_center_lines(
-            screen,
-            [block_title(block_name), "Press any key to begin"],
-            font_body,
-            WHITE,
-            rect=(0, 0, WIDTH, HEIGHT),
-            line_spacing=S(14),
-            vert_center=True,
-        )
-        pygame.display.flip()
-
-        wait_for_keypress(clock, min_show_ms=250)
-
-        # Inter-trial interval before block starts
-        fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
-
-        # -----------------------------
-        # Decide difficulty source for THIS block
-        # -----------------------------
-        if FIXED_DELTA_ON:
-            difficulty_mode = "fixed_delta"
-        elif (not AUTOMATION_ON) and STAIRCASE_ON:
-            difficulty_mode = "staircase"
-        else:
-            difficulty_mode = "fixed_props"
-
-        # If fixed-delta is on, pull mean/sd from most recent delta_*.csv (likely from previous manual block)
-        fixed_delta_mean = None
-        fixed_delta_sd   = None
-
-        if difficulty_mode == "fixed_delta":
-            # Preference order:
-            # 1) CALIBRATION completed earlier in THIS run
-            # 2) most recent prior CALIBRATION for this participant (timestamp does not need to match)
-            # 3) block fallback value in BLOCKS
-
-            if calib_delta_mean is not None and calib_delta_sd is not None:
-                fixed_delta_mean, fixed_delta_sd = calib_delta_mean, calib_delta_sd
-                print(
-                    f"[{block_name}] Using CALIBRATION delta from current run "
-                    f"(mean={fixed_delta_mean}, sd={fixed_delta_sd})"
-                )
-
-            elif prev_calib_delta_mean is not None and prev_calib_delta_sd is not None:
-                fixed_delta_mean, fixed_delta_sd = prev_calib_delta_mean, prev_calib_delta_sd
-                print(
-                    f"[{block_name}] Using most recent prior CALIBRATION delta for participant "
-                    f"{participant_id} from {prev_calib_delta_path} "
-                    f"(mean={fixed_delta_mean}, sd={fixed_delta_sd})"
-                )
-
-            else:
-                fixed_delta_mean = FIXED_DELTA_VALUE
-                fixed_delta_sd = 0.0
-                print(
-                    f"[{block_name}] No CALIBRATION delta found for participant {participant_id}; "
-                    f"falling back to FIXED_DELTA_VALUE={fixed_delta_mean}, sd={fixed_delta_sd}"
-                )
-
-
-        # Pre-generate proportions only for fixed-props mode
-        if difficulty_mode == "fixed_props":
-            vblack_props = [random.choice(VBLACK_PROPORTION_LEVELS) for _ in range(N_TRIALS)]
-            random.shuffle(vblack_props)
-        else:
-            vblack_props = None
-
-        # Staircase state only meaningful in staircase mode
-        delta_mean = DELTA_INIT
-        deltas_realised = []
-
         block_results = []
-
-        for t in range(N_TRIALS):
-            trials_left = N_TRIALS - t
+        for t in range(block_cfg["N_TRIALS"]):
+            trial_number = t + 1
+            trials_left = block_cfg["N_TRIALS"] - t
             global_trial_index += 1
-
-            # --- pick vblack_prop depending on difficulty_mode ---
-            if difficulty_mode == "fixed_props":
-                vblack_prop = vblack_props[t]
-                delta_realised_this_trial = None
-
-            elif difficulty_mode == "fixed_delta":
-                delta_realised_this_trial = sample_delta_from_mean(fixed_delta_mean, fixed_delta_sd)
-                vblack_prop = pick_vblack_prop_from_delta(delta_realised_this_trial)
-
-            else:  # staircase
-                delta_realised_this_trial = sample_delta_from_mean(delta_mean, DELTA_SD)
-                deltas_realised.append(delta_realised_this_trial)
-                vblack_prop = pick_vblack_prop_from_delta(delta_realised_this_trial)
-
-            dots, n_vblack, n_vwhite = make_trial_dots(N_DOTS, vblack_prop, center, DISH_RADIUS)
-            stimulus = "BLACK" if n_vblack > n_vwhite else "WHITE"
-
-            if AUTOMATION_ON:
-                aid_label, aid_correct = make_aid_recommendation(stimulus, accuracy=AID_ACCURACY)
-            else:
-                aid_label = None
-                aid_correct = None
-
-            responded = False
-            response = None
-            rt_ms = None
-
-            stim_onset_perf = None
-            resp_perf = None
-
-            aid_onset_perf = None
-            aid_visible = False
-            pre_aid_onset_perf = None
-
-            if not AUTOMATION_ON:
-                aid_visible = False
-
-            # (A) advanced aid (<0)
-            if AUTOMATION_ON and AID_ONSET_MS < 0:
-                pre_ms = abs(AID_ONSET_MS)
-                pre_start_perf = time.perf_counter()
-
-                while (time.perf_counter() - pre_start_perf) * 1000.0 < pre_ms:
-                    clock.tick(FPS)
-                    for ev in pygame.event.get():
-                        if ev.type == pygame.QUIT:
-                            pass
-                        if ev.type == pygame.KEYDOWN:
-                            if is_hard_quit_event(ev):
-                                quit_clean()
-
-                    screen.fill(BG)
-                    draw_progress_bar(screen, trials_left=trials_left, total_trials=N_TRIALS)
-
-                    pb_text = f"Samples left: {trials_left}"
-                    pb_img = font_small.render(pb_text, True, WHITE)
-                    screen.blit(pb_img, (WIDTH - PB_PAD - PB_W, PB_PAD + PB_H + 6))
-
-                    draw_aid_recommendation_top_center(
-                        screen, font_aid_label, font_aid, aid_label, show_value=True
-                    )
-
-                    if pre_aid_onset_perf is None:
-                        pre_aid_onset_perf = time.perf_counter()
-
-                    pygame.display.flip()
-
-                aid_visible = True
-
-            # (B) main trial loop
-            trial_start_ticks = pygame.time.get_ticks()
-
-            while not responded:
-                clock.tick(FPS)
-                now = pygame.time.get_ticks()
-
-                for ev in pygame.event.get():
-                    if ev.type == pygame.QUIT:
-                        pass  # ignore window close button
-                    if ev.type == pygame.KEYDOWN:
-                        if is_hard_quit_event(ev):
-                            quit_clean()
-                        if ev.key == KEY_BLACK:
-                            responded = True
-                            response = "BLACK"
-                            resp_perf = time.perf_counter()
-                        elif ev.key == KEY_WHITE:
-                            responded = True
-                            response = "WHITE"
-                            resp_perf = time.perf_counter()
-
-
-                if TRIAL_DEADLINE_MS is not None and (now - trial_start_ticks) >= TRIAL_DEADLINE_MS:
-                    responded = True
-                    response = "TIMEOUT"
-                    rt_ms = None
-
-                update_dots(dots, center, DISH_RADIUS)
-
-                screen.fill(BG)
-                # Countdown timer (top-left)
-                if TRIAL_DEADLINE_MS is not None:
-                    ms_left = TRIAL_DEADLINE_MS - (now - trial_start_ticks)
-                    draw_countdown_timer(
-                        surface=screen,
-                        font=font_body,
-                        ms_left=ms_left,
-                        x=PB_PAD,
-                        y=PB_PAD,
-                        color=WHITE
-                    )
-                    
-                # Progress bar (top-right)
-                draw_progress_bar(screen, trials_left=trials_left, total_trials=N_TRIALS)
-
-                pb_text = f"Samples left: {trials_left}"
-                pb_img = font_small.render(pb_text, True, WHITE)
-                screen.blit(pb_img, (WIDTH - PB_PAD - PB_W, PB_PAD + PB_H + 6))
-
-                draw_petri_dish(screen, center, DISH_RADIUS)
-
-                dot_layer.fill((0, 0, 0, 0))
-                for d in dots:
-                    x = int(d["x"])
-                    y = int(d["y"])
-                    r, g, b = d["col"]
-                    pygame.draw.circle(dot_layer, (r, g, b, DOT_ALPHA), (x, y), DOT_RADIUS)
-                screen.blit(dot_layer, (0, 0))
-
-                draw_trial_prompt_stacked(screen, font_small, HEIGHT - S(80), KEY_BLACK_NAME, KEY_WHITE_NAME)
-
-                if stim_onset_perf is None:
-                    stim_onset_perf = time.perf_counter()
-                    if pre_aid_onset_perf is not None:
-                        aid_onset_perf = pre_aid_onset_perf
-
-                if AUTOMATION_ON and AID_ONSET_MS >= 0 and stim_onset_perf is not None:
-                    elapsed_ms = (time.perf_counter() - stim_onset_perf) * 1000.0
-                    if (not aid_visible) and (elapsed_ms >= AID_ONSET_MS):
-                        aid_visible = True
-                        aid_onset_perf = time.perf_counter()
-
-                if AUTOMATION_ON:
-                    draw_aid_recommendation_top_center(
-                        screen, font_aid_label, font_aid, aid_label, show_value=aid_visible
-                    )
-                    
-                # Show masked "aid" in MANUAL (uninformative)
-                elif SHOW_AID_MASKED:
-                    draw_aid_recommendation_top_center(
-                        screen,
-                        font_aid_label,
-                        font_aid,
-                        rec_label="#####",
-                        show_value=True,   # always show the mask
-                    )
-
-                pygame.display.flip()
-
-            # RT from dot onset
-            if stim_onset_perf is not None and resp_perf is not None:
-                rt_ms = (resp_perf - stim_onset_perf) * 1000.0
-            else:
-                rt_ms = None
-
-            if stim_onset_perf is not None and aid_onset_perf is not None:
-                aid_onset_ms_rel = (aid_onset_perf - stim_onset_perf) * 1000.0
-            else:
-                aid_onset_ms_rel = None
-
-            correct = (response == stimulus)
-
-            # Feedback (per-block)
-            fb_msg = None
-            if TRIAL_FEEDBACK_ON:
-                if response == "TIMEOUT":
-                    fb_msg = "TOO SLOW"
-                    fb_col = FEEDBACK_SLOW_COLOR
-                elif correct:
-                    fb_msg = "CORRECT"
-                    fb_col = FEEDBACK_CORRECT_COLOR
-                else:
-                    fb_msg = "INCORRECT"
-                    fb_col = FEEDBACK_ERROR_COLOR
-
-                show_feedback_screen(
-                    screen=screen,
-                    clock=clock,
-                    font=font_title,
-                    msg=fb_msg,
-                    bg_color=BG,
-                    text_color=fb_col,
-                    prompt_text="Press any key to continue",
-                    prompt_font=font_body,   # nicer for the small prompt
-                    prompt_color=WHITE,
-                    min_show_ms=250
-                )
-
-            # Staircase update (only if staircase this block)
-            if difficulty_mode == "staircase":
-                trial_in_block = t + 1  # 1-based
-
-                step_down_now = burnin_step_down(
-                    trial_in_block_1based=trial_in_block,
-                    step_start=DELTA_STEP_DOWN,
-                    step_min=DELTA_STEP_DOWN_MIN,
-                    burnin_trials=BURNIN_TRIALS
-                )
-                step_up_now = step_down_now * (TARGET_ACC / (1.0 - TARGET_ACC))
-
-                is_correct = (response == stimulus)
-                if is_correct:
-                    delta_mean = max(DELTA_MIN, delta_mean - step_down_now)
-                else:
-                    delta_mean = min(DELTA_MAX, delta_mean + step_up_now)
-
-            row = {
-                "participant_id": participant_id,
-                "run_timestamp": run_ts,
-                
-                "key_black": KEY_BLACK_NAME,   # "D" or "J"
-                "key_white": KEY_WHITE_NAME,   # "J" or "D"
-                "keymap_flip": km["flip"],     # True/False
-                
-                "block": block_name,
-                "block_idx": b_idx,
-                "trial": t + 1,
-                "global_trial": global_trial_index,
-
-                "difficulty_mode": difficulty_mode,
-                "delta_fixed_mean": fixed_delta_mean if difficulty_mode == "fixed_delta" else None,
-                "delta_fixed_sd": fixed_delta_sd if difficulty_mode == "fixed_delta" else None,
-                "delta_stair_realised": delta_realised_this_trial if difficulty_mode == "staircase" else None,
-                "delta_stair_mean": delta_mean if difficulty_mode == "staircase" else None,
-                
-                "delta_step_down_used": step_down_now if difficulty_mode == "staircase" else None,
-                "delta_step_up_used": step_up_now if difficulty_mode == "staircase" else None,
-
-                "vblack_prop": vblack_prop,
-                "n_vblack": n_vblack,
-                "n_vwhite": n_vwhite,
-
-                "auto_on": 1 if AUTOMATION_ON else 0,
-                "aid_accuracy_setting": AID_ACCURACY if AUTOMATION_ON else None,
-
-                "stimulus": stimulus,
-                "aid_label": aid_label,
-                "aid_correct": aid_correct,
-                "aid_onset_ms": AID_ONSET_MS,
-                "aid_onset_ms_rel": aid_onset_ms_rel,
-
-                "response": response,
-                "correct": correct if response in ("BLACK", "WHITE") else None,
-                "feedback": fb_msg if TRIAL_FEEDBACK_ON else None,
-                "rt_s": (rt_ms / 1000.0) if rt_ms is not None else None,
-                "rt_ms": rt_ms,
-            }
-
+            row = run_single_trial(
+                screen,
+                clock,
+                dot_layer,
+                center,
+                fonts,
+                km,
+                block_cfg,
+                block_state,
+                trials_left,
+                trial_number,
+                global_trial_index,
+                run_ts,
+            )
             block_results.append(row)
             all_results.append(row)
-            
-            # Inter-trial participant-controlled continue screen
-            is_last_trial_in_block = (t == N_TRIALS - 1)
 
-            if not is_last_trial_in_block:
-                # If no feedback screen was shown, still gate progression between trials
-                if not TRIAL_FEEDBACK_ON:
+            if t != block_cfg["N_TRIALS"] - 1:
+                if not block_cfg["TRIAL_FEEDBACK_ON"]:
                     press_any_key_screen(
                         screen=screen,
                         clock=clock,
-                        font=font_body,
+                        font=fonts["body"],
                         msg="Press any key to continue",
                         bg_color=BG_INSTRUCTIONS,
                         text_color=WHITE,
                     )
-
-                # Fixation cross before the next trial only
                 fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
 
-        # -----------------------------
-        # Save per-block results CSV
-        # -----------------------------
-        output_dir = "output"
         os.makedirs(output_dir, exist_ok=True)
-
         block_csv_path = os.path.join(
             output_dir,
-            f"results_p{participant_id:03d}_{run_ts}_b{b_idx:02d}_{block_name}.csv"
+            f"results_p{participant_id:03d}_{run_ts}_b{b_idx:02d}_{block_cfg['name']}.csv"
         )
+        write_csv_rows(block_csv_path, block_results)
+        print(f"[{block_cfg['name']}] Results saved to: {block_csv_path}")
 
-        with open(block_csv_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=block_results[0].keys())
-            writer.writeheader()
-            writer.writerows(block_results)
-
-        print(f"[{block_name}] Results saved to: {block_csv_path}")
-
-        # -----------------------------
-        # Save per-block staircase delta summary (if staircase)
-        # -----------------------------
-        if difficulty_mode == "staircase":
-            delta_out_path = os.path.join(
-                output_dir,
-                f"delta_p{participant_id:03d}_{run_ts}_b{b_idx:02d}_{block_name}.csv"
-            )
-
-            # --- Step 1: apply burn-in exclusion (if any) ---
-            burn = int(BURNIN_TRIALS) if BURNIN_TRIALS is not None else 0
-            deltas_post_burnin = deltas_realised[burn:] if burn > 0 else deltas_realised[:]
-
-            # --- Step 2: optionally keep only the most recent N eligible trials ---
-            if CALIB_SUMMARY_LAST_N is None:
-                deltas_summary = deltas_post_burnin
-                summary_last_n_used = None
-            else:
-                n_last = max(1, int(CALIB_SUMMARY_LAST_N))
-                deltas_summary = deltas_post_burnin[-n_last:]
-                summary_last_n_used = n_last
-
-            # --- Summary stats ---
-            if deltas_summary:
-                m = sum(deltas_summary) / len(deltas_summary)
-                if len(deltas_summary) > 1:
-                    var = sum((x - m) ** 2 for x in deltas_summary) / (len(deltas_summary) - 1)
-                    sd = math.sqrt(var)
-                else:
-                    sd = 0.0
-            else:
-                m, sd = None, None
-
-            row = {
-                "participant_id": participant_id,
-                "run_timestamp": run_ts,
-                "block": block_name,
-                "block_idx": b_idx,
-
-                "n_trials_total": len(deltas_realised),
-                "burnin_trials_excluded": burn,
-                "n_trials_post_burnin": len(deltas_post_burnin),
-
-                "summary_last_n_setting": summary_last_n_used,
-                "n_trials_summarised": len(deltas_summary),
-
-                "delta_init": DELTA_INIT,
-                "delta_sd_setting": DELTA_SD,
-                "delta_step_down": DELTA_STEP_DOWN,
-                "delta_step_up": DELTA_STEP_UP,
-                "delta_min": DELTA_MIN,
-                "delta_max": DELTA_MAX,
-
-                # summary stats used by later blocks
-                "delta_block_mean": m,
-                "delta_block_sd": sd,
-
-                "delta_mean_final": delta_mean,
-            }
-
-            with open(delta_out_path, "w", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=row.keys())
-                writer.writeheader()
-                writer.writerow(row)
-
-            print(
-                f"[{block_name}] Staircase delta summary saved to: {delta_out_path} "
-                f"(post-burnin n={len(deltas_post_burnin)}, summarised n={len(deltas_summary)})"
-            )
-
-            # If this was the CALIBRATION block, cache its delta distribution for later blocks
-            if block_name == "CALIBRATION":
-                calib_delta_mean = m
-                calib_delta_sd   = sd
-                calib_delta_path = delta_out_path
-
-        # End-of-block feedback screen
-        # Treat TIMEOUT as incorrect (a miss)
-        n_trials_total = len(block_results)
-        n_correct = sum(1 for r in block_results if r["response"] in ("BLACK", "WHITE") and r["correct"] is True)
-        acc = (n_correct / n_trials_total) if n_trials_total > 0 else 0.0
-
-        aid_vals = [r["aid_correct"] for r in block_results if r.get("aid_correct") is not None]
-        aid_acc = sum(1 for v in aid_vals if v) / len(aid_vals) if aid_vals else 0.0
-
-        end_lines = [
-            f"{block_title(block_name)} COMPLETE",
-            # f"Samples evaluated: {len(block_results)}",
-            # f"Your accuracy: {acc*100:.1f}%",
-        ]
-        # if AUTOMATION_ON:
-            # end_lines.append(f"Automation accuracy: {aid_acc*100:.1f}%")
-        end_lines.append("Press any key to continue")
-
-        screen.fill(BG_INSTRUCTIONS)
-        draw_center_lines(
-            screen, end_lines, font_body, WHITE,
-            rect=(0, 0, WIDTH, HEIGHT),
-            line_spacing=S(14),
-            vert_center=True,
-        )
-        pygame.display.flip()
-
-        wait_for_keypress(clock, min_show_ms=250)
-
-        # -----------------------------
-        # Post-block slider questions
-        # -----------------------------
-        if ENABLE_POSTBLOCK_SLIDERS and block_name in ("CALIBRATION", "MANUAL", "AUTOMATION1", "AUTOMATION2"):
-            slider_rows = run_postblock_slider_questions(
-                screen=screen,
-                clock=clock,
-                font_title=font_title,
-                font_body=font_body,
-                participant_id=participant_id,
-                run_ts=run_ts,
-                block_name=block_name,
-                block_idx=b_idx,
-                automation_on=AUTOMATION_ON,
+        if block_state["difficulty_mode"] == "staircase":
+            mean_delta, sd_delta, _ = write_delta_summary(
                 output_dir=output_dir,
-            )
-            if isinstance(slider_rows, dict) and slider_rows.get("quit"):
-                quit_clean()
-
-            # keep for ALL file
-            if slider_rows:
-                # create the list once near your other accumulators
-                all_postblock_slider_rows.extend(slider_rows)
-                
-        # -----------------------------
-        # Post-block questionnaire (AUTOMATION blocks only)
-        # Shown after end-of-block feedback screen
-        # -----------------------------
-        if block_name in ("AUTOMATION1", "AUTOMATION2") and ENABLE_POSTBLOCK_QUESTIONS:
-            
-            # Questionnaire intro screen
-            run_questionnaire_intro_screen(
-                screen=screen,
-                clock=clock,
-                font_title=font_title,
-                font_body=font_body,
-                min_show_ms=250,
-            )
-            
-            q_base = f"p{participant_id:03d}_b{b_idx:02d}_{block_name}"
-            
-            q_resps = run_postblock_questionnaire(
-                screen,
-                clock,
-                font_body,
-                base_name=q_base,
                 participant_id=participant_id,
-                block_name=block_name,
+                run_timestamp=run_ts,
+                block_name=block_cfg["name"],
                 block_idx=b_idx,
+                deltas_realised=block_state["deltas_realised"],
+                delta_mean=block_state["delta_mean"],
+                delta_step_up=block_state["delta_step_up_setting"],
             )
+            if block_cfg["name"] == "CALIBRATION":
+                calib_delta_mean = mean_delta
+                calib_delta_sd = sd_delta
 
-            if isinstance(q_resps, dict) and q_resps.get("quit"):
-                quit_clean()
-
-            # Save per-block questionnaire CSV
-            if q_resps:
-                q_path = os.path.join(
-                    output_dir,
-                    f"results_p{participant_id:03d}_{run_ts}_b{b_idx:02d}_{block_name}_POSTBLOCK.csv"
-                )
-                with open(q_path, "w", newline="") as f:
-                    writer = csv.DictWriter(f, fieldnames=q_resps[0].keys())
-                    writer.writeheader()
-                    writer.writerows(q_resps)
-
-                print(f"[{block_name}] Questionnaire saved to: {q_path}")
-
-                all_questionnaire_rows.extend(q_resps)
-
-    # ---------------------------------------------------------
-    # Save combined post-block slider CSV (all blocks that had it)
-    # ---------------------------------------------------------
-    if all_postblock_slider_rows:
-        sliders_all_path = os.path.join(
+        show_block_complete_screen(screen, clock, fonts["body"], block_cfg["name"])
+        run_post_block_measures(
+            screen,
+            clock,
+            fonts,
+            participant_id,
+            run_ts,
+            block_cfg,
             output_dir,
-            f"results_p{participant_id:03d}_{run_ts}_b00_POSTBLOCK_SLIDERS_ALL.csv"
+            all_postblock_slider_rows,
+            all_questionnaire_rows,
         )
-        with open(sliders_all_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=all_postblock_slider_rows[0].keys())
-            writer.writeheader()
-            writer.writerows(all_postblock_slider_rows)
 
-        print(f"[ALL] Post-block sliders saved to: {sliders_all_path}")
-        
-    # ---------------------------------------------------------
-    # Save combined results CSV (all blocks)
-    # ---------------------------------------------------------
-    output_dir = "output"
-    os.makedirs(output_dir, exist_ok=True)
+    save_combined_outputs(
+        output_dir,
+        participant_id,
+        run_ts,
+        all_results,
+        all_postblock_slider_rows,
+        all_questionnaire_rows,
+    )
 
-    all_csv_path = os.path.join(output_dir, f"results_p{participant_id:03d}_{run_ts}_b00_ALL.csv")
-
-    with open(all_csv_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=all_results[0].keys())
-        writer.writeheader()
-        writer.writerows(all_results)
-
-    print(f"[ALL] Results saved to: {all_csv_path}")
-
-    # ---------------------------------------------------------
-    # Save combined questionnaire CSV (all blocks that had it)
-    # ---------------------------------------------------------
-    if all_questionnaire_rows:
-        q_all_path = os.path.join(output_dir, f"results_p{participant_id:03d}_{run_ts}_b00_POSTBLOCK_ALL.csv")
-        with open(q_all_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=all_questionnaire_rows[0].keys())
-            writer.writeheader()
-            writer.writerows(all_questionnaire_rows)
-
-        print(f"[ALL] Questionnaire saved to: {q_all_path}")
-
-    # ---------------------------------------------------------
-    # Compute overall performance score (selected blocks only)
-    # ---------------------------------------------------------
-    score_blocks = {"MANUAL", "AUTOMATION1", "AUTOMATION2"}
-
-    scored_trials = [
-        r for r in all_results
-        if r["block"] in score_blocks
-    ]
-
-    if scored_trials:
-        n_correct = sum(1 for r in scored_trials if r["correct"] is True)
-        perf_score = (n_correct / len(scored_trials)) * 100.0
-    else:
-        perf_score = 0.0
+    perf_score = compute_performance_score(all_results)
     
     # Final end screen (ESC allowed ONLY here)
     screen.fill(BG_INSTRUCTIONS)
@@ -2938,7 +3051,7 @@ def main():
             f"Performance score: {perf_score:.1f}% correct",
             "Please alert the experimenter now"
         ],
-        font_body,
+        fonts["body"],
         WHITE,
         rect=(0, 0, WIDTH, HEIGHT),
         line_spacing=S(14),

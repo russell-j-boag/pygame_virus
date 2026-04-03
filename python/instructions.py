@@ -68,16 +68,7 @@ VEL_MAX_BASE        = 0.16
 VEL_INIT_RANGE_BASE = 0.5
 COLLISION_DAMPING   = 0.9
 
-# -----------------------------
-# Text coloring toggles
-# -----------------------------
-TEXT_COLORING_UI_ON = False      # instructions + bottom prompt ("D = BLACK", "J = WHITE")
-TEXT_COLORING_AID_ON = True      # automated recommendation stays coloured
-
-RAW_COLOR_TOKENS = {"BLACK": VBLACK, "WHITE": VWHITE}
-
-COLOR_TOKENS_UI  = RAW_COLOR_TOKENS if TEXT_COLORING_UI_ON  else {}
-COLOR_TOKENS_AID = RAW_COLOR_TOKENS if TEXT_COLORING_AID_ON else {}
+COLOR_TOKENS_AID = {"BLACK": VBLACK, "WHITE": VWHITE}
 
 # -----------------------------
 # Placeholder slides
@@ -145,6 +136,33 @@ SLIDES = [
         "kind": "automation_example",
         "aid_label": "WHITE",
         "callout": "white_example",
+    },
+    {
+        "kind": "text",
+        "title": "TRANSPARENCY LEVELS",
+        "body": (
+            "Across automation blocks, the aid may present different levels of explanatory transparency. "
+            "Sometimes it will show only a recommendation. In other blocks it may also show a brief reason, "
+            "or more detailed information about the evidence and decision rule."
+        ),
+    },
+    {
+        "kind": "automation_example",
+        "aid_label": "BLACK",
+        "transparency_level": "none",
+        "callout": "transparency_none",
+    },
+    {
+        "kind": "automation_example",
+        "aid_label": "BLACK",
+        "transparency_level": "low",
+        "callout": "transparency_low",
+    },
+    {
+        "kind": "automation_example",
+        "aid_label": "BLACK",
+        "transparency_level": "high",
+        "callout": "transparency_high",
     },
     {
         "kind": "text",
@@ -535,11 +553,9 @@ def get_example_dots(center, radius):
 
     if EXAMPLE_DOTS_CACHE is None:
         example_prop = 0.56
-        dots, n_vblack, n_vwhite = make_trial_dots(N_DOTS, example_prop, center, radius)
+        dots, _, _ = make_trial_dots(N_DOTS, example_prop, center, radius)
         EXAMPLE_DOTS_CACHE = {
             "dots": dots,
-            "n_vblack": n_vblack,
-            "n_vwhite": n_vwhite,
             "center": center,
             "radius": radius,
         }
@@ -555,6 +571,7 @@ def draw_example_task_display(
     font_aid_label,
     font_aid,
     aid_label="#####",
+    transparency_level="none",
 ):
     """
     Frozen example of a task trial for instruction slides.
@@ -564,8 +581,6 @@ def draw_example_task_display(
     # fixed example stimulus (generated once only)
     cached = get_example_dots(center, DISH_RADIUS)
     dots = cached["dots"]
-    n_vblack = cached["n_vblack"]
-    n_vwhite = cached["n_vwhite"]
 
     # background
     screen.fill(BG)
@@ -609,12 +624,16 @@ def draw_example_task_display(
         key_white_name="J",
     )
 
-    aid_value_rect = draw_aid_recommendation_top_center(
+    aid_layout = draw_aid_recommendation_top_center(
         screen,
         font_aid_label,
         font_aid,
         rec_label=aid_label,
         show_value=True,
+        transparency_level=transparency_level,
+        evidence_black_pct=56.0,
+        evidence_white_pct=44.0,
+        dish_top_limit=center[1] - DISH_RADIUS,
     )
 
     return {
@@ -625,8 +644,9 @@ def draw_example_task_display(
             WIDTH - PB_PAD - PB_W // 2,
             PB_PAD + PB_H + font_small.get_height() + S(8),
         ),
-        "aid_rect": aid_value_rect,
-        "aid_anchor": aid_value_rect.center if aid_value_rect is not None else (WIDTH // 2, PB_PAD + PB_H + S(50)),
+        "aid_rect": aid_layout["value_rect"],
+        "aid_anchor": aid_layout["value_rect"].center if aid_layout["value_rect"] is not None else (WIDTH // 2, PB_PAD + PB_H + S(50)),
+        "aid_detail_rects": aid_layout["detail_rects"],
         "prompt_rect": prompt_rect,
     }
     
@@ -801,6 +821,7 @@ def draw_automation_example_slide(
     font_aid_label,
     font_aid,
     aid_label,
+    transparency_level="none",
     callout=None,
 ):
     meta = draw_example_task_display(
@@ -811,6 +832,7 @@ def draw_automation_example_slide(
         font_aid_label=font_aid_label,
         font_aid=font_aid,
         aid_label=aid_label,
+        transparency_level=transparency_level,
     )
 
     callout_title_font = font_body
@@ -932,6 +954,48 @@ def draw_automation_example_slide(
             color=WHITE,
             width=max(1, S(2)),
         )
+    elif callout == "transparency_none":
+        title = "No transparency"
+        body = (
+            "In some automation blocks, the aid will display only its recommendation"
+        )
+        bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
+        rect = pygame.Rect(S(80), S(95), bw, bh)
+        draw_callout_box(screen, title, body, rect, callout_title_font, callout_body_font)
+        target = (
+            meta["aid_rect"].midleft[0] - AID_ARROW_PAD,
+            meta["aid_rect"].midleft[1],
+        )
+        draw_arrow(screen, rect.midright, target, color=WHITE, width=max(1, S(2)))
+    elif callout == "transparency_low":
+        title = "Low transparency"
+        body = (
+            "In some automation blocks, the aid will display its recommendation and a brief reason"
+        )
+        bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
+        rect = pygame.Rect(WIDTH - S(80) - bw, S(95), bw, bh)
+        draw_callout_box(screen, title, body, rect, callout_title_font, callout_body_font)
+        detail_rect = meta["aid_detail_rects"][0]
+        target = (
+            detail_rect.right + AID_ARROW_PAD,
+            detail_rect.centery,
+        )
+        draw_arrow(screen, rect.midleft, target, color=WHITE, width=max(1, S(2)))
+    elif callout == "transparency_high":
+        title = "High transparency"
+        body = (
+            "In some automation blocks, the aid will display its recommendation, a brief reason, "
+            "the evidence summary, and the decision rule"
+        )
+        bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
+        rect = pygame.Rect(S(80), S(95), bw, bh)
+        draw_callout_box(screen, title, body, rect, callout_title_font, callout_body_font)
+        detail_rect = meta["aid_detail_rects"][2]
+        target = (
+            detail_rect.left - AID_ARROW_PAD,
+            detail_rect.centery,
+        )
+        draw_arrow(screen, rect.midright, target, color=WHITE, width=max(1, S(2)))
         
     
 def sample_points_in_circle(n, center, radius):
@@ -1090,32 +1154,74 @@ def draw_aid_recommendation_top_center(
     font_label,
     font_main,
     rec_label,
-    show_value=True
+    show_value=True,
+    transparency_level="none",
+    evidence_black_pct=None,
+    evidence_white_pct=None,
+    dish_top_limit=None,
 ):
     cx = WIDTH // 2
-    y0 = PB_PAD + PB_H + S(22)
-    line_gap = 4
+    top_padding = S(8)
+    line_gap = max(1, S(4))
+    detail_font = load_font(FONT_LIGHT, max(10, S(FONT_SMALL_BASE - 1)))
 
-    # Line 1
     img_label = font_label.render("AID JUDGES:", True, WHITE)
-    rect_label = img_label.get_rect(center=(cx, y0 + img_label.get_height() // 2))
-    screen.blit(img_label, rect_label)
+    img_main = None
+    detail_imgs = []
 
-    value_rect = None
-
-    # Line 2
     if show_value:
         phrase = f"{rec_label}"
         col = COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
 
-        value_rect = img_main.get_rect(
-            center=(cx, y0 + img_label.get_height() + line_gap + img_main.get_height() // 2)
-        )
+        detail_lines = []
+        if transparency_level in ("low", "high"):
+            detail_lines.append(f"Reason: The available evidence favors {rec_label}")
 
+        if transparency_level == "high":
+            detail_lines.append(
+                f"Basis: Stimulus scan estimates {evidence_black_pct:.1f}% BLACK and {evidence_white_pct:.1f}% WHITE"
+            )
+            detail_lines.append("Decision rule: Choose the higher-evidence category")
+
+        detail_imgs = [detail_font.render(line, True, WHITE) for line in detail_lines]
+
+    total_height = img_label.get_height()
+    if img_main is not None:
+        total_height += line_gap + img_main.get_height()
+    if detail_imgs:
+        total_height += len(detail_imgs) * line_gap + sum(img.get_height() for img in detail_imgs)
+
+    y0 = top_padding
+    if dish_top_limit is not None:
+        max_bottom = dish_top_limit - S(18)
+        y0 = min(y0, max_bottom - total_height)
+        y0 = max(S(4), y0)
+
+    rect_label = img_label.get_rect(midtop=(cx, y0))
+    screen.blit(img_label, rect_label)
+
+    value_rect = None
+    detail_rects = []
+    if img_main is not None:
+        value_rect = img_main.get_rect(midtop=(cx, rect_label.bottom + line_gap))
         screen.blit(img_main, value_rect)
 
-    return value_rect
+        current_y = value_rect.bottom + line_gap
+        for detail_img in detail_imgs:
+            if transparency_level == "low":
+                rect_detail = detail_img.get_rect(midtop=(cx, current_y))
+            else:
+                rect_detail = detail_img.get_rect(midtop=(cx, current_y))
+            screen.blit(detail_img, rect_detail)
+            detail_rects.append(rect_detail)
+            current_y = rect_detail.bottom + line_gap
+
+    return {
+        "label_rect": rect_label,
+        "value_rect": value_rect,
+        "detail_rects": detail_rects,
+    }
 
 
 # -----------------------------
@@ -1180,6 +1286,7 @@ def draw_slide(screen, font_title, font_body, font_button, font_small, font_aid_
             font_aid_label=font_aid_label,
             font_aid=font_aid,
             aid_label=slide.get("aid_label", "BLACK"),
+            transparency_level=slide.get("transparency_level", "none"),
             callout=slide.get("callout"),
         )
         
