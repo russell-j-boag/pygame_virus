@@ -42,6 +42,12 @@ dat <- latest_per_participant %>%
   pull(data) %>%
   bind_rows()
 
+# Normalise trial index naming across exports.
+if (!"trial_idx" %in% names(dat) && "trial" %in% names(dat)) {
+  dat <- dat %>%
+    mutate(trial_idx = trial)
+}
+
 # Inspect combined data
 head(dat)
 tail(dat)
@@ -54,7 +60,14 @@ write_csv(dat, "data/data_virus_all.csv")
 dat <- latest_per_participant %>%
   mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
   pull(data) %>%
-  bind_rows() %>%
+  bind_rows()
+
+if (!"trial" %in% names(dat) && "trial_idx" %in% names(dat)) {
+  dat <- dat %>%
+    mutate(trial = trial_idx)
+}
+
+dat <- dat %>%
   select(
     participant_id,
     block,
@@ -157,6 +170,27 @@ dat <- latest_per_participant %>%
   mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
   pull(data) %>%
   bind_rows()
+
+# Normalise slider column names across exports (both legacy and current names).
+if (!"question_key" %in% names(dat) && "slider_key" %in% names(dat)) {
+  dat <- dat %>%
+    mutate(question_key = slider_key)
+}
+
+if (!"slider_key" %in% names(dat) && "question_key" %in% names(dat)) {
+  dat <- dat %>%
+    mutate(slider_key = question_key)
+}
+
+if (!"response_percent" %in% names(dat) && "response" %in% names(dat)) {
+  dat <- dat %>%
+    mutate(response_percent = response)
+}
+
+if (!"response" %in% names(dat) && "response_percent" %in% names(dat)) {
+  dat <- dat %>%
+    mutate(response = response_percent)
+}
 
 # Inspect combined data
 head(dat)

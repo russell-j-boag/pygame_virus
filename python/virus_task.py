@@ -2,21 +2,22 @@
 Random Dot Classification (Bartlett & McCarley–style)
 
 Keys:
-- D = Black dominant
-- J = White dominant
-- Any key = advance from instructions
-- ESC = quit (from end-of-block screen only)
+- D/J = classify as V-BLACK or V-WHITE, counterbalanced by participant
+- Option/Alt + Q = hard quit
+- ESC = quit from final completion screen
 """
 
 import argparse
+import csv
+import itertools
 import sys
 import random
 import math
 import os
 import pygame
 import time
-import csv
 from datetime import datetime
+from typing import Any, Dict
 
 # -----------------------------
 # Run start time
@@ -87,6 +88,11 @@ BLOCKS = [
         TRIAL_FEEDBACK_ON=True,
     ),
 ]
+
+BLOCK_DEFAULTS = {
+    "SHOW_AID_MASKED": False,
+    "AID_TRANSPARENCY": "none",
+}
 
 BLOCK_INSTRUCTIONS = {
 
@@ -164,6 +170,12 @@ BLOCK_INSTRUCTIONS = {
         ],
     },
 }
+
+
+def copy_block_config(block_cfg):
+    cfg = dict(BLOCK_DEFAULTS)
+    cfg.update(block_cfg)
+    return cfg
 
 
 def transparency_instruction_slide(transparency_level: str) -> str:
@@ -622,7 +634,7 @@ def run_questionnaire_intro_screen(screen, clock, font_title, font_body, min_sho
         "The following questionnaire relates to your trust in the Automated Decision Aid. "
         "For each item, the scale ranges from strongly disagree to strongly agree. "
         "Please indicate how much you agree or disagree with the following statements "
-        "by ticking the appropriate box."
+        "by choosing the appropriate response on the scale."
     )
     prompt = "Press any key to continue"
 
@@ -991,19 +1003,16 @@ def is_hard_quit_event(event) -> bool:
     # Option on Mac == Alt in pygame
     return bool(mods & (pygame.KMOD_ALT | pygame.KMOD_LALT | pygame.KMOD_RALT))
   
-import itertools
-
 def build_blocks_for_participant(participant_id: int, blocks_template):
     """
-    TRAINING + CALIBRATION stay fixed.
+    CALIBRATION stays fixed.
 
     MANUAL/AUTOMATION1/AUTOMATION2 are counterbalanced across 6 possible orders.
     Participant assignment:
         idx = (participant_id - 1) % 6
         order = permutations([MANUAL, AUTOMATION1, AUTOMATION2])[idx]
     """
-    by_name = {b["name"]: dict(b) for b in blocks_template}  # copy dicts
-    # fixed = [by_name["TRAINING"], by_name["CALIBRATION"]]
+    by_name = {b["name"]: copy_block_config(b) for b in blocks_template}
     fixed = [by_name["CALIBRATION"]]
 
     tail_names = ["MANUAL", "AUTOMATION1", "AUTOMATION2"]
@@ -1113,6 +1122,9 @@ def draw_samples_left_label(surface, font, trials_left):
 
 
 def write_csv_rows(path, rows):
+    if not rows:
+        return
+
     with open(path, "w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
         writer.writeheader()
@@ -1572,8 +1584,6 @@ def draw_progress_bar(surface, trials_left, total_trials):
     if fill_w > 0:
         pygame.draw.rect(surface, WHITE, (x, y, fill_w, PB_H), border_radius=max(1, S(6)))
 
-from typing import Dict, Any
-
 def run_participant_number_screen(screen, clock, font) -> Dict[str, Any]:
     """
     Initial screen before instructions.
@@ -1581,7 +1591,7 @@ def run_participant_number_screen(screen, clock, font) -> Dict[str, Any]:
     Clickable "Continue" button is disabled until a number is entered.
 
     Returns:
-      {"quit": True}                          on quit/escape
+      {"quit": True}                          on hard quit
       {"quit": False, "participant": <int>}   on success
     """
     prompt = "Enter participant number:"
@@ -2072,11 +2082,11 @@ def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name: str, ke
     y_top = y_pos
     y_bottom = y_pos + font_small.get_height() + line_gap
 
-    # Left column (C)
+    # Left column (D)
     screen.blit(lt_img, (start_x + (left_w - lt_img.get_width()) // 2, y_top))
     screen.blit(lb_img, (start_x + (left_w - lb_img.get_width()) // 2, y_bottom))
 
-    # Right column (N)
+    # Right column (J)
     right_x = start_x + left_w + col_gap
     screen.blit(rt_img, (right_x + (right_w - rt_img.get_width()) // 2, y_top))
     screen.blit(rb_img, (right_x + (right_w - rb_img.get_width()) // 2, y_bottom))
@@ -2185,7 +2195,7 @@ def select_single_block(block_name: str, blocks_template):
     Return a single-block list matching block_name.
     Raises a clear error if the block is not available in BLOCKS.
     """
-    matches = [dict(b) for b in blocks_template if b["name"] == block_name]
+    matches = [copy_block_config(b) for b in blocks_template if b["name"] == block_name]
 
     if not matches:
         available = [b["name"] for b in blocks_template]
@@ -2650,7 +2660,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
         aid_mode = "none"
         if block_cfg["AUTOMATION_ON"]:
             aid_mode = "automation"
-        elif block_cfg["SHOW_AID_MASKED"]:
+        elif block_cfg.get("SHOW_AID_MASKED", False):
             aid_mode = "masked"
 
         ms_left = None
@@ -2930,7 +2940,7 @@ def main():
     else:
         print(f"[PREV CALIB] No prior CALIBRATION delta file found for participant {participant_id}")
         
-    # ---- key counterbalancing (every 2 participants) ----
+    # ---- key counterbalancing (every 6 participants) ----
     km = key_mapping_for_participant(participant_id)
     KEY_BLACK_NAME = km["key_black_name"]
     KEY_WHITE_NAME = km["key_white_name"]
@@ -2951,7 +2961,7 @@ def main():
     blocks_to_run = choose_blocks_to_run(args, participant_id)
 
     for b_idx, blk in enumerate(blocks_to_run, start=1):
-        block_cfg = dict(blk)
+        block_cfg = copy_block_config(blk)
         block_cfg["block_idx"] = b_idx
         block_cfg["participant_id"] = participant_id
         show_block_intro(screen, clock, fonts, block_cfg, KEY_BLACK_NAME, KEY_WHITE_NAME)
