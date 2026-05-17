@@ -74,6 +74,12 @@ dat <- dat %>%
     participant_id,
     block,
     block_idx,
+    any_of(c(
+      "condition_deadline_code",
+      "automation_reliability_group",
+      "trial_deadline_ms",
+      "trial_deadline_s"
+    )),
     trial,
     vblack_prop,
     stimulus,

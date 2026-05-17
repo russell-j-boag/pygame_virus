@@ -13,12 +13,17 @@ library("ggplot2")
 # ------------------
 CALIB_SUMMARY_LAST_N <- 150
 PLOT_DIR <- "plots"
-BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION1", "AUTOMATION2")
-BLOCK_LEVELS <- c("Calibration", "Manual", "Automation 95%", "Automation 65%")
+BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION", "AUTOMATION1", "AUTOMATION2")
+BLOCK_LEVELS <- c("Calibration", "Manual", "Automation", "Automation 95%", "Automation 65%")
+DEADLINE_LEVELS <- c("3s", "6s", "10s")
 AUTO_BLOCK_LABELS <- c(
+  "AUTOMATION" = "Automation",
   "AUTOMATION1" = "Automation 95%",
   "AUTOMATION2" = "Automation 65%"
 )
+AUTOMATION_FACET_LEVELS <- c("Automation high", "Automation low", "Automation 95%", "Automation 65%")
+FACET_GROUP_LEVELS <- c("Unaided", AUTOMATION_FACET_LEVELS)
+RELIABILITY_LEVELS <- c("high", "low", "none")
 MOREY_SE_SUBTITLE <- "Error bars are Morey-Cousineau within-subject SEs"
 rt_mode  <- "mean"              # "mean" or "quantile"
 # rt_mode <- "quantile"
@@ -44,6 +49,72 @@ factor_auto_block <- function(x) {
     recode(as.character(x), !!!AUTO_BLOCK_LABELS),
     levels = unname(AUTO_BLOCK_LABELS)
   )
+}
+
+factor_reliability_group <- function(x) {
+  factor(x, levels = RELIABILITY_LEVELS)
+}
+
+factor_deadline <- function(x) {
+  deadline_num <- suppressWarnings(as.numeric(x))
+  deadline_chr <- ifelse(
+    is.na(deadline_num),
+    NA_character_,
+    ifelse(
+      deadline_num == floor(deadline_num),
+      paste0(as.integer(deadline_num), "s"),
+      paste0(deadline_num, "s")
+    )
+  )
+  factor(deadline_chr, levels = DEADLINE_LEVELS)
+}
+
+deadline_code_suffix <- function(x) {
+  deadline_num <- suppressWarnings(as.numeric(x))
+  ifelse(
+    is.na(deadline_num),
+    "",
+    ifelse(
+      deadline_num == floor(deadline_num),
+      as.character(as.integer(deadline_num)),
+      as.character(deadline_num)
+    )
+  )
+}
+
+ensure_deadline_columns <- function(data) {
+  if (!"condition_deadline_code" %in% names(data)) {
+    data$condition_deadline_code <- NA_character_
+  }
+  if (!"automation_reliability_group" %in% names(data)) {
+    data$automation_reliability_group <- NA_character_
+  }
+  if (!"trial_deadline_ms" %in% names(data)) {
+    data$trial_deadline_ms <- NA_real_
+  }
+  if (!"trial_deadline_s" %in% names(data)) {
+    data$trial_deadline_s <- NA_real_
+  }
+  if (!"aid_accuracy_setting" %in% names(data)) {
+    data$aid_accuracy_setting <- NA_real_
+  }
+  data
+}
+
+derive_reliability_group <- function(data) {
+  data %>%
+    mutate(
+      automation_reliability_group = case_when(
+        !is.na(automation_reliability_group) & automation_reliability_group != "" ~
+          as.character(automation_reliability_group),
+        as.character(block) == "AUTOMATION1" ~ "high",
+        as.character(block) == "AUTOMATION2" ~ "low",
+        suppressWarnings(as.numeric(aid_accuracy_setting)) >= 0.90 ~ "high",
+        suppressWarnings(as.numeric(aid_accuracy_setting)) < 0.90 &
+          !is.na(suppressWarnings(as.numeric(aid_accuracy_setting))) ~ "low",
+        TRUE ~ "none"
+      )
+    )
 }
 
 get_axis_limits <- function(y, se = NULL, pad_prop = 0.06) {
@@ -221,11 +292,24 @@ trial_dat_raw <- read_csv("data/data_virus_all.csv", show_col_types = FALSE)
 slider_dat_raw <- read_csv("data/data_virus_sliders_all.csv", show_col_types = FALSE)
 postblock_dat_raw <- read_csv("data/data_virus_postblock_all.csv", show_col_types = FALSE)
 
+trial_dat_raw <- trial_dat_raw %>%
+  ensure_deadline_columns() %>%
+  derive_reliability_group()
+slider_dat_raw <- slider_dat_raw %>%
+  ensure_deadline_columns() %>%
+  derive_reliability_group()
+postblock_dat_raw <- postblock_dat_raw %>%
+  ensure_deadline_columns() %>%
+  derive_reliability_group()
+
 if (!dir.exists(PLOT_DIR)) dir.create(PLOT_DIR, recursive = TRUE)
 
 dat <- trial_dat_raw %>%
   mutate(
-    block = factor_display_block(block),
+    block_raw = as.character(block),
+    block = factor_display_block(block_raw),
+    automation_reliability_group = factor_reliability_group(automation_reliability_group),
+    deadline = factor_deadline(trial_deadline_s),
     aid_correct = case_when(
       aid_correct %in% c(TRUE, 1, "1", "TRUE", "True", "true") ~ "Aid correct",
       aid_correct %in% c(FALSE, 0, "0", "FALSE", "False", "false") ~ "Aid incorrect",
@@ -233,18 +317,20 @@ dat <- trial_dat_raw %>%
     ),
     facet_group = case_when(
       block %in% c("Calibration", "Manual") ~ "Unaided",
+      block == "Automation" & automation_reliability_group == "high" ~ "Automation high",
+      block == "Automation" & automation_reliability_group == "low" ~ "Automation low",
       block == "Automation 95%" ~ "Automation 95%",
       block == "Automation 65%" ~ "Automation 65%",
       TRUE ~ NA_character_
     ),
     x_group = case_when(
       block %in% c("Calibration", "Manual") ~ as.character(block),
-      block %in% c("Automation 95%", "Automation 65%") ~ aid_correct,
+      block %in% c("Automation", "Automation 95%", "Automation 65%") ~ aid_correct,
       TRUE ~ NA_character_
     ),
     facet_group = factor(
       facet_group,
-      levels = c("Unaided", "Automation 95%", "Automation 65%")
+      levels = FACET_GROUP_LEVELS
     ),
     x_group = factor(
       x_group,
@@ -408,10 +494,10 @@ rt_ylim <- get_axis_limits(rt_all_vals, rt_all_ses)
 # ------------------
 acc_hlines <- tibble(
   facet_group = factor(
-    c("Unaided", "Automation 95%", "Automation 65%"),
+    c("Unaided", "Automation high", "Automation low", "Automation 95%", "Automation 65%"),
     levels = levels(acc_summary$facet_group)
   ),
-  yint = c(0.80, 0.95, 0.65)
+  yint = c(0.80, 0.95, 0.65, 0.95, 0.65)
 )
 
 p_acc <- ggplot(acc_summary, aes(x = x_group, y = mean_acc, group = 1)) +
@@ -959,7 +1045,7 @@ acc_base_lines <- tibble(
 
 # purple automation-target lines in auto panels
 acc_auto_lines <- tibble(
-  block_simple = factor_block_simple(unname(AUTO_BLOCK_LABELS)),
+  block_simple = factor_block_simple(c("Automation 95%", "Automation 65%")),
   xint = c(0.95, 0.65)
 )
 
@@ -1075,18 +1161,24 @@ calib_manual_acc <- dat %>%
 block_order_codes <- trial_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
-    block = as.character(block)
+    block = as.character(block),
+    condition_deadline_code = as.character(condition_deadline_code)
   ) %>%
-  filter(block %in% c("MANUAL", "AUTOMATION1", "AUTOMATION2"), !is.na(block_idx)) %>%
-  distinct(participant_id, block, block_idx) %>%
+  filter(block %in% c("MANUAL", "AUTOMATION", "AUTOMATION1", "AUTOMATION2"), !is.na(block_idx)) %>%
+  distinct(participant_id, block, block_idx, condition_deadline_code, trial_deadline_s) %>%
   group_by(participant_id) %>%
   arrange(block_idx, .by_group = TRUE) %>%
   mutate(
-    block_code = recode(
+    legacy_block_code = recode(
       block,
       "MANUAL" = "M",
+      "AUTOMATION" = "A",
       "AUTOMATION1" = "H",
       "AUTOMATION2" = "L"
+    ),
+    block_code = coalesce(
+      na_if(condition_deadline_code, ""),
+      paste0(legacy_block_code, deadline_code_suffix(trial_deadline_s))
     )
   ) %>%
   summarise(
@@ -1376,6 +1468,7 @@ empirical_aid_acc <- trial_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
     block = as.character(block),
+    automation_reliability_group = as.character(automation_reliability_group),
     aid_correct_num = case_when(
       aid_correct %in% c(TRUE, 1, "1", "TRUE", "True", "true") ~ 1,
       aid_correct %in% c(FALSE, 0, "0", "FALSE", "False", "false") ~ 0,
@@ -1383,20 +1476,22 @@ empirical_aid_acc <- trial_dat_raw %>%
     )
   ) %>%
   filter(block %in% names(AUTO_BLOCK_LABELS), !is.na(aid_correct_num)) %>%
-  group_by(participant_id, block) %>%
+  group_by(participant_id, block, automation_reliability_group) %>%
   summarise(
     empirical_aid_accuracy = mean(aid_correct_num, na.rm = TRUE),
     n_trials = dplyr::n(),
     .groups = "drop"
   ) %>%
   mutate(
-    block_label = factor_auto_block(block)
+    block_label = factor_auto_block(block),
+    automation_reliability_group = factor_reliability_group(automation_reliability_group)
   )
 
 self_rated_aid_acc <- slider_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
     block = as.character(block),
+    automation_reliability_group = as.character(automation_reliability_group),
     response = as.numeric(response)
   ) %>%
   filter(
@@ -1404,19 +1499,20 @@ self_rated_aid_acc <- slider_dat_raw %>%
     slider_key == "perc_auto_correct",
     !is.na(response)
   ) %>%
-  group_by(participant_id, block) %>%
+  group_by(participant_id, block, automation_reliability_group) %>%
   summarise(
     self_rated_aid_accuracy = mean(response, na.rm = TRUE) / 100,
     .groups = "drop"
   ) %>%
   mutate(
-    block_label = factor_auto_block(block)
+    block_label = factor_auto_block(block),
+    automation_reliability_group = factor_reliability_group(automation_reliability_group)
   )
 
 aid_accuracy_diff <- empirical_aid_acc %>%
   inner_join(
     self_rated_aid_acc,
-    by = c("participant_id", "block", "block_label")
+    by = c("participant_id", "block", "block_label", "automation_reliability_group")
   ) %>%
   mutate(
     aid_accuracy_difference = empirical_aid_accuracy - self_rated_aid_accuracy
@@ -1427,17 +1523,19 @@ trust_ratings <- postblock_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
     block = as.character(block),
+    automation_reliability_group = as.character(automation_reliability_group),
     question_idx = as.integer(question_idx),
     response = as.numeric(response)
   ) %>%
   filter(block %in% names(AUTO_BLOCK_LABELS), !is.na(question_idx), !is.na(response)) %>%
-  group_by(participant_id, block, question_idx, question) %>%
+  group_by(participant_id, block, automation_reliability_group, question_idx, question) %>%
   summarise(
     trust_rating = mean(response, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   mutate(
     block_label = factor_auto_block(block),
+    automation_reliability_group = factor_reliability_group(automation_reliability_group),
     question_label = paste0("Q", question_idx, ". ", wrap_text(question))
   )
 
@@ -1451,6 +1549,7 @@ aid_accuracy_trust_dat <- aid_accuracy_diff %>%
     participant_id,
     block,
     block_label,
+    automation_reliability_group,
     empirical_aid_accuracy,
     self_rated_aid_accuracy,
     aid_accuracy_difference
@@ -1461,25 +1560,31 @@ aid_accuracy_trust_dat <- aid_accuracy_diff %>%
         participant_id,
         block,
         block_label,
+        automation_reliability_group,
         question_idx,
         question,
         question_label,
         trust_rating
       ),
-    by = c("participant_id", "block", "block_label")
+    by = c("participant_id", "block", "block_label", "automation_reliability_group")
   )
 
 aid_accuracy_trust_cor <- aid_accuracy_trust_dat %>%
-  group_by(block_label, question_idx, question, question_label) %>%
+  group_by(block_label, automation_reliability_group, question_idx, question, question_label) %>%
   group_modify(~ safe_cor_summary(
     x = .x$aid_accuracy_difference,
     y = .x$trust_rating
   )) %>%
   ungroup() %>%
   mutate(
-    question_label = factor(question_label, levels = rev(question_levels))
+    question_label = factor(question_label, levels = rev(question_levels)),
+    panel_label = if_else(
+      as.character(block_label) == "Automation",
+      paste("Automation", as.character(automation_reliability_group)),
+      as.character(block_label)
+    )
   ) %>%
-  arrange(block_label, question_idx)
+  arrange(block_label, automation_reliability_group, question_idx)
 
 p_aid_accuracy_trust_cor <- ggplot(
   aid_accuracy_trust_cor,
@@ -1494,7 +1599,7 @@ p_aid_accuracy_trust_cor <- ggplot(
   geom_errorbar(linewidth = 0.45, width = 0.15) +
   geom_point(size = 2.3) +
   coord_flip(ylim = c(-1, 1)) +
-  facet_wrap(~ block_label, ncol = 1) +
+  facet_wrap(~ panel_label, ncol = 1) +
   labs(
     x = NULL,
     y = "Pearson r",
@@ -1530,7 +1635,7 @@ save_plot_pair(
 # ------------------
 
 pooled_aid_accuracy_diff <- aid_accuracy_diff %>%
-  group_by(participant_id) %>%
+  group_by(participant_id, automation_reliability_group) %>%
   summarise(
     pooled_empirical_aid_accuracy = mean(empirical_aid_accuracy, na.rm = TRUE),
     pooled_self_rated_aid_accuracy = mean(self_rated_aid_accuracy, na.rm = TRUE),
@@ -1540,7 +1645,7 @@ pooled_aid_accuracy_diff <- aid_accuracy_diff %>%
   )
 
 pooled_trust_ratings <- trust_ratings %>%
-  group_by(participant_id) %>%
+  group_by(participant_id, automation_reliability_group) %>%
   summarise(
     pooled_trust_rating = mean(trust_rating, na.rm = TRUE),
     n_trust_ratings = dplyr::n(),
@@ -1548,24 +1653,29 @@ pooled_trust_ratings <- trust_ratings %>%
   )
 
 pooled_aid_accuracy_trust_dat <- pooled_aid_accuracy_diff %>%
-  inner_join(pooled_trust_ratings, by = "participant_id")
+  inner_join(pooled_trust_ratings, by = c("participant_id", "automation_reliability_group"))
 
-pooled_aid_accuracy_trust_cor <- safe_cor_summary(
-  x = pooled_aid_accuracy_trust_dat$pooled_aid_accuracy_difference,
-  y = pooled_aid_accuracy_trust_dat$pooled_trust_rating
-) %>%
+pooled_aid_accuracy_trust_cor <- pooled_aid_accuracy_trust_dat %>%
+  group_by(automation_reliability_group) %>%
+  group_modify(~ safe_cor_summary(
+    x = .x$pooled_aid_accuracy_difference,
+    y = .x$pooled_trust_rating
+  )) %>%
+  ungroup() %>%
   mutate(
     analysis = "pooled_across_automation_blocks_and_trust_questions"
   )
 
 pooled_cor_label <- pooled_aid_accuracy_trust_cor %>%
   transmute(
+    automation_reliability_group,
     label = paste0(
       "r = ", sprintf("%.2f", correlation),
       "\np = ", sprintf("%.3f", p_value),
       "\nn = ", n
     )
   ) %>%
+  mutate(label = setNames(label, automation_reliability_group)) %>%
   pull(label)
 
 pooled_diff_xlim <- get_axis_limits(
@@ -1590,22 +1700,26 @@ p_aid_accuracy_trust_pooled <- ggplot(
     linewidth = 0.8,
     colour = "black"
   ) +
-  annotate(
-    geom = "text",
-    x = Inf,
-    y = Inf,
-    label = pooled_cor_label,
+  geom_text(
+    data = tibble(
+      automation_reliability_group = factor(names(pooled_cor_label), levels = RELIABILITY_LEVELS),
+      pooled_trust_rating = Inf,
+      pooled_aid_accuracy_difference = Inf,
+      label = unname(pooled_cor_label)
+    ),
+    aes(label = label),
     hjust = 1.05,
     vjust = 1.3,
     size = 3.5
   ) +
+  facet_wrap(~ automation_reliability_group) +
   labs(
     x = "Pooled trust rating",
     y = "Pooled aid-accuracy discrepancy",
     title = "Pooled trust vs pooled aid-accuracy discrepancy",
     subtitle = paste(
-      "Discrepancy is averaged across Automation 95% and Automation 65%;",
-      "trust is averaged across all 6 trust items in both automation blocks"
+      "Discrepancy and trust are averaged across the two automation-deadline blocks;",
+      "panels show the between-subjects reliability groups"
     )
   ) +
   coord_cartesian(
