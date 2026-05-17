@@ -75,8 +75,12 @@ dat <- dat %>%
     block,
     block_idx,
     any_of(c(
+      "condition_code",
       "condition_deadline_code",
       "automation_reliability_group",
+      "aid_onset_condition",
+      "aid_onset_ms",
+      "aid_onset_ms_rel",
       "trial_deadline_ms",
       "trial_deadline_s"
     )),

@@ -29,7 +29,7 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 # -----------------------------
 POST_CALIBRATION_N_TRIALS = 400
 CALIBRATION_TRIAL_DEADLINE_MS = 10000
-TIME_PRESSURE_DEADLINES_MS = (3000, 6000)
+POST_CALIBRATION_TRIAL_DEADLINE_MS = 6000
 AUTOMATION_RELIABILITY_SETTINGS = {
     "high": 0.95,
     "low": 0.65,
@@ -58,35 +58,9 @@ BLOCKS = [
         FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=CALIBRATION_TRIAL_DEADLINE_MS,
-        CONDITION_DEADLINE_CODE="CAL",
-    ),
-    dict(
-        name="MANUAL",
-        N_TRIALS=POST_CALIBRATION_N_TRIALS,
-        AUTOMATION_ON=False,      # automation off
-        AID_ACCURACY=0.90,        # not used (automation off), but harmless
-        STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=0.80,          # not used (staircase off), but harmless
-        FIXED_DELTA_ON=True,
-        FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
-        TRIAL_FEEDBACK_ON=True,
-        SHOW_AID_MASKED=True,
-        TRIAL_DEADLINE_MS=3000,
-        CONDITION_DEADLINE_CODE="M3",
-    ),
-    dict(
-        name="MANUAL",
-        N_TRIALS=POST_CALIBRATION_N_TRIALS,
-        AUTOMATION_ON=False,      # automation off
-        AID_ACCURACY=0.90,        # not used (automation off), but harmless
-        STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=0.80,          # not used (staircase off), but harmless
-        FIXED_DELTA_ON=True,
-        FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
-        TRIAL_FEEDBACK_ON=True,
-        SHOW_AID_MASKED=True,
-        TRIAL_DEADLINE_MS=6000,
-        CONDITION_DEADLINE_CODE="M6",
+        CONDITION_CODE="CAL",
+        AID_ONSET_CONDITION=None,
+        AID_ONSET_MS=None,
     ),
     dict(
         name="AUTOMATION",
@@ -94,13 +68,15 @@ BLOCKS = [
         AUTOMATION_ON=True,       # automation on
         AID_ACCURACY=None,        # assigned by participant reliability group
         AID_TRANSPARENCY="none",
+        AID_ONSET_CONDITION="before",
+        AID_ONSET_MS=-500,
         STAIRCASE_ON=False,       # staircase off
         TARGET_ACC=0.80,          # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
         TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=3000,
-        CONDITION_DEADLINE_CODE="A3",
+        TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
+        CONDITION_CODE="AB500",
     ),
     dict(
         name="AUTOMATION",
@@ -108,13 +84,31 @@ BLOCKS = [
         AUTOMATION_ON=True,       # automation on
         AID_ACCURACY=None,        # assigned by participant reliability group
         AID_TRANSPARENCY="none",
+        AID_ONSET_CONDITION="simultaneous",
+        AID_ONSET_MS=0,
         STAIRCASE_ON=False,       # staircase off
         TARGET_ACC=0.80,          # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
         TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=6000,
-        CONDITION_DEADLINE_CODE="A6",
+        TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
+        CONDITION_CODE="AS0",
+    ),
+    dict(
+        name="AUTOMATION",
+        N_TRIALS=POST_CALIBRATION_N_TRIALS,
+        AUTOMATION_ON=True,       # automation on
+        AID_ACCURACY=None,        # assigned by participant reliability group
+        AID_TRANSPARENCY="none",
+        AID_ONSET_CONDITION="after",
+        AID_ONSET_MS=500,
+        STAIRCASE_ON=False,       # staircase off
+        TARGET_ACC=0.80,          # not used (staircase off), but harmless
+        FIXED_DELTA_ON=True,
+        FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
+        TRIAL_FEEDBACK_ON=True,
+        TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
+        CONDITION_CODE="AA500",
     ),
 ]
 
@@ -122,7 +116,10 @@ BLOCK_DEFAULTS = {
     "SHOW_AID_MASKED": False,
     "AID_TRANSPARENCY": "none",
     "TRIAL_DEADLINE_MS": CALIBRATION_TRIAL_DEADLINE_MS,
+    "CONDITION_CODE": None,
     "CONDITION_DEADLINE_CODE": None,
+    "AID_ONSET_CONDITION": None,
+    "AID_ONSET_MS": None,
     "AUTOMATION_RELIABILITY_GROUP": "none",
 }
 
@@ -132,13 +129,6 @@ BLOCK_INSTRUCTIONS = {
         "title": "MANUAL BLOCK",
         "slides": [
             "You will now begin your first block of trials."
-        ],
-    },
-
-    "MANUAL": {
-        "title": "MANUAL BLOCK",
-        "slides": [
-            "In this block, there is no special information shown at the top of the display.\nThere is simply a string '#####', which you should ignore."
         ],
     },
 
@@ -174,11 +164,15 @@ def copy_block_config(block_cfg):
     return cfg
 
 
-def block_condition_deadline_code(block_cfg) -> str:
-    code = block_cfg.get("CONDITION_DEADLINE_CODE")
+def block_condition_code(block_cfg) -> str:
+    code = block_cfg.get("CONDITION_CODE") or block_cfg.get("CONDITION_DEADLINE_CODE")
     if code:
         return code
     return block_cfg["name"]
+
+
+def block_condition_deadline_code(block_cfg) -> str:
+    return block_condition_code(block_cfg)
 
 
 def trial_deadline_ms_for_block(block_cfg):
@@ -200,13 +194,47 @@ def format_deadline_s(deadline_s) -> str:
     return f"{deadline_s:g}"
 
 
-def time_pressure_instruction_slide(block_cfg) -> str:
+def aid_onset_ms_for_block(block_cfg):
+    return block_cfg.get("AID_ONSET_MS")
+
+
+def aid_onset_condition_for_block(block_cfg):
+    return block_cfg.get("AID_ONSET_CONDITION")
+
+
+def format_aid_onset_ms(aid_onset_ms) -> str:
+    if aid_onset_ms is None:
+        return "none"
+    if int(aid_onset_ms) == 0:
+        return "0 ms"
+    direction = "before" if int(aid_onset_ms) < 0 else "after"
+    return f"{abs(int(aid_onset_ms))} ms {direction}"
+
+
+def response_window_instruction_slide(block_cfg) -> str:
     deadline_s = trial_deadline_s_for_block(block_cfg)
     deadline_text = format_deadline_s(deadline_s)
     return (
-        f"In this block, each trial has a response deadline of {deadline_text} seconds. "
-        "If you do not respond before the deadline, the trial will be recorded as too slow. "
-        "Please respond as accurately as possible while staying within the deadline."
+        f"In this block, each trial has a {deadline_text}-second response window. "
+        "If you do not respond within this window, the trial will be recorded as too slow. "
+        "Please respond as accurately as possible."
+    )
+
+
+def aid_onset_instruction_slide(block_cfg) -> str:
+    aid_onset_ms = aid_onset_ms_for_block(block_cfg)
+    onset_text = format_aid_onset_ms(aid_onset_ms)
+    if aid_onset_ms is None:
+        return ""
+    if int(aid_onset_ms) < 0:
+        timing_text = f"{onset_text} the virus sample appears"
+    elif int(aid_onset_ms) > 0:
+        timing_text = f"{onset_text} the virus sample appears"
+    else:
+        timing_text = "at the same time as the virus sample"
+    return (
+        "In this block, the automated decision aid recommendation will appear "
+        f"{timing_text}."
     )
 
 
@@ -235,8 +263,7 @@ def reliability_group_for_participant(participant_id: int) -> str:
 
 
 def block_order_index_for_participant(participant_id: int) -> int:
-    cycle_idx = (participant_id - 1) % 16
-    return (cycle_idx % 8) // 2
+    return ((participant_id - 1) // 2) % 3
 
 
 def apply_reliability_to_block(block_cfg, reliability_group: str):
@@ -343,11 +370,10 @@ DISH_EDGE = BLACK     # thin edge
 # V-BLACK cell proportions
 VBLACK_PROPORTION_LEVELS = [0.40, 0.42, 0.44, 0.46, 0.48, 0.52, 0.54, 0.56, 0.58, 0.60]
 
-# Automated aid onset (relative to dot stimulus onset)
+# Automated aid onset is configured per automation block.
 # 0   = aid appears simultaneously with dot stimulus
 # >0  = aid delayed (ms after dot onset)
 # <0  = aid advanced (ms before dot onset)
-AID_ONSET_MS = 0
 AID_TRANSPARENCY_LEVELS = {"none", "low", "high"}
 
 # -----------------------------
@@ -809,8 +835,11 @@ def run_postblock_questionnaire(
             "participant_id": participant_id,
             "block": block_name,
             "block_idx": block_idx,
+            "condition_code": block_condition_code(block_cfg) if block_cfg else None,
             "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
             "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
+            "aid_onset_condition": aid_onset_condition_for_block(block_cfg) if block_cfg else None,
+            "aid_onset_ms": aid_onset_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": idx,
@@ -1081,9 +1110,9 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
     """
     CALIBRATION stays fixed.
 
-    The four post-calibration condition-deadline cells are assigned with a
-    Williams Latin square. Reliability is assigned between subjects within a
-    16-participant cycle that also balances key mapping.
+    The three post-calibration aid-onset cells are assigned with balanced
+    rotations. Reliability remains between subjects and key mapping uses the
+    existing participant-ID cycle.
     """
     calibration_blocks = [
         copy_block_config(b)
@@ -1098,13 +1127,11 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
         for b in blocks_template
         if b["name"] != "CALIBRATION"
     ]
-    if len(tail_blocks) != 4:
-        raise ValueError("The between-subjects reliability design expects exactly four post-calibration blocks.")
+    if len(tail_blocks) != 3:
+        raise ValueError("The aid-onset design expects exactly three post-calibration blocks.")
 
-    # Williams square pattern for four unique cells: 1, 2, 4, 3.
-    order_pattern = [0, 1, 3, 2]
     all_orders = [
-        [tail_blocks[(pattern_idx + offset) % len(tail_blocks)] for pattern_idx in order_pattern]
+        [tail_blocks[(idx + offset) % len(tail_blocks)] for idx in range(len(tail_blocks))]
         for offset in range(len(tail_blocks))
     ]
 
@@ -1412,9 +1439,9 @@ def run_postblock_slider_questions(
     if not ENABLE_POSTBLOCK_SLIDERS:
         return []
 
-    if block_name in ("CALIBRATION", "MANUAL"):
+    if block_name == "CALIBRATION":
         items = SLIDER_ITEMS_MANUAL
-    elif block_name in ("AUTOMATION", "AUTOMATION1", "AUTOMATION2"):
+    elif block_name == "AUTOMATION":
         items = SLIDER_ITEMS_AUTOMATION
     else:
         return []  # no sliders for other blocks
@@ -1453,8 +1480,11 @@ def run_postblock_slider_questions(
             "run_timestamp": run_ts,
             "block": block_name,
             "block_idx": block_idx,
+            "condition_code": block_condition_code(block_cfg) if block_cfg else None,
             "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
             "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
+            "aid_onset_condition": aid_onset_condition_for_block(block_cfg) if block_cfg else None,
+            "aid_onset_ms": aid_onset_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": i,
@@ -1911,14 +1941,20 @@ def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
 
         if block_cfg is not None and block_name == "AUTOMATION":
             reliability_group = block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none")
-            slides = slides[:1] + [automation_reliability_instruction_slide(reliability_group)] + slides[1:]
+            slides = (
+                slides[:1]
+                + [
+                    automation_reliability_instruction_slide(reliability_group),
+                    aid_onset_instruction_slide(block_cfg),
+                ]
+                + slides[1:]
+            )
+            payload["title"] = (
+                f"{payload['title']} ({format_aid_onset_ms(aid_onset_ms_for_block(block_cfg)).upper()})"
+            )
 
         if block_cfg is not None and block_name != "CALIBRATION":
-            deadline_s = trial_deadline_s_for_block(block_cfg)
-            payload["title"] = (
-                f"{payload['title']} ({format_deadline_s(deadline_s)}s DEADLINE)"
-            )
-            slides = [time_pressure_instruction_slide(block_cfg)] + slides
+            slides = [response_window_instruction_slide(block_cfg)] + slides
 
         payload["slides"] = slides
 
@@ -2282,13 +2318,13 @@ def parse_cli_args():
         "--block",
         type=str,
         default=None,
-        help="Run only a selected block. Valid values: CALIBRATION, MANUAL, AUTOMATION",
+        help="Run only a selected block. Valid values: CALIBRATION, AUTOMATION",
     )
     parser.add_argument(
-        "--deadline-s",
-        type=float,
+        "--aid-onset-ms",
+        type=int,
         default=None,
-        help="Select a post-calibration deadline in seconds when --block has 3s and 6s variants.",
+        help="Select an AUTOMATION block by aid onset relative to stimulus onset: -500, 0, or 500.",
     )
     parser.add_argument(
         "--reliability-group",
@@ -2302,8 +2338,10 @@ def parse_cli_args():
     if args.block is not None:
         args.block = args.block.upper()
 
-    if args.deadline_s is not None and args.block is None:
-        parser.error("--deadline-s requires --block")
+    if args.aid_onset_ms is not None and args.block is None:
+        parser.error("--aid-onset-ms requires --block")
+    if args.aid_onset_ms is not None and args.block != "AUTOMATION":
+        parser.error("--aid-onset-ms can only be used with --block AUTOMATION")
     if args.reliability_group is not None and args.block is None:
         parser.error("--reliability-group requires --block")
     if args.reliability_group is not None and args.block != "AUTOMATION":
@@ -2312,9 +2350,9 @@ def parse_cli_args():
     return args
   
 
-def select_single_block(block_name: str, blocks_template, participant_id: int, deadline_s=None, reliability_group=None):
+def select_single_block(block_name: str, blocks_template, participant_id: int, aid_onset_ms=None, reliability_group=None):
     """
-    Return block configs matching block_name and, when needed, deadline_s.
+    Return block configs matching block_name and, when needed, aid_onset_ms.
     Raises a clear error if the block is not available in BLOCKS.
     """
     matches = [copy_block_config(b) for b in blocks_template if b["name"] == block_name]
@@ -2325,31 +2363,31 @@ def select_single_block(block_name: str, blocks_template, participant_id: int, d
             f"Unknown block '{block_name}'. Available blocks in this script: {available}"
         )
 
-    if deadline_s is not None:
+    if aid_onset_ms is not None:
         matches = [
             b for b in matches
-            if trial_deadline_s_for_block(b) == float(deadline_s)
+            if aid_onset_ms_for_block(b) == int(aid_onset_ms)
         ]
         if not matches:
             available = sorted(
                 set(
-                    format_deadline_s(trial_deadline_s_for_block(b))
+                    format_aid_onset_ms(aid_onset_ms_for_block(b))
                     for b in blocks_template
                     if b["name"] == block_name
                 )
             )
             raise ValueError(
-                f"No {block_name} block has a {format_deadline_s(deadline_s)}s deadline. "
-                f"Available deadlines for this block: {available}"
+                f"No {block_name} block has aid onset {format_aid_onset_ms(aid_onset_ms)}. "
+                f"Available aid onsets for this block: {available}"
             )
 
     if len(matches) > 1:
         available = sorted(
-            set(format_deadline_s(trial_deadline_s_for_block(b)) for b in matches)
+            set(format_aid_onset_ms(aid_onset_ms_for_block(b)) for b in matches)
         )
         raise ValueError(
-            f"Block '{block_name}' has multiple deadline variants. "
-            f"Pass --deadline-s with one of: {available}"
+            f"Block '{block_name}' has multiple aid-onset variants. "
+            f"Pass --aid-onset-ms with one of: {available}"
         )
 
     if matches[0]["AUTOMATION_ON"] and reliability_group is None:
@@ -2411,14 +2449,14 @@ def choose_blocks_to_run(args, participant_id):
             args.block,
             BLOCKS,
             participant_id=participant_id,
-            deadline_s=args.deadline_s,
+            aid_onset_ms=args.aid_onset_ms,
             reliability_group=args.reliability_group,
         )
         print(
             "[SINGLE BLOCK MODE]",
             participant_id,
             "->",
-            [block_condition_deadline_code(b) for b in blocks_to_run],
+            [block_condition_code(b) for b in blocks_to_run],
             f"(reliability={blocks_to_run[0]['AUTOMATION_RELIABILITY_GROUP']})",
         )
         return blocks_to_run
@@ -2428,7 +2466,7 @@ def choose_blocks_to_run(args, participant_id):
         "[BLOCK ORDER]",
         participant_id,
         "->",
-        [block_condition_deadline_code(b) for b in blocks_to_run],
+        [block_condition_code(b) for b in blocks_to_run],
         f"(reliability={blocks_to_run[0]['AUTOMATION_RELIABILITY_GROUP']})",
     )
     return blocks_to_run
@@ -2621,11 +2659,11 @@ def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, m
         )
 
 
-def maybe_run_advanced_aid_phase(screen, clock, aid_payload, ui_payload):
-    if AID_ONSET_MS >= 0:
+def maybe_run_advanced_aid_phase(screen, clock, aid_payload, ui_payload, aid_onset_ms):
+    if aid_onset_ms is None or aid_onset_ms >= 0:
         return False, None
 
-    pre_ms = abs(AID_ONSET_MS)
+    pre_ms = abs(aid_onset_ms)
     pre_start_perf = time.perf_counter()
     pre_aid_onset_perf = None
 
@@ -2694,8 +2732,10 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "keymap_flip": keymap["flip"],
         "block": block_name,
         "block_idx": block_idx,
+        "condition_code": block_condition_code(block_cfg),
         "condition_deadline_code": block_condition_deadline_code(block_cfg),
         "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none"),
+        "aid_onset_condition": aid_onset_condition_for_block(block_cfg),
         "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg),
         "trial_deadline_s": trial_deadline_s_for_block(block_cfg),
         "trial": trial_number,
@@ -2716,7 +2756,7 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "stimulus": trial_data["stimulus"],
         "aid_label": trial_data["aid_label"],
         "aid_correct": trial_data["aid_correct"],
-        "aid_onset_ms": AID_ONSET_MS,
+        "aid_onset_ms": aid_onset_ms_for_block(block_cfg),
         "aid_onset_ms_rel": trial_data["aid_onset_ms_rel"],
         "response": response,
         "correct": trial_data["correct"] if response in ("BLACK", "WHITE") else None,
@@ -2785,12 +2825,14 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
 
     aid_visible = False
     aid_onset_perf = None
+    aid_onset_ms = aid_onset_ms_for_block(block_cfg)
     if block_cfg["AUTOMATION_ON"]:
         aid_visible, pre_aid_onset_perf = maybe_run_advanced_aid_phase(
             screen,
             clock,
             aid_render_payload,
             ui_payload,
+            aid_onset_ms,
         )
     else:
         pre_aid_onset_perf = None
@@ -2832,9 +2874,9 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             if pre_aid_onset_perf is not None:
                 aid_onset_perf = pre_aid_onset_perf
 
-        if block_cfg["AUTOMATION_ON"] and AID_ONSET_MS >= 0 and stim_onset_perf is not None:
+        if block_cfg["AUTOMATION_ON"] and aid_onset_ms is not None and aid_onset_ms >= 0 and stim_onset_perf is not None:
             elapsed_ms = (time.perf_counter() - stim_onset_perf) * 1000.0
-            if (not aid_visible) and (elapsed_ms >= AID_ONSET_MS):
+            if (not aid_visible) and (elapsed_ms >= aid_onset_ms):
                 aid_visible = True
                 aid_onset_perf = time.perf_counter()
 
@@ -3001,7 +3043,7 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
     block_name = block_cfg["name"]
     block_idx = block_cfg["block_idx"]
 
-    if ENABLE_POSTBLOCK_SLIDERS and block_name in ("CALIBRATION", "MANUAL", "AUTOMATION", "AUTOMATION1", "AUTOMATION2"):
+    if ENABLE_POSTBLOCK_SLIDERS and block_name in ("CALIBRATION", "AUTOMATION"):
         slider_rows = run_postblock_slider_questions(
             screen=screen,
             clock=clock,
@@ -3019,7 +3061,7 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
         if slider_rows:
             all_postblock_slider_rows.extend(slider_rows)
 
-    if block_name in ("AUTOMATION", "AUTOMATION1", "AUTOMATION2") and ENABLE_POSTBLOCK_QUESTIONS:
+    if block_name == "AUTOMATION" and ENABLE_POSTBLOCK_QUESTIONS:
         run_questionnaire_intro_screen(
             screen=screen,
             clock=clock,
@@ -3072,7 +3114,7 @@ def save_combined_outputs(output_dir, participant_id, run_timestamp, all_results
 
 
 def compute_performance_score(all_results):
-    score_blocks = {"MANUAL", "AUTOMATION", "AUTOMATION1", "AUTOMATION2"}
+    score_blocks = {"AUTOMATION"}
     scored_trials = [row for row in all_results if row["block"] in score_blocks]
     if not scored_trials:
         return 0.0
@@ -3109,7 +3151,7 @@ def main():
     participant_id = res["participant"]
 
     # Preload most recent CALIBRATION delta summary for this participant
-    # so single-block MANUAL/AUTOMATION runs can inherit it from a prior run.
+    # so single-block AUTOMATION runs can inherit it from a prior run.
     prev_calib_delta_mean, prev_calib_delta_sd, prev_calib_delta_path = (
         get_latest_calibration_delta_for_participant(participant_id, output_dir="output")
     )

@@ -36,7 +36,7 @@ run_instructions <- function(
 # Helper function to run virus task
 run_task <- function(
     block      = NULL,
-    deadline_s = NULL,
+    aid_onset_ms = NULL,
     reliability_group = NULL,
     conda_env  = "r-pygame",
     script     = "python/virus_task.py",
@@ -45,10 +45,10 @@ run_task <- function(
   
   valid_blocks <- c(
     "CALIBRATION",
-    "MANUAL",
     "AUTOMATION"
   )
   valid_reliability_groups <- c("high", "low")
+  valid_aid_onsets <- c(-500, 0, 500)
   if (!is.null(reliability_group)) {
     reliability_group <- tolower(reliability_group)
   }
@@ -60,8 +60,17 @@ run_task <- function(
       paste(valid_blocks, collapse = ", ")
     )
   }
-  if (!is.null(deadline_s) && is.null(block)) {
-    stop("'deadline_s' can only be used when 'block' is specified.")
+  if (!is.null(aid_onset_ms) && is.null(block)) {
+    stop("'aid_onset_ms' can only be used when 'block' is specified.")
+  }
+  if (!is.null(aid_onset_ms) && block != "AUTOMATION") {
+    stop("'aid_onset_ms' can only be used with block = 'AUTOMATION'.")
+  }
+  if (!is.null(aid_onset_ms) && !as.numeric(aid_onset_ms) %in% valid_aid_onsets) {
+    stop(
+      "Invalid aid_onset_ms. Must be one of: ",
+      paste(valid_aid_onsets, collapse = ", ")
+    )
   }
   if (!is.null(reliability_group) && is.null(block)) {
     stop("'reliability_group' can only be used when 'block' is specified.")
@@ -97,9 +106,9 @@ run_task <- function(
     args <- c(args, "--block", block)
   }
   
-  # Add deadline argument for blocks with 3s and 6s variants
-  if (!is.null(deadline_s)) {
-    args <- c(args, "--deadline-s", as.character(deadline_s))
+  # Add aid-onset selector for automation-block variants
+  if (!is.null(aid_onset_ms)) {
+    args <- c(args, "--aid-onset-ms", as.character(as.integer(aid_onset_ms)))
   }
   if (!is.null(reliability_group)) {
     args <- c(args, "--reliability-group", reliability_group)

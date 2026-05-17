@@ -9,28 +9,20 @@ library("patchwork")
 library("ggplot2")
 library("forcats")
 
-BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION", "AUTOMATION1", "AUTOMATION2")
-BLOCK_LABELS <- c("Calibration", "Manual", "Automation", "Auto95", "Auto65")
-BLOCK_DEADLINE_LEVELS <- c(
+ONSET_LEVELS <- c(
   "Calibration",
-  "Manual 3s",
-  "Manual 6s",
-  "Automation 3s",
-  "Automation 6s",
-  "Auto95 3s",
-  "Auto95 6s",
-  "Auto65 3s",
-  "Auto65 6s",
-  "Manual",
-  "Automation",
-  "Auto95",
-  "Auto65"
+  "Aid before",
+  "Aid simultaneous",
+  "Aid after"
 )
 RELIABILITY_LEVELS <- c("high", "low", "none")
 
-ensure_deadline_columns <- function(data) {
-  if (!"trial_deadline_s" %in% names(data)) {
-    data$trial_deadline_s <- NA_real_
+ensure_onset_columns <- function(data) {
+  if (!"aid_onset_condition" %in% names(data)) {
+    data$aid_onset_condition <- NA_character_
+  }
+  if (!"aid_onset_ms" %in% names(data)) {
+    data$aid_onset_ms <- NA_real_
   }
   if (!"automation_reliability_group" %in% names(data)) {
     data$automation_reliability_group <- NA_character_
@@ -47,8 +39,6 @@ derive_reliability_group <- function(data) {
       automation_reliability_group = case_when(
         !is.na(automation_reliability_group) & automation_reliability_group != "" ~
           as.character(automation_reliability_group),
-        as.character(block) == "AUTOMATION1" ~ "high",
-        as.character(block) == "AUTOMATION2" ~ "low",
         suppressWarnings(as.numeric(aid_accuracy_setting)) >= 0.90 ~ "high",
         suppressWarnings(as.numeric(aid_accuracy_setting)) < 0.90 &
           !is.na(suppressWarnings(as.numeric(aid_accuracy_setting))) ~ "low",
@@ -61,24 +51,18 @@ factor_reliability_group <- function(x) {
   factor(x, levels = RELIABILITY_LEVELS)
 }
 
-deadline_suffix <- function(block_label, deadline_s) {
-  deadline_num <- suppressWarnings(as.numeric(deadline_s))
-  suffix <- ifelse(
-    is.na(deadline_num) | block_label == "Calibration",
-    "",
-    ifelse(
-      deadline_num == floor(deadline_num),
-      paste0(" ", as.integer(deadline_num), "s"),
-      paste0(" ", deadline_num, "s")
-    )
+make_block_onset <- function(block, aid_onset_condition, aid_onset_ms) {
+  onset <- case_when(
+    as.character(block) == "CALIBRATION" ~ "Calibration",
+    !is.na(aid_onset_condition) & aid_onset_condition == "before" ~ "Aid before",
+    !is.na(aid_onset_condition) & aid_onset_condition == "simultaneous" ~ "Aid simultaneous",
+    !is.na(aid_onset_condition) & aid_onset_condition == "after" ~ "Aid after",
+    suppressWarnings(as.numeric(aid_onset_ms)) < 0 ~ "Aid before",
+    suppressWarnings(as.numeric(aid_onset_ms)) == 0 ~ "Aid simultaneous",
+    suppressWarnings(as.numeric(aid_onset_ms)) > 0 ~ "Aid after",
+    TRUE ~ NA_character_
   )
-  suffix
-}
-
-make_block_deadline <- function(block, deadline_s) {
-  block_label <- factor(block, levels = BLOCK_RAW_LEVELS, labels = BLOCK_LABELS)
-  block_deadline <- paste0(as.character(block_label), deadline_suffix(block_label, deadline_s))
-  factor(block_deadline, levels = BLOCK_DEADLINE_LEVELS)
+  factor(onset, levels = ONSET_LEVELS)
 }
 
 # ------------------
@@ -86,7 +70,7 @@ make_block_deadline <- function(block, deadline_s) {
 # ------------------
 dat <- read_csv("data/data_virus_postblock_all.csv", show_col_types = FALSE)
 dat <- dat %>%
-  ensure_deadline_columns() %>%
+  ensure_onset_columns() %>%
   derive_reliability_group()
 str(dat)
 
@@ -98,13 +82,13 @@ dat_q <- dat %>%
   mutate(
     participant_id = factor(participant_id),
     automation_reliability_group = factor_reliability_group(automation_reliability_group),
-    block_deadline = make_block_deadline(block, trial_deadline_s),
+    block_onset = make_block_onset(block, aid_onset_condition, aid_onset_ms),
     question = factor(question, levels = unique(question))
   ) %>%
-  filter(!is.na(participant_id), !is.na(block_deadline), !is.na(question), !is.na(response))
+  filter(!is.na(participant_id), !is.na(block_onset), !is.na(question), !is.na(response))
 
 subj_q_summary <- dat_q %>%
-  group_by(participant_id, automation_reliability_group, block_deadline, question) %>%
+  group_by(participant_id, automation_reliability_group, block_onset, question) %>%
   summarise(
     response = mean(response, na.rm = TRUE),
     .groups = "drop"
@@ -146,11 +130,11 @@ get_morey_cf <- function(data, subject_col, within_cols, dv_col) {
 q_plot_dat <- get_morey_cf(
   data = subj_q_summary,
   subject_col = "participant_id",
-  within_cols = c("automation_reliability_group", "block_deadline", "question"),
+  within_cols = c("automation_reliability_group", "block_onset", "question"),
   dv_col = "response"
 )
 
-p_q <- ggplot(q_plot_dat, aes(x = block_deadline, y = mean, group = 1)) +
+p_q <- ggplot(q_plot_dat, aes(x = block_onset, y = mean, group = 1)) +
   geom_hline(yintercept = 3, linetype = "dashed") +
   geom_line() +
   geom_point(size = 2.5) +
@@ -158,9 +142,9 @@ p_q <- ggplot(q_plot_dat, aes(x = block_deadline, y = mean, group = 1)) +
   facet_grid(automation_reliability_group ~ question) +
   scale_y_continuous(limits = c(1, 5), breaks = 1:5) +
   labs(
-    x = "Block and deadline",
+    x = "Aid onset",
     y = "Mean response",
-    title = "Questionnaire responses by block and deadline",
+    title = "Questionnaire responses by aid onset",
     subtitle = "Error bars are Morey-Cousineau within-subject SEs"
   ) +
   theme_classic() +
@@ -191,7 +175,7 @@ ggsave(
 # ------------------
 dat_slider_raw <- read_csv("data/data_virus_sliders_all.csv", show_col_types = FALSE)
 dat_slider_raw <- dat_slider_raw %>%
-  ensure_deadline_columns() %>%
+  ensure_onset_columns() %>%
   derive_reliability_group()
 str(dat_slider_raw)
 
@@ -202,7 +186,7 @@ dat_slider <- dat_slider_raw %>%
   mutate(
     participant_id = factor(participant_id),
     automation_reliability_group = factor_reliability_group(automation_reliability_group),
-    block_deadline = make_block_deadline(block, trial_deadline_s),
+    block_onset = make_block_onset(block, aid_onset_condition, aid_onset_ms),
     question_key = factor(
       question_key,
       levels = c("perc_self_correct", "perc_auto_correct"),
@@ -211,7 +195,7 @@ dat_slider <- dat_slider_raw %>%
   ) %>%
   filter(
     !is.na(participant_id),
-    !is.na(block_deadline),
+    !is.na(block_onset),
     !is.na(question_key),
     !is.na(response_percent)
   )
@@ -219,7 +203,7 @@ dat_slider <- dat_slider_raw %>%
 # If there is ever more than one row per participant/block/question_key,
 # average within participant first
 subj_slider_summary <- dat_slider %>%
-  group_by(participant_id, automation_reliability_group, block_deadline, question_key) %>%
+  group_by(participant_id, automation_reliability_group, block_onset, question_key) %>%
   summarise(
     response_percent = mean(response_percent, na.rm = TRUE),
     .groups = "drop"
@@ -231,7 +215,7 @@ subj_slider_summary <- dat_slider %>%
 slider_plot_dat <- get_morey_cf(
   data = subj_slider_summary,
   subject_col = "participant_id",
-  within_cols = c("automation_reliability_group", "block_deadline", "question_key"),
+  within_cols = c("automation_reliability_group", "block_onset", "question_key"),
   dv_col = "response_percent"
 )
 
@@ -240,7 +224,7 @@ slider_plot_dat <- get_morey_cf(
 # ------------------
 p_slider <- ggplot(
   slider_plot_dat,
-  aes(x = block_deadline, y = mean, group = 1)
+  aes(x = block_onset, y = mean, group = 1)
 ) +
   geom_hline(yintercept = 50, linetype = "dashed") +
   geom_line() +
@@ -252,9 +236,9 @@ p_slider <- ggplot(
     breaks = seq(0, 100, by = 20)
   ) +
   labs(
-    x = "Block and deadline",
+    x = "Aid onset",
     y = "Mean slider response (%)",
-    title = "Slider responses by block and deadline",
+    title = "Slider responses by aid onset",
     subtitle = "Error bars are Morey-Cousineau within-subject SEs"
   ) +
   theme_classic() +

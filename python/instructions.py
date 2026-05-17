@@ -139,30 +139,12 @@ SLIDES = [
     },
     {
         "kind": "text",
-        "title": "TRANSPARENCY LEVELS",
+        "title": "AID TIMING",
         "body": (
-            "Across automation blocks, the aid may present different levels of explanatory transparency. "
-            "Sometimes it will show only a recommendation. In other blocks it may also show a brief reason, "
-            "or more detailed information about the evidence and decision rule."
+            "Across automation blocks, the aid recommendation may appear before the virus sample, "
+            "at the same time as the virus sample, or shortly after the virus sample appears. "
+            "Your job is always to classify the sample as accurately as possible."
         ),
-    },
-    {
-        "kind": "automation_example",
-        "aid_label": "BLACK",
-        "transparency_level": "none",
-        "callout": "transparency_none",
-    },
-    {
-        "kind": "automation_example",
-        "aid_label": "BLACK",
-        "transparency_level": "low",
-        "callout": "transparency_low",
-    },
-    {
-        "kind": "automation_example",
-        "aid_label": "BLACK",
-        "transparency_level": "high",
-        "callout": "transparency_high",
     },
     {
         "kind": "text",
@@ -170,9 +152,9 @@ SLIDES = [
         "body": (
             "We will keep an ongoing tally of your performance. "
             "At the end of the experiment you will receive a point-based bonus, up to $25, based on your performance score.\n\n"
-            "You will have up to 10 seconds to respond per trial. "
-            "Incorrect responses and responses not made before the deadline will reduce your performance score, so try "
-            "to respond as quickly and accurately as possible.\n\n"
+            "In the main automation blocks, you will have up to 6 seconds to respond on each trial. "
+            "Incorrect responses and responses not made within the response window will reduce your performance score, "
+            "so try to respond accurately within the available time.\n\n"
             "You may take short breaks at any time between trials\n\n"
         ),
     },
