@@ -27,13 +27,25 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 # -----------------------------
 # Block definitions
 # -----------------------------
-POST_CALIBRATION_N_TRIALS = 400
+RELIABILITY_BLOCK_SIZE = 50
+DYNAMIC_RELIABILITY_BASE_SCHEDULE = [
+    0.65, 0.85, 0.75, 0.95,
+    0.85, 0.65, 0.95, 0.75,
+    0.75, 0.65, 0.95, 0.85,
+    0.65, 0.75, 0.85, 0.95,
+    0.95, 0.75, 0.85, 0.65,
+    0.75, 0.95, 0.65, 0.85,
+]
+DYNAMIC_RELIABILITY_FAMILY_COUNT = 4
+POST_CALIBRATION_N_TRIALS = RELIABILITY_BLOCK_SIZE * len(DYNAMIC_RELIABILITY_BASE_SCHEDULE)
 CALIBRATION_TRIAL_DEADLINE_MS = 10000
 POST_CALIBRATION_TRIAL_DEADLINE_MS = 6000
-AUTOMATION_RELIABILITY_SETTINGS = {
-    "high": 0.95,
-    "low": 0.65,
-}
+
+if len(DYNAMIC_RELIABILITY_BASE_SCHEDULE) != 24:
+    raise ValueError("Dynamic reliability schedule must contain 24 mini-blocks.")
+for reliability_level in (0.65, 0.75, 0.85, 0.95):
+    if DYNAMIC_RELIABILITY_BASE_SCHEDULE.count(reliability_level) != 6:
+        raise ValueError("Each dynamic reliability level must appear six times.")
 
 BLOCKS = [
     # dict(
@@ -59,56 +71,21 @@ BLOCKS = [
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=CALIBRATION_TRIAL_DEADLINE_MS,
         CONDITION_CODE="CAL",
-        AID_ONSET_CONDITION=None,
-        AID_ONSET_MS=None,
     ),
     dict(
         name="AUTOMATION",
         N_TRIALS=POST_CALIBRATION_N_TRIALS,
         AUTOMATION_ON=True,       # automation on
-        AID_ACCURACY=None,        # assigned by participant reliability group
+        AID_ACCURACY=None,        # assigned dynamically in 50-trial mini-blocks
         AID_TRANSPARENCY="none",
-        AID_ONSET_CONDITION="before",
-        AID_ONSET_MS=-500,
+        AID_ONSET_MS=0,           # aid appears with the stimulus; not an experimental factor
         STAIRCASE_ON=False,       # staircase off
         TARGET_ACC=0.80,          # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
-        CONDITION_CODE="AB500",
-    ),
-    dict(
-        name="AUTOMATION",
-        N_TRIALS=POST_CALIBRATION_N_TRIALS,
-        AUTOMATION_ON=True,       # automation on
-        AID_ACCURACY=None,        # assigned by participant reliability group
-        AID_TRANSPARENCY="none",
-        AID_ONSET_CONDITION="simultaneous",
-        AID_ONSET_MS=0,
-        STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=0.80,          # not used (staircase off), but harmless
-        FIXED_DELTA_ON=True,
-        FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
-        TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
-        CONDITION_CODE="AS0",
-    ),
-    dict(
-        name="AUTOMATION",
-        N_TRIALS=POST_CALIBRATION_N_TRIALS,
-        AUTOMATION_ON=True,       # automation on
-        AID_ACCURACY=None,        # assigned by participant reliability group
-        AID_TRANSPARENCY="none",
-        AID_ONSET_CONDITION="after",
-        AID_ONSET_MS=500,
-        STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=0.80,          # not used (staircase off), but harmless
-        FIXED_DELTA_ON=True,
-        FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
-        TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
-        CONDITION_CODE="AA500",
+        CONDITION_CODE="DYNREL",
     ),
 ]
 
@@ -118,9 +95,10 @@ BLOCK_DEFAULTS = {
     "TRIAL_DEADLINE_MS": CALIBRATION_TRIAL_DEADLINE_MS,
     "CONDITION_CODE": None,
     "CONDITION_DEADLINE_CODE": None,
-    "AID_ONSET_CONDITION": None,
     "AID_ONSET_MS": None,
-    "AUTOMATION_RELIABILITY_GROUP": "none",
+    "DYNAMIC_RELIABILITY_FAMILY": None,
+    "DYNAMIC_RELIABILITY_SCHEDULE": None,
+    "DYNAMIC_RELIABILITY_BLOCK_SIZE": RELIABILITY_BLOCK_SIZE,
 }
 
 BLOCK_INSTRUCTIONS = {
@@ -198,19 +176,6 @@ def aid_onset_ms_for_block(block_cfg):
     return block_cfg.get("AID_ONSET_MS")
 
 
-def aid_onset_condition_for_block(block_cfg):
-    return block_cfg.get("AID_ONSET_CONDITION")
-
-
-def format_aid_onset_ms(aid_onset_ms) -> str:
-    if aid_onset_ms is None:
-        return "none"
-    if int(aid_onset_ms) == 0:
-        return "0 ms"
-    direction = "before" if int(aid_onset_ms) < 0 else "after"
-    return f"{abs(int(aid_onset_ms))} ms {direction}"
-
-
 def response_window_instruction_slide(block_cfg) -> str:
     deadline_s = trial_deadline_s_for_block(block_cfg)
     deadline_text = format_deadline_s(deadline_s)
@@ -221,57 +186,83 @@ def response_window_instruction_slide(block_cfg) -> str:
     )
 
 
-def aid_onset_instruction_slide(block_cfg) -> str:
-    aid_onset_ms = aid_onset_ms_for_block(block_cfg)
-    onset_text = format_aid_onset_ms(aid_onset_ms)
-    if aid_onset_ms is None:
-        return ""
-    if int(aid_onset_ms) < 0:
-        timing_text = f"{onset_text} the virus sample appears"
-    elif int(aid_onset_ms) > 0:
-        timing_text = f"{onset_text} the virus sample appears"
-    else:
-        timing_text = "at the same time as the virus sample"
+def automation_reliability_instruction_slide() -> str:
     return (
-        "In this block, the automated decision aid recommendation will appear "
-        f"{timing_text}."
+        "In the next block, the automated decision aid will not be equally reliable "
+        "throughout the block. Its recommendations may become more or less reliable "
+        "over time. Please monitor the aid carefully and continue to make the correct "
+        "classification on each trial."
     )
 
 
-def automation_reliability_instruction_slide(reliability_group: str) -> str:
-    if reliability_group == "high":
-        return (
-            "In the next block, although the automation is highly reliable, it is not perfect, "
-            "and automation advice errors are unlikely but still possible."
-        )
-
-    if reliability_group == "low":
-        return (
-            "In the next block, although the automation is reasonably reliable, it is not perfect, "
-            "and automation advice errors may be relatively common."
-        )
-
-    raise ValueError(
-        f"Unsupported automation reliability group '{reliability_group}'. "
-        f"Valid values: {sorted(AUTOMATION_RELIABILITY_SETTINGS)}"
-    )
+def reliability_family_index_for_participant(participant_id: int) -> int:
+    return (participant_id - 1) % DYNAMIC_RELIABILITY_FAMILY_COUNT
 
 
-def reliability_group_for_participant(participant_id: int) -> str:
-    cycle_idx = (participant_id - 1) % 16
-    return "high" if (cycle_idx % 2) == 0 else "low"
+def reliability_family_label_for_participant(participant_id: int) -> str:
+    return f"F{reliability_family_index_for_participant(participant_id) + 1}"
 
 
-def block_order_index_for_participant(participant_id: int) -> int:
-    return ((participant_id - 1) // 2) % 3
+def rotate_schedule(schedule, offset):
+    offset = offset % len(schedule)
+    return list(schedule[offset:]) + list(schedule[:offset])
 
 
-def apply_reliability_to_block(block_cfg, reliability_group: str):
+def dynamic_reliability_schedule_for_participant(participant_id: int):
+    family_idx = reliability_family_index_for_participant(participant_id)
+    return rotate_schedule(DYNAMIC_RELIABILITY_BASE_SCHEDULE, family_idx)
+
+
+def apply_dynamic_reliability_to_block(block_cfg, participant_id: int):
     cfg = copy_block_config(block_cfg)
-    cfg["AUTOMATION_RELIABILITY_GROUP"] = reliability_group
     if cfg["AUTOMATION_ON"]:
-        cfg["AID_ACCURACY"] = AUTOMATION_RELIABILITY_SETTINGS[reliability_group]
+        cfg["DYNAMIC_RELIABILITY_FAMILY"] = reliability_family_label_for_participant(participant_id)
+        cfg["DYNAMIC_RELIABILITY_SCHEDULE"] = dynamic_reliability_schedule_for_participant(participant_id)
+        cfg["DYNAMIC_RELIABILITY_BLOCK_SIZE"] = RELIABILITY_BLOCK_SIZE
     return cfg
+
+
+def dynamic_reliability_metadata_for_trial(block_cfg, trial_number):
+    if not block_cfg.get("AUTOMATION_ON", False):
+        return empty_dynamic_reliability_metadata()
+
+    schedule = block_cfg.get("DYNAMIC_RELIABILITY_SCHEDULE")
+    block_size = block_cfg.get("DYNAMIC_RELIABILITY_BLOCK_SIZE", RELIABILITY_BLOCK_SIZE)
+    if not schedule:
+        raise ValueError("Automation block is missing DYNAMIC_RELIABILITY_SCHEDULE.")
+
+    reliability_block_idx = ((trial_number - 1) // block_size) + 1
+    if reliability_block_idx > len(schedule):
+        raise ValueError(
+            f"Trial {trial_number} exceeds dynamic reliability schedule length "
+            f"({len(schedule)} blocks of {block_size} trials)."
+        )
+
+    aid_reliability_level = schedule[reliability_block_idx - 1]
+    return {
+        "dynamic_reliability_family": block_cfg.get("DYNAMIC_RELIABILITY_FAMILY"),
+        "reliability_block_idx": reliability_block_idx,
+        "trial_in_reliability_block": ((trial_number - 1) % block_size) + 1,
+        "aid_reliability_level": aid_reliability_level,
+        "aid_accuracy_setting": aid_reliability_level,
+    }
+
+
+def empty_dynamic_reliability_metadata():
+    return {
+        "dynamic_reliability_family": None,
+        "reliability_block_idx": None,
+        "trial_in_reliability_block": None,
+        "aid_reliability_level": None,
+        "aid_accuracy_setting": None,
+    }
+
+
+def is_reliability_checkpoint_trial(block_cfg, trial_number):
+    if not block_cfg.get("AUTOMATION_ON", False):
+        return False
+    block_size = block_cfg.get("DYNAMIC_RELIABILITY_BLOCK_SIZE", RELIABILITY_BLOCK_SIZE)
+    return trial_number % block_size == 0
 
 
 def transparency_instruction_slide(transparency_level: str) -> str:
@@ -808,6 +799,7 @@ def run_postblock_questionnaire(
     block_name=None,
     block_idx=None,
     block_cfg=None,
+    reliability_metadata=None,
 ):
     """
     Present all post-block QUESTION_ITEMS if enabled.
@@ -817,6 +809,7 @@ def run_postblock_questionnaire(
         return []
 
     responses = []
+    dynamic_meta = reliability_metadata or empty_dynamic_reliability_metadata()
 
     for idx, item in enumerate(QUESTION_ITEMS, start=1):
         resp = run_likert_question(
@@ -837,9 +830,11 @@ def run_postblock_questionnaire(
             "block_idx": block_idx,
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
             "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
-            "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
-            "aid_onset_condition": aid_onset_condition_for_block(block_cfg) if block_cfg else None,
-            "aid_onset_ms": aid_onset_ms_for_block(block_cfg) if block_cfg else None,
+            "dynamic_reliability_family": dynamic_meta["dynamic_reliability_family"],
+            "reliability_block_idx": dynamic_meta["reliability_block_idx"],
+            "trial_in_reliability_block": dynamic_meta["trial_in_reliability_block"],
+            "aid_reliability_level": dynamic_meta["aid_reliability_level"],
+            "aid_accuracy_setting": dynamic_meta["aid_accuracy_setting"],
             "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": idx,
@@ -1108,11 +1103,8 @@ def is_hard_quit_event(event) -> bool:
   
 def build_blocks_for_participant(participant_id: int, blocks_template):
     """
-    CALIBRATION stays fixed.
-
-    The three post-calibration aid-onset cells are assigned with balanced
-    rotations. Reliability remains between subjects and key mapping uses the
-    existing participant-ID cycle.
+    CALIBRATION stays fixed. The post-calibration automation block uses a
+    participant-ID-assigned dynamic reliability schedule.
     """
     calibration_blocks = [
         copy_block_config(b)
@@ -1127,21 +1119,13 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
         for b in blocks_template
         if b["name"] != "CALIBRATION"
     ]
-    if len(tail_blocks) != 3:
-        raise ValueError("The aid-onset design expects exactly three post-calibration blocks.")
+    if len(tail_blocks) != 1:
+        raise ValueError("The dynamic reliability design expects exactly one post-calibration block.")
 
-    all_orders = [
-        [tail_blocks[(idx + offset) % len(tail_blocks)] for idx in range(len(tail_blocks))]
-        for offset in range(len(tail_blocks))
+    return [
+        copy_block_config(calibration_blocks[0]),
+        apply_dynamic_reliability_to_block(tail_blocks[0], participant_id),
     ]
-
-    order_idx = block_order_index_for_participant(participant_id)
-    reliability_group = reliability_group_for_participant(participant_id)
-    ordered_tail = [
-        apply_reliability_to_block(b, reliability_group)
-        for b in all_orders[order_idx]
-    ]
-    return [apply_reliability_to_block(calibration_blocks[0], reliability_group)] + ordered_tail
 
 def key_mapping_for_participant(participant_id: int):
     """
@@ -1431,6 +1415,7 @@ def run_postblock_slider_questions(
     block_idx,
     block_cfg=None,
     output_dir="output",
+    reliability_metadata=None,
 ):
     """
     Runs the appropriate set of slider questions for a block.
@@ -1447,6 +1432,7 @@ def run_postblock_slider_questions(
         return []  # no sliders for other blocks
 
     rows = []
+    dynamic_meta = reliability_metadata or empty_dynamic_reliability_metadata()
     for i, it in enumerate(items, start=1):
         if it["key"] == "perc_self_correct":
             anchors = [
@@ -1482,9 +1468,11 @@ def run_postblock_slider_questions(
             "block_idx": block_idx,
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
             "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
-            "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
-            "aid_onset_condition": aid_onset_condition_for_block(block_cfg) if block_cfg else None,
-            "aid_onset_ms": aid_onset_ms_for_block(block_cfg) if block_cfg else None,
+            "dynamic_reliability_family": dynamic_meta["dynamic_reliability_family"],
+            "reliability_block_idx": dynamic_meta["reliability_block_idx"],
+            "trial_in_reliability_block": dynamic_meta["trial_in_reliability_block"],
+            "aid_reliability_level": dynamic_meta["aid_reliability_level"],
+            "aid_accuracy_setting": dynamic_meta["aid_accuracy_setting"],
             "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": i,
@@ -1496,9 +1484,12 @@ def run_postblock_slider_questions(
     # Save per-block sliders CSV
     if rows:
         os.makedirs(output_dir, exist_ok=True)
+        suffix = ""
+        if dynamic_meta["reliability_block_idx"] is not None:
+            suffix = f"_rb{int(dynamic_meta['reliability_block_idx']):02d}"
         path = os.path.join(
             output_dir,
-            f"results_p{participant_id:03d}_{run_ts}_b{block_idx:02d}_{block_name}_POSTBLOCK_SLIDERS.csv"
+            f"results_p{participant_id:03d}_{run_ts}_b{block_idx:02d}_{block_name}{suffix}_POSTBLOCK_SLIDERS.csv"
         )
         write_csv_rows(path, rows)
         print(f"[{block_name}] Post-block slider responses saved to: {path}")
@@ -1940,17 +1931,10 @@ def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
         slides = list(payload.get("slides", [payload.get("body", "")]))
 
         if block_cfg is not None and block_name == "AUTOMATION":
-            reliability_group = block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none")
             slides = (
                 slides[:1]
-                + [
-                    automation_reliability_instruction_slide(reliability_group),
-                    aid_onset_instruction_slide(block_cfg),
-                ]
+                + [automation_reliability_instruction_slide()]
                 + slides[1:]
-            )
-            payload["title"] = (
-                f"{payload['title']} ({format_aid_onset_ms(aid_onset_ms_for_block(block_cfg)).upper()})"
             )
 
         if block_cfg is not None and block_name != "CALIBRATION":
@@ -2320,40 +2304,17 @@ def parse_cli_args():
         default=None,
         help="Run only a selected block. Valid values: CALIBRATION, AUTOMATION",
     )
-    parser.add_argument(
-        "--aid-onset-ms",
-        type=int,
-        default=None,
-        help="Select an AUTOMATION block by aid onset relative to stimulus onset: -500, 0, or 500.",
-    )
-    parser.add_argument(
-        "--reliability-group",
-        type=str,
-        choices=sorted(AUTOMATION_RELIABILITY_SETTINGS),
-        default=None,
-        help="Automation reliability group for single-block AUTOMATION runs.",
-    )
     args = parser.parse_args()
 
     if args.block is not None:
         args.block = args.block.upper()
 
-    if args.aid_onset_ms is not None and args.block is None:
-        parser.error("--aid-onset-ms requires --block")
-    if args.aid_onset_ms is not None and args.block != "AUTOMATION":
-        parser.error("--aid-onset-ms can only be used with --block AUTOMATION")
-    if args.reliability_group is not None and args.block is None:
-        parser.error("--reliability-group requires --block")
-    if args.reliability_group is not None and args.block != "AUTOMATION":
-        parser.error("--reliability-group can only be used with --block AUTOMATION")
-
     return args
   
 
-def select_single_block(block_name: str, blocks_template, participant_id: int, aid_onset_ms=None, reliability_group=None):
+def select_single_block(block_name: str, blocks_template, participant_id: int):
     """
-    Return block configs matching block_name and, when needed, aid_onset_ms.
-    Raises a clear error if the block is not available in BLOCKS.
+    Return the single block config matching block_name.
     """
     matches = [copy_block_config(b) for b in blocks_template if b["name"] == block_name]
 
@@ -2363,43 +2324,16 @@ def select_single_block(block_name: str, blocks_template, participant_id: int, a
             f"Unknown block '{block_name}'. Available blocks in this script: {available}"
         )
 
-    if aid_onset_ms is not None:
-        matches = [
-            b for b in matches
-            if aid_onset_ms_for_block(b) == int(aid_onset_ms)
-        ]
-        if not matches:
-            available = sorted(
-                set(
-                    format_aid_onset_ms(aid_onset_ms_for_block(b))
-                    for b in blocks_template
-                    if b["name"] == block_name
-                )
-            )
-            raise ValueError(
-                f"No {block_name} block has aid onset {format_aid_onset_ms(aid_onset_ms)}. "
-                f"Available aid onsets for this block: {available}"
-            )
-
     if len(matches) > 1:
-        available = sorted(
-            set(format_aid_onset_ms(aid_onset_ms_for_block(b)) for b in matches)
-        )
         raise ValueError(
-            f"Block '{block_name}' has multiple aid-onset variants. "
-            f"Pass --aid-onset-ms with one of: {available}"
+            f"Block '{block_name}' has multiple variants; the dynamic reliability design "
+            "expects one automation block."
         )
 
-    if matches[0]["AUTOMATION_ON"] and reliability_group is None:
-        raise ValueError(
-            "Single-block AUTOMATION runs require --reliability-group "
-            f"with one of: {sorted(AUTOMATION_RELIABILITY_SETTINGS)}"
-        )
+    if matches[0]["AUTOMATION_ON"]:
+        return [apply_dynamic_reliability_to_block(matches[0], participant_id)]
 
-    selected_reliability_group = reliability_group or reliability_group_for_participant(participant_id)
-    return [
-        apply_reliability_to_block(matches[0], selected_reliability_group)
-    ]
+    return [copy_block_config(matches[0])]
 
 
 def create_display_surface():
@@ -2449,15 +2383,13 @@ def choose_blocks_to_run(args, participant_id):
             args.block,
             BLOCKS,
             participant_id=participant_id,
-            aid_onset_ms=args.aid_onset_ms,
-            reliability_group=args.reliability_group,
         )
         print(
             "[SINGLE BLOCK MODE]",
             participant_id,
             "->",
             [block_condition_code(b) for b in blocks_to_run],
-            f"(reliability={blocks_to_run[0]['AUTOMATION_RELIABILITY_GROUP']})",
+            f"(dynamic_family={blocks_to_run[0].get('DYNAMIC_RELIABILITY_FAMILY')})",
         )
         return blocks_to_run
 
@@ -2467,7 +2399,7 @@ def choose_blocks_to_run(args, participant_id):
         participant_id,
         "->",
         [block_condition_code(b) for b in blocks_to_run],
-        f"(reliability={blocks_to_run[0]['AUTOMATION_RELIABILITY_GROUP']})",
+        f"(dynamic_family={reliability_family_label_for_participant(participant_id)})",
     )
     return blocks_to_run
 
@@ -2734,8 +2666,10 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "block_idx": block_idx,
         "condition_code": block_condition_code(block_cfg),
         "condition_deadline_code": block_condition_deadline_code(block_cfg),
-        "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none"),
-        "aid_onset_condition": aid_onset_condition_for_block(block_cfg),
+        "dynamic_reliability_family": trial_data["dynamic_reliability_family"],
+        "reliability_block_idx": trial_data["reliability_block_idx"],
+        "trial_in_reliability_block": trial_data["trial_in_reliability_block"],
+        "aid_reliability_level": trial_data["aid_reliability_level"],
         "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg),
         "trial_deadline_s": trial_deadline_s_for_block(block_cfg),
         "trial": trial_number,
@@ -2751,13 +2685,11 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "n_vblack": trial_data["n_vblack"],
         "n_vwhite": trial_data["n_vwhite"],
         "auto_on": 1 if block_cfg["AUTOMATION_ON"] else 0,
-        "aid_accuracy_setting": block_cfg["AID_ACCURACY"] if block_cfg["AUTOMATION_ON"] else None,
+        "aid_accuracy_setting": trial_data["aid_accuracy_setting"],
         "aid_transparency_level": block_state["aid_transparency"] if block_cfg["AUTOMATION_ON"] else None,
         "stimulus": trial_data["stimulus"],
         "aid_label": trial_data["aid_label"],
         "aid_correct": trial_data["aid_correct"],
-        "aid_onset_ms": aid_onset_ms_for_block(block_cfg),
-        "aid_onset_ms_rel": trial_data["aid_onset_ms_rel"],
         "response": response,
         "correct": trial_data["correct"] if response in ("BLACK", "WHITE") else None,
         "feedback": feedback_msg if block_cfg["TRIAL_FEEDBACK_ON"] else None,
@@ -2800,9 +2732,13 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
     vblack_prop, delta_realised = pick_trial_vblack_prop(block_state, trial_number - 1)
     dots, n_vblack, n_vwhite = make_trial_dots(N_DOTS, vblack_prop, center, DISH_RADIUS)
     stimulus = "BLACK" if n_vblack > n_vwhite else "WHITE"
+    reliability_metadata = dynamic_reliability_metadata_for_trial(block_cfg, trial_number)
 
     if block_cfg["AUTOMATION_ON"]:
-        aid_label, aid_correct = make_aid_recommendation(stimulus, accuracy=block_cfg["AID_ACCURACY"])
+        aid_label, aid_correct = make_aid_recommendation(
+            stimulus,
+            accuracy=reliability_metadata["aid_accuracy_setting"],
+        )
     else:
         aid_label, aid_correct = None, None
 
@@ -2912,10 +2848,6 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
     if stim_onset_perf is not None and resp_perf is not None:
         rt_ms = (resp_perf - stim_onset_perf) * 1000.0
 
-    aid_onset_ms_rel = None
-    if stim_onset_perf is not None and aid_onset_perf is not None:
-        aid_onset_ms_rel = (aid_onset_perf - stim_onset_perf) * 1000.0
-
     correct = response == stimulus
     feedback_msg = maybe_show_feedback(screen, clock, fonts, response, correct, block_cfg["TRIAL_FEEDBACK_ON"])
     step_down_now, step_up_now = update_staircase_state(
@@ -2942,7 +2874,11 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             "stimulus": stimulus,
             "aid_label": aid_label,
             "aid_correct": aid_correct,
-            "aid_onset_ms_rel": aid_onset_ms_rel,
+            "dynamic_reliability_family": reliability_metadata["dynamic_reliability_family"],
+            "reliability_block_idx": reliability_metadata["reliability_block_idx"],
+            "trial_in_reliability_block": reliability_metadata["trial_in_reliability_block"],
+            "aid_reliability_level": reliability_metadata["aid_reliability_level"],
+            "aid_accuracy_setting": reliability_metadata["aid_accuracy_setting"],
             "response": response,
             "correct": correct,
             "rt_ms": rt_ms,
@@ -3038,10 +2974,29 @@ def show_block_complete_screen(screen, clock, font_body, block_name, block_cfg=N
     wait_for_keypress(clock, min_show_ms=250)
 
 
+def show_reliability_checkpoint_screen(screen, clock, font_body):
+    screen.fill(BG_INSTRUCTIONS)
+    draw_center_lines(
+        screen,
+        [
+            "BLOCK COMPLETE",
+            "You will answer a few questions before continuing",
+        ],
+        font_body,
+        WHITE,
+        rect=(0, 0, WIDTH, HEIGHT),
+        line_spacing=S(14),
+        vert_center=True,
+    )
+    pygame.display.flip()
+    wait_for_keypress(clock, min_show_ms=250)
+
+
 def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp, block_cfg, output_dir,
-                            all_postblock_slider_rows, all_questionnaire_rows):
+                            all_postblock_slider_rows, all_questionnaire_rows, reliability_metadata=None):
     block_name = block_cfg["name"]
     block_idx = block_cfg["block_idx"]
+    dynamic_meta = reliability_metadata or empty_dynamic_reliability_metadata()
 
     if ENABLE_POSTBLOCK_SLIDERS and block_name in ("CALIBRATION", "AUTOMATION"):
         slider_rows = run_postblock_slider_questions(
@@ -3055,6 +3010,7 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
             block_idx=block_idx,
             block_cfg=block_cfg,
             output_dir=output_dir,
+            reliability_metadata=dynamic_meta,
         )
         if isinstance(slider_rows, dict) and slider_rows.get("quit"):
             quit_clean()
@@ -3078,13 +3034,17 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
             block_name=block_name,
             block_idx=block_idx,
             block_cfg=block_cfg,
+            reliability_metadata=dynamic_meta,
         )
         if isinstance(questionnaire_rows, dict) and questionnaire_rows.get("quit"):
             quit_clean()
         if questionnaire_rows:
+            suffix = ""
+            if dynamic_meta["reliability_block_idx"] is not None:
+                suffix = f"_rb{int(dynamic_meta['reliability_block_idx']):02d}"
             q_path = os.path.join(
                 output_dir,
-                f"results_p{participant_id:03d}_{run_timestamp}_b{block_idx:02d}_{block_name}_POSTBLOCK.csv"
+                f"results_p{participant_id:03d}_{run_timestamp}_b{block_idx:02d}_{block_name}{suffix}_POSTBLOCK.csv"
             )
             write_csv_rows(q_path, questionnaire_rows)
             print(f"[{block_name}] Questionnaire saved to: {q_path}")
@@ -3218,7 +3178,25 @@ def main():
             block_results.append(row)
             all_results.append(row)
 
-            if t != block_cfg["N_TRIALS"] - 1:
+            is_last_trial = t == block_cfg["N_TRIALS"] - 1
+            if is_reliability_checkpoint_trial(block_cfg, trial_number):
+                reliability_metadata = dynamic_reliability_metadata_for_trial(block_cfg, trial_number)
+                show_reliability_checkpoint_screen(screen, clock, fonts["body"])
+                run_post_block_measures(
+                    screen,
+                    clock,
+                    fonts,
+                    participant_id,
+                    run_ts,
+                    block_cfg,
+                    output_dir,
+                    all_postblock_slider_rows,
+                    all_questionnaire_rows,
+                    reliability_metadata=reliability_metadata,
+                )
+                if not is_last_trial:
+                    fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            elif not is_last_trial:
                 if not block_cfg["TRIAL_FEEDBACK_ON"]:
                     press_any_key_screen(
                         screen=screen,
@@ -3254,17 +3232,18 @@ def main():
                 calib_delta_sd = sd_delta
 
         show_block_complete_screen(screen, clock, fonts["body"], block_cfg["name"], block_cfg=block_cfg)
-        run_post_block_measures(
-            screen,
-            clock,
-            fonts,
-            participant_id,
-            run_ts,
-            block_cfg,
-            output_dir,
-            all_postblock_slider_rows,
-            all_questionnaire_rows,
-        )
+        if block_cfg["name"] == "CALIBRATION":
+            run_post_block_measures(
+                screen,
+                clock,
+                fonts,
+                participant_id,
+                run_ts,
+                block_cfg,
+                output_dir,
+                all_postblock_slider_rows,
+                all_questionnaire_rows,
+            )
 
     save_combined_outputs(
         output_dir,

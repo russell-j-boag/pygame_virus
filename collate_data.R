@@ -77,6 +77,10 @@ dat <- dat %>%
     any_of(c(
       "condition_code",
       "condition_deadline_code",
+      "dynamic_reliability_family",
+      "reliability_block_idx",
+      "trial_in_reliability_block",
+      "aid_reliability_level",
       "automation_reliability_group",
       "aid_onset_condition",
       "aid_onset_ms",

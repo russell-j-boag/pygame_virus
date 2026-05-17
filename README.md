@@ -15,70 +15,43 @@ Based on Bartlett & McCarley RDC task.
 
 ## Current task design
 
-The task uses a mixed design. Calibration is unchanged and always occurs first. After calibration, participants complete three automation blocks that manipulate aid onset relative to stimulus onset. There is no post-calibration manual block and response deadline is not manipulated; the automation blocks all use the same 6 s response window.
+Calibration is unchanged and always occurs first. After calibration, participants complete one dynamic automation block in which aid reliability changes across 50-trial mini-blocks. The experimental goal is to test whether participants learn to track the aid's reliability as it changes over time.
 
-| Code | Mode | Aid onset | Response window | Trials |
-| --- | --- | ---: | ---: | ---: |
-| `AB500` | Automation | 500 ms before stimulus | 6 s | 400 |
-| `AS0` | Automation | simultaneous with stimulus | 6 s | 400 |
-| `AA500` | Automation | 500 ms after stimulus | 6 s | 400 |
+| Code | Mode | Response window | Trials |
+| --- | --- | ---: | ---: |
+| `CAL` | Manual calibration | 10 s | 300 |
+| `DYNREL` | Dynamic automation | 6 s | 1200 |
 
-The calibration block contains 300 manual staircase trials with a 10 s response window. Automation blocks use the calibration-derived fixed difficulty for the participant.
+The automation block uses the calibration-derived fixed difficulty for the participant. The aid appears with the stimulus, and aid onset is not manipulated.
 
-Automation reliability is a between-subjects factor:
+Automation reliability changes every 50 trials. The dynamic automation block contains 24 reliability mini-blocks, so each participant sees six mini-blocks at each aid-accuracy level:
 
-| Reliability group | Aid accuracy |
-| --- | ---: |
-| `high` | 95% |
-| `low` | 65% |
+| Aid accuracy level | Mini-blocks per participant | Trials per mini-block |
+| --- | ---: | ---: |
+| 65% | 6 | 50 |
+| 75% | 6 | 50 |
+| 85% | 6 | 50 |
+| 95% | 6 | 50 |
 
-Participant-facing automation instructions are qualitative rather than numeric. The high-reliability group is told that the aid is highly reliable but not perfect. The low-reliability group is told that the aid is reasonably reliable and that errors may be relatively common.
+Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid's reliability may change over time, but they are not told the numeric reliability levels or the current mini-block's reliability.
 
 ## Counterbalancing
 
-The post-calibration block order uses balanced rotations of the three aid-onset conditions:
+Dynamic reliability trajectories are assigned deterministically from participant ID. The base 24-mini-block schedule is:
 
-| Order | Sequence |
-| --- | --- |
-| `O1` | `AB500 -> AS0 -> AA500` |
-| `O2` | `AS0 -> AA500 -> AB500` |
-| `O3` | `AA500 -> AB500 -> AS0` |
+```text
+65, 85, 75, 95, 85, 65, 95, 75,
+75, 65, 95, 85, 65, 75, 85, 95,
+95, 75, 85, 65, 75, 95, 65, 85
+```
 
-Reliability group, block order, and key mapping are assigned deterministically from participant ID:
+The trajectory family is `(participant_id - 1) %% 4`, with four cyclic rotations of the base schedule. This preserves six mini-blocks per reliability level for every participant while counterbalancing which reliability levels occur early.
 
-- Reliability: `high` for odd participant IDs, `low` for even participant IDs.
-- Block order: `floor((participant_id - 1) / 2) %% 3`, so each adjacent high/low pair receives the same order and the order advances every two participants.
 - Key mapping: standard for participant IDs 1-8 within each 16-ID keymap cycle, flipped for participant IDs 9-16.
 
-The full joint cycle for reliability, order, and key mapping is 48 participants. The first 16 assignments are:
-
-| Participant IDs in cycle | Reliability | Key mapping | Order |
-| --- | --- | --- | --- |
-| 1 | `high` | standard | `O1` |
-| 2 | `low` | standard | `O1` |
-| 3 | `high` | standard | `O2` |
-| 4 | `low` | standard | `O2` |
-| 5 | `high` | standard | `O3` |
-| 6 | `low` | standard | `O3` |
-| 7 | `high` | standard | `O1` |
-| 8 | `low` | standard | `O1` |
-| 9 | `high` | flipped | `O2` |
-| 10 | `low` | flipped | `O2` |
-| 11 | `high` | flipped | `O3` |
-| 12 | `low` | flipped | `O3` |
-| 13 | `high` | flipped | `O1` |
-| 14 | `low` | flipped | `O1` |
-| 15 | `high` | flipped | `O2` |
-| 16 | `low` | flipped | `O2` |
-
-For the planned sample of `N = 96`, this gives:
-
-- 48 participants in the high-reliability group and 48 in the low-reliability group.
-- 32 participants per block order overall.
-- 16 high-reliability and 16 low-reliability participants per order.
-- 48 standard-key and 48 flipped-key participants.
-
 The standard key mapping is `D = V-BLACK` and `J = V-WHITE`. The flipped key mapping is `J = V-BLACK` and `D = V-WHITE`.
+
+After each 50-trial automation mini-block, participants report perceived automation accuracy and self accuracy and complete the trust questionnaire.
 
 ## Output fields
 
@@ -87,21 +60,21 @@ The main trial and post-block output files include fields that identify the desi
 | Field | Meaning |
 | --- | --- |
 | `block` | `CALIBRATION` or `AUTOMATION` |
-| `condition_code` | `CAL`, `AB500`, `AS0`, or `AA500` |
+| `condition_code` | `CAL` or `DYNREL` |
 | `condition_deadline_code` | Compatibility alias for `condition_code` |
-| `automation_reliability_group` | `high`, `low`, or `none` |
-| `aid_accuracy_setting` | `0.95`, `0.65`, or blank for calibration |
-| `aid_onset_condition` | `before`, `simultaneous`, `after`, or blank for calibration |
-| `aid_onset_ms` | Configured aid onset relative to stimulus onset |
-| `aid_onset_ms_rel` | Realized aid onset relative to stimulus onset |
+| `dynamic_reliability_family` | Participant-ID assigned trajectory family, `F1`-`F4` |
+| `reliability_block_idx` | Automation mini-block index, `1`-`24` |
+| `trial_in_reliability_block` | Trial index within the current 50-trial reliability mini-block |
+| `aid_reliability_level` | Current mini-block aid accuracy level |
+| `aid_accuracy_setting` | Accuracy setting used to generate the aid recommendation on the current trial |
 | `trial_deadline_ms` | Fixed response window in milliseconds |
 | `trial_deadline_s` | Fixed response window in seconds |
 
-Single-block automation runs require an explicit reliability group and aid onset, for example:
+Single-block runs can be selected for calibration-only or automation-only checks:
 
 ```r
-run_task(block = "AUTOMATION", aid_onset_ms = -500, reliability_group = "high")
-run_task(block = "AUTOMATION", aid_onset_ms = 500, reliability_group = "low")
+run_task(block = "CALIBRATION")
+run_task(block = "AUTOMATION")
 ```
 
 ## Author

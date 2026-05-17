@@ -139,11 +139,12 @@ SLIDES = [
     },
     {
         "kind": "text",
-        "title": "AID TIMING",
+        "title": "MONITORING THE AID",
         "body": (
-            "Across automation blocks, the aid recommendation may appear before the virus sample, "
-            "at the same time as the virus sample, or shortly after the virus sample appears. "
-            "Your job is always to classify the sample as accurately as possible."
+            "The automated decision aid is not perfect. Its recommendations may be more reliable "
+            "at some times and less reliable at other times.\n\n"
+            "Your task is to monitor the aid carefully while still judging each virus sample yourself. "
+            "If the aid makes an incorrect recommendation, you should make the correct classification."
         ),
     },
     {
@@ -152,9 +153,10 @@ SLIDES = [
         "body": (
             "We will keep an ongoing tally of your performance. "
             "At the end of the experiment you will receive a point-based bonus, up to $25, based on your performance score.\n\n"
-            "In the main automation blocks, you will have up to 6 seconds to respond on each trial. "
+            "In the main automation block, you will have up to 6 seconds to respond on each trial. "
             "Incorrect responses and responses not made within the response window will reduce your performance score, "
             "so try to respond accurately within the available time.\n\n"
+            "After some sets of trials, you will be asked to estimate how accurate the aid was and how accurate your own responses were.\n\n"
             "You may take short breaks at any time between trials\n\n"
         ),
     },
@@ -817,7 +819,7 @@ def draw_automation_example_slide(
     if callout == "intro":
         title = "Automated decision aid"
         body = (
-            "In some parts of this study you will be assisted "
+            "After the manual block, you will be assisted "
             "by an Automated Decision Aid"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
