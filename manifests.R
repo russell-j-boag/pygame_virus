@@ -696,7 +696,7 @@ p_acc_block <- ggplot() +
   labs(
     x = "Block",
     y = "Accuracy (%)",
-    title = "Accuracy by block",
+    title = "Accuracy by block (Virus task)",
     subtitle = MOREY_SE_SUBTITLE
   ) +
   coord_cartesian(ylim = acc_block_ylim) +
@@ -1134,6 +1134,9 @@ calib_manual_long <- calib_manual_acc %>%
     participant_id = factor(participant_id, levels = calib_manual_acc$participant_id)
   )
 
+calib_manual_point_labels <- calib_manual_long %>%
+  filter(accuracy < 0.65 | accuracy > 0.95)
+
 participant_palette <- setNames(
   scales::hue_pal()(length(levels(calib_manual_long$participant_id))),
   levels(calib_manual_long$participant_id)
@@ -1145,7 +1148,7 @@ calib_manual_ref_lines <- tibble(
 )
 
 calib_manual_diff_range <- range(calib_manual_acc$accuracy_diff, na.rm = TRUE)
-calib_manual_label_offset <- pmax(0.02, 0.08 * diff(calib_manual_diff_range))
+calib_manual_label_offset <- pmax(0.025, 0.10 * diff(calib_manual_diff_range))
 
 calib_manual_acc <- calib_manual_acc %>%
   mutate(
@@ -1189,6 +1192,22 @@ p_calib_manual_acc <- ggplot(
   ) +
   geom_line(colour = "grey70", linewidth = 0.7) +
   geom_point(aes(colour = participant_id), size = 2.4, show.legend = FALSE) +
+  geom_text(
+    data = filter(calib_manual_point_labels, block_simple == "Calibration"),
+    aes(label = participant_id),
+    hjust = 1,
+    nudge_x = -0.03,
+    size = 3,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    data = filter(calib_manual_point_labels, block_simple == "Manual"),
+    aes(label = participant_id),
+    hjust = 0,
+    nudge_x = 0.03,
+    size = 3,
+    show.legend = FALSE
+  ) +
   scale_colour_manual(values = participant_palette) +
   stat_summary(
     aes(group = 1),
@@ -1207,7 +1226,7 @@ p_calib_manual_acc <- ggplot(
   labs(
     x = NULL,
     y = "Participant accuracy",
-    title = "Calibration vs Manual accuracy"
+    title = "Calibration vs Manual accuracy (Virus task)"
   ) +
   coord_cartesian(ylim = c(0.50, 1.00), clip = "off") +
   theme_classic() +
@@ -1234,7 +1253,7 @@ p_calib_manual_diff <- ggplot(
     inherit.aes = FALSE,
     angle = 90,
     hjust = 0.5,
-    vjust = 0,
+    vjust = 0.5,
     size = 2.8
   ) +
   annotate(
@@ -1261,7 +1280,7 @@ p_calib_manual_diff <- ggplot(
 calib_manual_plot <- p_calib_manual_acc / p_calib_manual_diff
 calib_manual_plot
 
-save_plot_pair(calib_manual_plot, "calibration_manual_accuracy_plot", width = 7, height = 7)
+save_plot_pair(calib_manual_plot, "calibration_manual_accuracy_plot", width = 10, height = 7)
 
 write_csv(
   calib_manual_acc,
