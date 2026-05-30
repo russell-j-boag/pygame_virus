@@ -13,15 +13,13 @@ library("ggplot2")
 # ------------------
 CALIB_SUMMARY_LAST_N <- 150
 PLOT_DIR <- "plots"
-BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION", "AUTOMATION1", "AUTOMATION2")
-BLOCK_LEVELS <- c("Calibration", "Manual", "Automation", "Automation 95%", "Automation 65%")
-DEADLINE_LEVELS <- c("3s", "6s", "10s")
+BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION")
+BLOCK_LEVELS <- c("Calibration", "Manual", "Automation")
+DEADLINE_LEVELS <- c("2s", "4s")
 AUTO_BLOCK_LABELS <- c(
-  "AUTOMATION" = "Automation",
-  "AUTOMATION1" = "Automation 95%",
-  "AUTOMATION2" = "Automation 65%"
+  "AUTOMATION" = "Automation"
 )
-AUTOMATION_FACET_LEVELS <- c("Automation high", "Automation low", "Automation 95%", "Automation 65%")
+AUTOMATION_FACET_LEVELS <- c("Automation high", "Automation low")
 FACET_GROUP_LEVELS <- c("Unaided", AUTOMATION_FACET_LEVELS)
 RELIABILITY_LEVELS <- c("high", "low", "none")
 MOREY_SE_SUBTITLE <- "Error bars are Morey-Cousineau within-subject SEs"
@@ -69,19 +67,6 @@ factor_deadline <- function(x) {
   factor(deadline_chr, levels = DEADLINE_LEVELS)
 }
 
-deadline_code_suffix <- function(x) {
-  deadline_num <- suppressWarnings(as.numeric(x))
-  ifelse(
-    is.na(deadline_num),
-    "",
-    ifelse(
-      deadline_num == floor(deadline_num),
-      as.character(as.integer(deadline_num)),
-      as.character(deadline_num)
-    )
-  )
-}
-
 ensure_deadline_columns <- function(data) {
   if (!"condition_deadline_code" %in% names(data)) {
     data$condition_deadline_code <- NA_character_
@@ -107,8 +92,6 @@ derive_reliability_group <- function(data) {
       automation_reliability_group = case_when(
         !is.na(automation_reliability_group) & automation_reliability_group != "" ~
           as.character(automation_reliability_group),
-        as.character(block) == "AUTOMATION1" ~ "high",
-        as.character(block) == "AUTOMATION2" ~ "low",
         suppressWarnings(as.numeric(aid_accuracy_setting)) >= 0.90 ~ "high",
         suppressWarnings(as.numeric(aid_accuracy_setting)) < 0.90 &
           !is.na(suppressWarnings(as.numeric(aid_accuracy_setting))) ~ "low",
@@ -319,13 +302,11 @@ dat <- trial_dat_raw %>%
       block %in% c("Calibration", "Manual") ~ "Unaided",
       block == "Automation" & automation_reliability_group == "high" ~ "Automation high",
       block == "Automation" & automation_reliability_group == "low" ~ "Automation low",
-      block == "Automation 95%" ~ "Automation 95%",
-      block == "Automation 65%" ~ "Automation 65%",
       TRUE ~ NA_character_
     ),
     x_group = case_when(
       block %in% c("Calibration", "Manual") ~ as.character(block),
-      block %in% c("Automation", "Automation 95%", "Automation 65%") ~ aid_correct,
+      block == "Automation" ~ aid_correct,
       TRUE ~ NA_character_
     ),
     facet_group = factor(
@@ -494,10 +475,10 @@ rt_ylim <- get_axis_limits(rt_all_vals, rt_all_ses)
 # ------------------
 acc_hlines <- tibble(
   facet_group = factor(
-    c("Unaided", "Automation high", "Automation low", "Automation 95%", "Automation 65%"),
+    c("Unaided", "Automation high", "Automation low"),
     levels = levels(acc_summary$facet_group)
   ),
-  yint = c(0.80, 0.95, 0.65, 0.95, 0.65)
+  yint = c(0.80, 0.95, 0.65)
 )
 
 p_acc <- ggplot(acc_summary, aes(x = x_group, y = mean_acc, group = 1)) +
@@ -669,15 +650,11 @@ acc_block_ylim <- get_axis_limits(
   c(
     acc_block_summary$mean_acc,
     slider_block_summary$mean_rated_acc,
-    0.80,
-    0.95,
-    0.65
+    0.80
   ),
   c(
     acc_block_summary$se_acc,
     slider_block_summary$se_rated_acc,
-    0,
-    0,
     0
   )
 )
@@ -749,9 +726,7 @@ p_acc_block <- ggplot() +
     width = 0.12,
     na.rm = TRUE
   ) +
-  annotate("segment", x = 0.5, xend = 4.5, y = 0.80, yend = 0.80, linetype = "dashed") +
-  annotate("segment", x = 2.5, xend = 3.5, y = 0.95, yend = 0.95, linetype = "dashed") +
-  annotate("segment", x = 3.5, xend = 4.5, y = 0.65, yend = 0.65, linetype = "dashed") +
+  annotate("segment", x = 0.5, xend = 3.5, y = 0.80, yend = 0.80, linetype = "dashed") +
   scale_colour_manual(
     values = c(
       "Observed accuracy" = "black",
@@ -839,8 +814,8 @@ dat_stim <- dat %>%
     block_simple = factor_block_simple(block),
     stimulus = factor(
       stimulus,
-      levels = c("conflict", "nonconflict"),
-      labels = c("Conflict", "Non-conflict")
+      levels = c("BLACK", "WHITE"),
+      labels = c("V-BLACK", "V-WHITE")
     )
   ) %>%
   filter(!is.na(stimulus), !is.na(block_simple))
@@ -914,7 +889,7 @@ p_acc_stim <- ggplot(
     position = stim_dodge
   ) +
   scale_colour_manual(
-    values = c("Conflict" = "#111111", "Non-conflict" = "#ffffff")
+    values = c("V-BLACK" = "#111111", "V-WHITE" = "#ffffff")
   ) +
   labs(
     x = "Block",
@@ -952,7 +927,7 @@ p_rt_stim <- ggplot(
     position = stim_dodge
   ) +
   scale_colour_manual(
-    values = c("Conflict" = "#111111", "Non-conflict" = "#ffffff")
+    values = c("V-BLACK" = "#111111", "V-WHITE" = "#ffffff")
   ) +
   labs(
     x = "Block",
@@ -1043,12 +1018,6 @@ acc_base_lines <- tibble(
   xint = 0.80
 )
 
-# purple automation-target lines in auto panels
-acc_auto_lines <- tibble(
-  block_simple = factor_block_simple(c("Automation 95%", "Automation 65%")),
-  xint = c(0.95, 0.65)
-)
-
 # empirical mean accuracy line per block
 acc_mean_lines <- id_acc_summary %>%
   group_by(block_simple) %>%
@@ -1076,12 +1045,6 @@ p_acc_id <- ggplot(
     data = acc_base_lines,
     aes(xintercept = xint),
     colour = "orange",
-    linetype = "dashed"
-  ) +
-  geom_vline(
-    data = acc_auto_lines,
-    aes(xintercept = xint),
-    colour = "purple",
     linetype = "dashed"
   ) +
   geom_vline(
@@ -1164,25 +1127,17 @@ block_order_codes <- trial_dat_raw %>%
     block = as.character(block),
     condition_deadline_code = as.character(condition_deadline_code)
   ) %>%
-  filter(block %in% c("MANUAL", "AUTOMATION", "AUTOMATION1", "AUTOMATION2"), !is.na(block_idx)) %>%
-  distinct(participant_id, block, block_idx, condition_deadline_code, trial_deadline_s) %>%
+  filter(
+    block %in% c("MANUAL", "AUTOMATION"),
+    !is.na(block_idx),
+    !is.na(condition_deadline_code),
+    condition_deadline_code != ""
+  ) %>%
+  distinct(participant_id, block_idx, condition_deadline_code) %>%
   group_by(participant_id) %>%
   arrange(block_idx, .by_group = TRUE) %>%
-  mutate(
-    legacy_block_code = recode(
-      block,
-      "MANUAL" = "M",
-      "AUTOMATION" = "A",
-      "AUTOMATION1" = "H",
-      "AUTOMATION2" = "L"
-    ),
-    block_code = coalesce(
-      na_if(condition_deadline_code, ""),
-      paste0(legacy_block_code, deadline_code_suffix(trial_deadline_s))
-    )
-  ) %>%
   summarise(
-    block_order_code = paste(block_code, collapse = "/"),
+    block_order_code = paste(condition_deadline_code, collapse = "/"),
     .groups = "drop"
   )
 
@@ -1663,7 +1618,7 @@ pooled_aid_accuracy_trust_cor <- pooled_aid_accuracy_trust_dat %>%
   )) %>%
   ungroup() %>%
   mutate(
-    analysis = "pooled_across_automation_blocks_and_trust_questions"
+    analysis = "pooled_within_automation_reliability_level"
   )
 
 pooled_cor_label <- pooled_aid_accuracy_trust_cor %>%
@@ -1718,8 +1673,8 @@ p_aid_accuracy_trust_pooled <- ggplot(
     y = "Pooled aid-accuracy discrepancy",
     title = "Pooled trust vs pooled aid-accuracy discrepancy",
     subtitle = paste(
-      "Discrepancy and trust are averaged across the two automation-deadline blocks;",
-      "panels show the between-subjects reliability groups"
+      "Discrepancy and trust are averaged within participant and reliability level;",
+      "panels show block reliability levels"
     )
   ) +
   coord_cartesian(

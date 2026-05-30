@@ -76,6 +76,12 @@ dat <- dat %>%
     block_idx,
     any_of(c(
       "condition_deadline_code",
+      "time_pressure_condition",
+      "calibration_time_pressure_condition",
+      "calibration_condition_deadline_code",
+      "calibration_trial_deadline_ms",
+      "calibration_trial_deadline_s",
+      "automation_reliability_pattern",
       "automation_reliability_group",
       "trial_deadline_ms",
       "trial_deadline_s"

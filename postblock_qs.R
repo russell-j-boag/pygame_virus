@@ -11,7 +11,23 @@ library("forcats")
 
 BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION", "AUTOMATION1", "AUTOMATION2")
 BLOCK_LABELS <- c("Calibration", "Manual", "Automation", "Auto95", "Auto65")
+# Current task deadlines are 2s (HP) and 4s (LP). No-deadline and 3s/6s labels
+# are retained only for older exports.
 BLOCK_DEADLINE_LEVELS <- c(
+  "Calibration 2s",
+  "Calibration 4s",
+  "Manual 2s",
+  "Manual 4s",
+  "Automation 2s",
+  "Automation 4s",
+  "Auto95 2s",
+  "Auto95 4s",
+  "Auto65 2s",
+  "Auto65 4s",
+  "Manual",
+  "Automation",
+  "Auto95",
+  "Auto65",
   "Calibration",
   "Manual 3s",
   "Manual 6s",
@@ -20,11 +36,7 @@ BLOCK_DEADLINE_LEVELS <- c(
   "Auto95 3s",
   "Auto95 6s",
   "Auto65 3s",
-  "Auto65 6s",
-  "Manual",
-  "Automation",
-  "Auto95",
-  "Auto65"
+  "Auto65 6s"
 )
 RELIABILITY_LEVELS <- c("high", "low", "none")
 
@@ -64,7 +76,7 @@ factor_reliability_group <- function(x) {
 deadline_suffix <- function(block_label, deadline_s) {
   deadline_num <- suppressWarnings(as.numeric(deadline_s))
   suffix <- ifelse(
-    is.na(deadline_num) | block_label == "Calibration",
+    is.na(deadline_num),
     "",
     ifelse(
       deadline_num == floor(deadline_num),
