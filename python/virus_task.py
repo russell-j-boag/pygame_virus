@@ -1230,15 +1230,15 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
 
 def key_mapping_for_participant(participant_id: int):
     """
-    Flip key mapping within the 16-participant counterbalancing cycle:
-      - p 1-8:   standard  (D->BLACK, J->WHITE)
-      - p 9-16:  flipped   (J->BLACK, D->WHITE)
-      - p 17-24: standard
-      - p 25-32: flipped
+    Flip key mapping within the 4-participant counterbalancing cycle:
+      - p 1-2: standard  (D->BLACK, J->WHITE)
+      - p 3-4: flipped   (J->BLACK, D->WHITE)
+      - p 5-6: standard
+      - p 7-8: flipped
       ... etc
     """
-    cycle_idx = (participant_id - 1) % 16
-    flip = cycle_idx >= 8
+    cycle_idx = (participant_id - 1) % (2 * len(CALIBRATION_TARGET_LEVELS))
+    flip = cycle_idx >= len(CALIBRATION_TARGET_LEVELS)
 
     if not flip:
         key_black = pygame.K_d
@@ -3265,7 +3265,7 @@ def main():
     else:
         print(f"[PREV CALIB] No prior CALIBRATION delta file found for participant {participant_id}")
         
-    # ---- key counterbalancing (every 6 participants) ----
+    # ---- key counterbalancing (every 4 participants) ----
     km = key_mapping_for_participant(participant_id)
     KEY_BLACK_NAME = km["key_black_name"]
     KEY_WHITE_NAME = km["key_white_name"]

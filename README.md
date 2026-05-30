@@ -53,14 +53,16 @@ This design tests whether participants respond only to absolute changes in aid r
 
 - Calibration target: participant IDs alternate between `CAL65` and `CAL85`.
 - Main block sequence: all participants complete `CAL -> MAN/PRE_AUTOMATION -> REL_DROP -> MAN/POST_AUTOMATION`.
-- Key mapping: standard for participant IDs 1-8 within each 16-ID keymap cycle, flipped for participant IDs 9-16.
+- Key mapping: standard for the first two participants within each four-participant cycle, flipped for the next two participants.
 
-This gives an even counterbalance over the two calibration groups:
+This gives a complete four-participant counterbalance over calibration target and key mapping:
 
-| Participant cycle position | Calibration group | Main block sequence |
-| ---: | --- | --- |
-| 1 | `CAL65` | `SPLIT_MANUAL` |
-| 2 | `CAL85` | `SPLIT_MANUAL` |
+| Participant cycle position | Calibration group | Key mapping | Main block sequence |
+| ---: | --- | --- | --- |
+| 1 | `CAL65` | `D = V-BLACK`, `J = V-WHITE` | `SPLIT_MANUAL` |
+| 2 | `CAL85` | `D = V-BLACK`, `J = V-WHITE` | `SPLIT_MANUAL` |
+| 3 | `CAL65` | `J = V-BLACK`, `D = V-WHITE` | `SPLIT_MANUAL` |
+| 4 | `CAL85` | `J = V-BLACK`, `D = V-WHITE` | `SPLIT_MANUAL` |
 
 The standard key mapping is `D = V-BLACK` and `J = V-WHITE`. The flipped key mapping is `J = V-BLACK` and `D = V-WHITE`.
 
@@ -98,6 +100,8 @@ run_task(block = "CALIBRATION")
 run_task(block = "MANUAL")
 run_task(block = "AUTOMATION")
 ```
+
+In single-block mode, `MANUAL` runs one 200-trial manual segment labelled `SINGLE_BLOCK`.
 
 ## Author
 Russell J. Boag
