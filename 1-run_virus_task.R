@@ -11,10 +11,10 @@ run_instructions()
 run_task()
 
 # # You can also run one block at a time by selecting a specific block:
-# run_task(block = "CALIBRATION")
-# run_task(block = "MANUAL", deadline_s = 3)
-# run_task(block = "MANUAL", deadline_s = 6)
-# run_task(block = "AUTOMATION", deadline_s = 3, reliability_group = "high")
-# run_task(block = "AUTOMATION", deadline_s = 6, reliability_group = "high")
-# run_task(block = "AUTOMATION", deadline_s = 3, reliability_group = "low")
-# run_task(block = "AUTOMATION", deadline_s = 6, reliability_group = "low")
+# # Run only the participant's assigned calibration deadline.
+# run_task(block = "CALIBRATION", deadline_s = 2) # CAL_HP-assigned participants
+# run_task(block = "CALIBRATION", deadline_s = 4) # CAL_LP-assigned participants
+# run_task(block = "MANUAL", deadline_s = 2)
+# run_task(block = "MANUAL", deadline_s = 4)
+# run_task(block = "AUTOMATION", deadline_s = 2, reliability_group = "high")
+# run_task(block = "AUTOMATION", deadline_s = 4, reliability_group = "low")

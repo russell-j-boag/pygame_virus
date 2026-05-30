@@ -28,12 +28,89 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 # Block definitions
 # -----------------------------
 POST_CALIBRATION_N_TRIALS = 400
-CALIBRATION_TRIAL_DEADLINE_MS = 10000
-TIME_PRESSURE_DEADLINES_MS = (3000, 6000)
+CALIBRATION_N_TRIALS = 300
+TIME_PRESSURE_DEADLINES_MS = {
+    "HP": 2000,
+    "LP": 4000,
+}
+TIME_PRESSURE_LABELS = {
+    "HP": "high pressure",
+    "LP": "low pressure",
+}
 AUTOMATION_RELIABILITY_SETTINGS = {
     "high": 0.95,
     "low": 0.65,
 }
+AUTOMATION_RELIABILITY_PATTERNS = {
+    "HP95_LP65": {
+        "HP": "high",
+        "LP": "low",
+    },
+    "HP65_LP95": {
+        "HP": "low",
+        "LP": "high",
+    },
+}
+COUNTERBALANCE_CYCLE_N = 32
+COUNTERBALANCE_RANDOM_SEED = 20260530
+POST_CALIBRATION_BLOCK_ORDERS = (
+    (
+        ("HP", "MANUAL"),
+        ("HP", "AUTOMATION"),
+        ("LP", "AUTOMATION"),
+        ("LP", "MANUAL"),
+    ),
+    (
+        ("HP", "AUTOMATION"),
+        ("LP", "MANUAL"),
+        ("HP", "MANUAL"),
+        ("LP", "AUTOMATION"),
+    ),
+    (
+        ("LP", "MANUAL"),
+        ("LP", "AUTOMATION"),
+        ("HP", "AUTOMATION"),
+        ("HP", "MANUAL"),
+    ),
+    (
+        ("LP", "AUTOMATION"),
+        ("HP", "MANUAL"),
+        ("LP", "MANUAL"),
+        ("HP", "AUTOMATION"),
+    ),
+)
+COUNTERBALANCE_FACTOR_ASSIGNMENTS = tuple(
+    {
+        "calibration_pressure": calibration_pressure,
+        "reliability_pattern": reliability_pattern,
+        "key_flip": key_flip,
+    }
+    for calibration_pressure in ("HP", "LP")
+    for reliability_pattern in ("HP95_LP65", "HP65_LP95")
+    for key_flip in (False, True)
+)
+
+
+def build_counterbalance_table():
+    rows = [
+        {
+            "post_calibration_block_order_idx": order_idx,
+            "factor_assignment_idx": factor_idx,
+        }
+        for order_idx in range(len(POST_CALIBRATION_BLOCK_ORDERS))
+        for factor_idx in range(len(COUNTERBALANCE_FACTOR_ASSIGNMENTS))
+    ]
+    rng = random.Random(COUNTERBALANCE_RANDOM_SEED)
+    rng.shuffle(rows)
+    return tuple(rows)
+
+
+COUNTERBALANCE_TABLE = build_counterbalance_table()
+if len(COUNTERBALANCE_TABLE) != COUNTERBALANCE_CYCLE_N:
+    raise RuntimeError(
+        f"Expected {COUNTERBALANCE_CYCLE_N} counterbalance rows, "
+        f"found {len(COUNTERBALANCE_TABLE)}."
+    )
 
 BLOCKS = [
     # dict(
@@ -49,7 +126,7 @@ BLOCKS = [
     # ),
     dict(
         name="CALIBRATION",
-        N_TRIALS=300,
+        N_TRIALS=CALIBRATION_N_TRIALS,
         AUTOMATION_ON=False,      # automation off
         AID_ACCURACY=0.90,        # not used (automation off), but harmless
         STAIRCASE_ON=True,        # staircase on
@@ -57,8 +134,9 @@ BLOCKS = [
         FIXED_DELTA_ON=False,     # fixed delta off because using staircase
         FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
         TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=CALIBRATION_TRIAL_DEADLINE_MS,
-        CONDITION_DEADLINE_CODE="CAL",
+        TRIAL_DEADLINE_MS=TIME_PRESSURE_DEADLINES_MS["HP"],
+        CONDITION_DEADLINE_CODE="CAL_HP",
+        TIME_PRESSURE_CONDITION="HP",
     ),
     dict(
         name="MANUAL",
@@ -71,8 +149,38 @@ BLOCKS = [
         FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
         TRIAL_FEEDBACK_ON=True,
         SHOW_AID_MASKED=True,
-        TRIAL_DEADLINE_MS=3000,
-        CONDITION_DEADLINE_CODE="M3",
+        TRIAL_DEADLINE_MS=TIME_PRESSURE_DEADLINES_MS["HP"],
+        CONDITION_DEADLINE_CODE="M_HP",
+        TIME_PRESSURE_CONDITION="HP",
+    ),
+    dict(
+        name="AUTOMATION",
+        N_TRIALS=POST_CALIBRATION_N_TRIALS,
+        AUTOMATION_ON=True,       # automation on
+        AID_ACCURACY=None,        # assigned by participant reliability pattern
+        AID_TRANSPARENCY="none",
+        STAIRCASE_ON=False,       # staircase off
+        TARGET_ACC=0.80,          # not used (staircase off), but harmless
+        FIXED_DELTA_ON=True,
+        FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
+        TRIAL_FEEDBACK_ON=True,
+        TRIAL_DEADLINE_MS=TIME_PRESSURE_DEADLINES_MS["HP"],
+        CONDITION_DEADLINE_CODE="A_HP",
+        TIME_PRESSURE_CONDITION="HP",
+    ),
+    dict(
+        name="CALIBRATION",
+        N_TRIALS=CALIBRATION_N_TRIALS,
+        AUTOMATION_ON=False,      # automation off
+        AID_ACCURACY=0.90,        # not used (automation off), but harmless
+        STAIRCASE_ON=True,        # staircase on
+        TARGET_ACC=0.80,          # target accuracy for adaptive staircase
+        FIXED_DELTA_ON=False,     # fixed delta off because using staircase
+        FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
+        TRIAL_FEEDBACK_ON=True,
+        TRIAL_DEADLINE_MS=TIME_PRESSURE_DEADLINES_MS["LP"],
+        CONDITION_DEADLINE_CODE="CAL_LP",
+        TIME_PRESSURE_CONDITION="LP",
     ),
     dict(
         name="MANUAL",
@@ -85,53 +193,46 @@ BLOCKS = [
         FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
         TRIAL_FEEDBACK_ON=True,
         SHOW_AID_MASKED=True,
-        TRIAL_DEADLINE_MS=6000,
-        CONDITION_DEADLINE_CODE="M6",
+        TRIAL_DEADLINE_MS=TIME_PRESSURE_DEADLINES_MS["LP"],
+        CONDITION_DEADLINE_CODE="M_LP",
+        TIME_PRESSURE_CONDITION="LP",
     ),
     dict(
         name="AUTOMATION",
         N_TRIALS=POST_CALIBRATION_N_TRIALS,
         AUTOMATION_ON=True,       # automation on
-        AID_ACCURACY=None,        # assigned by participant reliability group
+        AID_ACCURACY=None,        # assigned by participant reliability pattern
         AID_TRANSPARENCY="none",
         STAIRCASE_ON=False,       # staircase off
         TARGET_ACC=0.80,          # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
         TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=3000,
-        CONDITION_DEADLINE_CODE="A3",
-    ),
-    dict(
-        name="AUTOMATION",
-        N_TRIALS=POST_CALIBRATION_N_TRIALS,
-        AUTOMATION_ON=True,       # automation on
-        AID_ACCURACY=None,        # assigned by participant reliability group
-        AID_TRANSPARENCY="none",
-        STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=0.80,          # not used (staircase off), but harmless
-        FIXED_DELTA_ON=True,
-        FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
-        TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=6000,
-        CONDITION_DEADLINE_CODE="A6",
+        TRIAL_DEADLINE_MS=TIME_PRESSURE_DEADLINES_MS["LP"],
+        CONDITION_DEADLINE_CODE="A_LP",
+        TIME_PRESSURE_CONDITION="LP",
     ),
 ]
 
 BLOCK_DEFAULTS = {
     "SHOW_AID_MASKED": False,
     "AID_TRANSPARENCY": "none",
-    "TRIAL_DEADLINE_MS": CALIBRATION_TRIAL_DEADLINE_MS,
+    "TRIAL_DEADLINE_MS": None,
     "CONDITION_DEADLINE_CODE": None,
+    "TIME_PRESSURE_CONDITION": None,
+    "CALIBRATION_TIME_PRESSURE_CONDITION": None,
+    "CALIBRATION_CONDITION_DEADLINE_CODE": None,
+    "CALIBRATION_TRIAL_DEADLINE_MS": None,
     "AUTOMATION_RELIABILITY_GROUP": "none",
+    "AUTOMATION_RELIABILITY_PATTERN": "none",
 }
 
 BLOCK_INSTRUCTIONS = {
 
     "CALIBRATION": {
-        "title": "MANUAL BLOCK",
+        "title": "CALIBRATION BLOCK",
         "slides": [
-            "You will now begin your first block of trials."
+            "You will now complete calibration trials for this response deadline."
         ],
     },
 
@@ -181,8 +282,17 @@ def block_condition_deadline_code(block_cfg) -> str:
     return block_cfg["name"]
 
 
+def block_time_pressure_condition(block_cfg):
+    return block_cfg.get("TIME_PRESSURE_CONDITION")
+
+
+def block_time_pressure_label(block_cfg) -> str:
+    pressure = block_time_pressure_condition(block_cfg)
+    return TIME_PRESSURE_LABELS.get(pressure, "time pressure")
+
+
 def trial_deadline_ms_for_block(block_cfg):
-    return block_cfg.get("TRIAL_DEADLINE_MS", CALIBRATION_TRIAL_DEADLINE_MS)
+    return block_cfg.get("TRIAL_DEADLINE_MS")
 
 
 def trial_deadline_s_for_block(block_cfg):
@@ -203,8 +313,9 @@ def format_deadline_s(deadline_s) -> str:
 def time_pressure_instruction_slide(block_cfg) -> str:
     deadline_s = trial_deadline_s_for_block(block_cfg)
     deadline_text = format_deadline_s(deadline_s)
+    pressure_label = block_time_pressure_label(block_cfg)
     return (
-        f"In this block, each trial has a response deadline of {deadline_text} seconds. "
+        f"This is a {pressure_label} block. Each trial has a response deadline of {deadline_text} seconds. "
         "If you do not respond before the deadline, the trial will be recorded as too slow. "
         "Please respond as accurately as possible while staying within the deadline."
     )
@@ -229,21 +340,109 @@ def automation_reliability_instruction_slide(reliability_group: str) -> str:
     )
 
 
-def reliability_group_for_participant(participant_id: int) -> str:
-    cycle_idx = (participant_id - 1) % 16
-    return "high" if (cycle_idx % 2) == 0 else "low"
+def counterbalance_cycle_index(participant_id: int) -> int:
+    return (participant_id - 1) % COUNTERBALANCE_CYCLE_N
 
 
-def block_order_index_for_participant(participant_id: int) -> int:
-    cycle_idx = (participant_id - 1) % 16
-    return (cycle_idx % 8) // 2
+def counterbalance_allocation_for_participant(participant_id: int):
+    cycle_idx = counterbalance_cycle_index(participant_id)
+    row = COUNTERBALANCE_TABLE[cycle_idx]
+    factors = COUNTERBALANCE_FACTOR_ASSIGNMENTS[row["factor_assignment_idx"]]
+    block_order_idx = row["post_calibration_block_order_idx"]
+    return {
+        "cycle_idx": cycle_idx,
+        "post_calibration_block_order_idx": block_order_idx,
+        "factor_assignment_idx": row["factor_assignment_idx"],
+        "post_calibration_block_order": POST_CALIBRATION_BLOCK_ORDERS[block_order_idx],
+        **factors,
+    }
 
 
-def apply_reliability_to_block(block_cfg, reliability_group: str):
+def post_calibration_block_order_for_participant(participant_id: int):
+    return counterbalance_allocation_for_participant(participant_id)[
+        "post_calibration_block_order"
+    ]
+
+
+def reliability_pattern_for_participant(participant_id: int) -> str:
+    return counterbalance_allocation_for_participant(participant_id)[
+        "reliability_pattern"
+    ]
+
+
+def calibration_pressure_for_participant(participant_id: int) -> str:
+    """
+    Assign the single calibration deadline from the 32-participant
+    counterbalancing table.
+
+    The table crosses four Latin-square post-calibration block orders with
+    calibration deadline, reliability pattern, and key mapping.
+    """
+    return counterbalance_allocation_for_participant(participant_id)[
+        "calibration_pressure"
+    ]
+
+
+def calibration_condition_deadline_code(pressure: str) -> str:
+    if pressure not in TIME_PRESSURE_DEADLINES_MS:
+        raise ValueError(f"Unsupported calibration pressure condition '{pressure}'.")
+    return f"CAL_{pressure}"
+
+
+def apply_calibration_assignment_to_block(block_cfg, calibration_pressure: str):
     cfg = copy_block_config(block_cfg)
-    cfg["AUTOMATION_RELIABILITY_GROUP"] = reliability_group
+    if calibration_pressure not in TIME_PRESSURE_DEADLINES_MS:
+        raise ValueError(
+            f"Unsupported calibration pressure condition '{calibration_pressure}'. "
+            f"Valid values: {sorted(TIME_PRESSURE_DEADLINES_MS)}"
+        )
+
+    cfg["CALIBRATION_TIME_PRESSURE_CONDITION"] = calibration_pressure
+    cfg["CALIBRATION_CONDITION_DEADLINE_CODE"] = calibration_condition_deadline_code(calibration_pressure)
+    cfg["CALIBRATION_TRIAL_DEADLINE_MS"] = TIME_PRESSURE_DEADLINES_MS[calibration_pressure]
+    return cfg
+
+
+def calibration_time_pressure_condition(block_cfg):
+    return block_cfg.get("CALIBRATION_TIME_PRESSURE_CONDITION")
+
+
+def calibration_trial_deadline_ms_for_block(block_cfg):
+    return block_cfg.get("CALIBRATION_TRIAL_DEADLINE_MS")
+
+
+def calibration_trial_deadline_s_for_block(block_cfg):
+    deadline_ms = calibration_trial_deadline_ms_for_block(block_cfg)
+    if deadline_ms is None:
+        return None
+    return deadline_ms / 1000.0
+
+
+def apply_reliability_to_block(block_cfg, reliability_pattern="none", reliability_group=None):
+    cfg = copy_block_config(block_cfg)
+    cfg["AUTOMATION_RELIABILITY_PATTERN"] = reliability_pattern
+
     if cfg["AUTOMATION_ON"]:
+        if reliability_group is None:
+            if reliability_pattern not in AUTOMATION_RELIABILITY_PATTERNS:
+                raise ValueError(
+                    "Automation blocks require either an explicit reliability group "
+                    f"or one of these reliability patterns: {sorted(AUTOMATION_RELIABILITY_PATTERNS)}"
+                )
+            pressure = block_time_pressure_condition(cfg)
+            reliability_group = AUTOMATION_RELIABILITY_PATTERNS[reliability_pattern][pressure]
+
+        if reliability_group not in AUTOMATION_RELIABILITY_SETTINGS:
+            raise ValueError(
+                f"Unsupported automation reliability group '{reliability_group}'. "
+                f"Valid values: {sorted(AUTOMATION_RELIABILITY_SETTINGS)}"
+            )
+
+        cfg["AUTOMATION_RELIABILITY_GROUP"] = reliability_group
         cfg["AID_ACCURACY"] = AUTOMATION_RELIABILITY_SETTINGS[reliability_group]
+    else:
+        cfg["AUTOMATION_RELIABILITY_GROUP"] = "none"
+
     return cfg
 
 
@@ -382,7 +581,7 @@ FEEDBACK_SLOW_COLOR    = (200, 200, 0)
 
 # Trial timing
 FIXATION_DURATION_MS = 750
-TRIAL_DEADLINE_MS = CALIBRATION_TRIAL_DEADLINE_MS
+TRIAL_DEADLINE_MS = None
 
 # Brownian motion for dots (per-frame random walk)
 BROWNIAN_STEP_MEAN = 0.001   # pixels per frame (typical step)
@@ -810,6 +1009,14 @@ def run_postblock_questionnaire(
             "block": block_name,
             "block_idx": block_idx,
             "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
+            "time_pressure_condition": block_time_pressure_condition(block_cfg) if block_cfg else None,
+            "calibration_time_pressure_condition": calibration_time_pressure_condition(block_cfg) if block_cfg else None,
+            "calibration_condition_deadline_code": (
+                block_cfg.get("CALIBRATION_CONDITION_DEADLINE_CODE") if block_cfg else None
+            ),
+            "calibration_trial_deadline_ms": calibration_trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
+            "calibration_trial_deadline_s": calibration_trial_deadline_s_for_block(block_cfg) if block_cfg else None,
+            "automation_reliability_pattern": block_cfg.get("AUTOMATION_RELIABILITY_PATTERN", "none") if block_cfg else None,
             "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
             "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
@@ -1079,54 +1286,45 @@ def is_hard_quit_event(event) -> bool:
   
 def build_blocks_for_participant(participant_id: int, blocks_template):
     """
-    CALIBRATION stays fixed.
-
-    The four post-calibration condition-deadline cells are assigned with a
-    Williams Latin square. Reliability is assigned between subjects within a
-    16-participant cycle that also balances key mapping.
+    One calibration block is assigned first, then the four post-calibration
+    manual/automation x HP/LP cells are ordered from a balanced Latin square.
     """
-    calibration_blocks = [
-        copy_block_config(b)
+    blocks_by_cell = {
+        (b["TIME_PRESSURE_CONDITION"], b["name"]): copy_block_config(b)
         for b in blocks_template
-        if b["name"] == "CALIBRATION"
-    ]
-    if len(calibration_blocks) != 1:
-        raise ValueError("Exactly one CALIBRATION block must be defined.")
+    }
 
-    tail_blocks = [
-        copy_block_config(b)
-        for b in blocks_template
-        if b["name"] != "CALIBRATION"
-    ]
-    if len(tail_blocks) != 4:
-        raise ValueError("The between-subjects reliability design expects exactly four post-calibration blocks.")
+    expected_cells = {
+        (pressure, block_name)
+        for pressure in TIME_PRESSURE_DEADLINES_MS
+        for block_name in ("CALIBRATION", "MANUAL", "AUTOMATION")
+    }
+    missing_cells = expected_cells - set(blocks_by_cell)
+    if missing_cells:
+        raise ValueError(f"Missing block definitions for cells: {sorted(missing_cells)}")
 
-    # Williams square pattern for four unique cells: 1, 2, 4, 3.
-    order_pattern = [0, 1, 3, 2]
-    all_orders = [
-        [tail_blocks[(pattern_idx + offset) % len(tail_blocks)] for pattern_idx in order_pattern]
-        for offset in range(len(tail_blocks))
-    ]
+    reliability_pattern = reliability_pattern_for_participant(participant_id)
+    calibration_pressure = calibration_pressure_for_participant(participant_id)
+    ordered_blocks = []
+    ordered_blocks.append(blocks_by_cell[(calibration_pressure, "CALIBRATION")])
+    for pressure, block_name in post_calibration_block_order_for_participant(participant_id):
+        ordered_blocks.append(blocks_by_cell[(pressure, block_name)])
 
-    order_idx = block_order_index_for_participant(participant_id)
-    reliability_group = reliability_group_for_participant(participant_id)
-    ordered_tail = [
-        apply_reliability_to_block(b, reliability_group)
-        for b in all_orders[order_idx]
+    return [
+        apply_reliability_to_block(
+            apply_calibration_assignment_to_block(b, calibration_pressure),
+            reliability_pattern=reliability_pattern,
+        )
+        for b in ordered_blocks
     ]
-    return [apply_reliability_to_block(calibration_blocks[0], reliability_group)] + ordered_tail
 
 def key_mapping_for_participant(participant_id: int):
     """
-    Flip key mapping within the 16-participant counterbalancing cycle:
-      - p 1-8:   standard  (D->BLACK, J->WHITE)
-      - p 9-16:  flipped   (J->BLACK, D->WHITE)
-      - p 17-24: standard
-      - p 25-32: flipped
-      ... etc
+    Flip key mapping within the 32-participant counterbalancing cycle:
+      - standard  (D->BLACK, J->WHITE)
+      - flipped   (J->BLACK, D->WHITE)
     """
-    cycle_idx = (participant_id - 1) % 16
-    flip = cycle_idx >= 8
+    flip = counterbalance_allocation_for_participant(participant_id)["key_flip"]
 
     if not flip:
         key_black = pygame.K_d
@@ -1454,6 +1652,14 @@ def run_postblock_slider_questions(
             "block": block_name,
             "block_idx": block_idx,
             "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
+            "time_pressure_condition": block_time_pressure_condition(block_cfg) if block_cfg else None,
+            "calibration_time_pressure_condition": calibration_time_pressure_condition(block_cfg) if block_cfg else None,
+            "calibration_condition_deadline_code": (
+                block_cfg.get("CALIBRATION_CONDITION_DEADLINE_CODE") if block_cfg else None
+            ),
+            "calibration_trial_deadline_ms": calibration_trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
+            "calibration_trial_deadline_s": calibration_trial_deadline_s_for_block(block_cfg) if block_cfg else None,
+            "automation_reliability_pattern": block_cfg.get("AUTOMATION_RELIABILITY_PATTERN", "none") if block_cfg else None,
             "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
             "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
@@ -1503,13 +1709,41 @@ def make_trial_dots(n_dots, vblack_prop, center, radius):
     random.shuffle(dots)
     return dots, n_vblack, n_vwhite
 
-def _latest_delta_csv(output_dir="output", participant_id=None, block_name=None):
+def _delta_csv_matches_metadata(csv_path, time_pressure_condition=None, condition_deadline_code=None):
+    if time_pressure_condition is None and condition_deadline_code is None:
+        return True
+
+    try:
+        with open(csv_path, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            row = next(reader, None)
+    except Exception:
+        return False
+
+    if not row:
+        return False
+    if time_pressure_condition is not None and row.get("time_pressure_condition") != time_pressure_condition:
+        return False
+    if condition_deadline_code is not None and row.get("condition_deadline_code") != condition_deadline_code:
+        return False
+    return True
+
+
+def _latest_delta_csv(
+    output_dir="output",
+    participant_id=None,
+    block_name=None,
+    time_pressure_condition=None,
+    condition_deadline_code=None,
+):
     """
     Returns path to most recent delta_*.csv in output_dir.
 
     Optional filters:
       - participant_id: only files starting with f"delta_p{participant_id:03d}_"
       - block_name: only files containing _{block_name}.csv (e.g., "_CALIBRATION.csv")
+      - time_pressure_condition: only files whose row has this HP/LP value
+      - condition_deadline_code: only files whose row has this condition code
     """
     if not os.path.isdir(output_dir):
         return None
@@ -1525,6 +1759,16 @@ def _latest_delta_csv(output_dir="output", participant_id=None, block_name=None)
 
     if block_name is not None:
         files = [f for f in files if f"_{block_name}.csv" in f]
+
+    if time_pressure_condition is not None or condition_deadline_code is not None:
+        files = [
+            f for f in files
+            if _delta_csv_matches_metadata(
+                os.path.join(output_dir, f),
+                time_pressure_condition=time_pressure_condition,
+                condition_deadline_code=condition_deadline_code,
+            )
+        ]
 
     if not files:
         return None
@@ -1557,10 +1801,10 @@ def load_delta_distribution_from_csv(csv_path):
         return None, None
 
 
-def get_latest_calibration_delta_for_participant(participant_id, output_dir="output"):
+def get_latest_calibration_delta_for_participant(participant_id, output_dir="output", time_pressure_condition=None):
     """
-    Load the most recent CALIBRATION delta summary for this participant,
-    regardless of timestamp.
+    Load the most recent CALIBRATION delta summary for this participant.
+    If time_pressure_condition is supplied, only that HP/LP calibration is used.
 
     Returns:
         (delta_mean, delta_sd, path)
@@ -1570,6 +1814,7 @@ def get_latest_calibration_delta_for_participant(participant_id, output_dir="out
         output_dir=output_dir,
         participant_id=participant_id,
         block_name="CALIBRATION",
+        time_pressure_condition=time_pressure_condition,
     )
 
     if latest_path is None:
@@ -1577,6 +1822,17 @@ def get_latest_calibration_delta_for_participant(participant_id, output_dir="out
 
     delta_mean, delta_sd = load_delta_distribution_from_csv(latest_path)
     return delta_mean, delta_sd, latest_path
+
+
+def get_latest_calibration_deltas_by_pressure(participant_id, output_dir="output"):
+    return {
+        pressure: get_latest_calibration_delta_for_participant(
+            participant_id,
+            output_dir=output_dir,
+            time_pressure_condition=pressure,
+        )
+        for pressure in TIME_PRESSURE_DEADLINES_MS
+    }
   
   
 def clamp(x, lo, hi):
@@ -1913,10 +2169,11 @@ def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
             reliability_group = block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none")
             slides = slides[:1] + [automation_reliability_instruction_slide(reliability_group)] + slides[1:]
 
-        if block_cfg is not None and block_name != "CALIBRATION":
+        if block_cfg is not None:
             deadline_s = trial_deadline_s_for_block(block_cfg)
+            pressure = block_time_pressure_condition(block_cfg)
             payload["title"] = (
-                f"{payload['title']} ({format_deadline_s(deadline_s)}s DEADLINE)"
+                f"{payload['title']} ({pressure}, {format_deadline_s(deadline_s)}s DEADLINE)"
             )
             slides = [time_pressure_instruction_slide(block_cfg)] + slides
 
@@ -2288,7 +2545,7 @@ def parse_cli_args():
         "--deadline-s",
         type=float,
         default=None,
-        help="Select a post-calibration deadline in seconds when --block has 3s and 6s variants.",
+        help="Select the 2s or 4s pressure variant when --block has multiple deadlines.",
     )
     parser.add_argument(
         "--reliability-group",
@@ -2358,9 +2615,22 @@ def select_single_block(block_name: str, blocks_template, participant_id: int, d
             f"with one of: {sorted(AUTOMATION_RELIABILITY_SETTINGS)}"
         )
 
-    selected_reliability_group = reliability_group or reliability_group_for_participant(participant_id)
+    calibration_pressure = calibration_pressure_for_participant(participant_id)
+    if matches[0]["name"] == "CALIBRATION" and block_time_pressure_condition(matches[0]) != calibration_pressure:
+        assigned_deadline_s = TIME_PRESSURE_DEADLINES_MS[calibration_pressure] / 1000.0
+        raise ValueError(
+            f"Participant {participant_id} is assigned to {calibration_pressure} calibration "
+            f"({format_deadline_s(assigned_deadline_s)}s). "
+            "Run the assigned calibration deadline for this participant."
+        )
+
+    reliability_pattern = "single_block" if matches[0]["AUTOMATION_ON"] else "none"
     return [
-        apply_reliability_to_block(matches[0], selected_reliability_group)
+        apply_reliability_to_block(
+            apply_calibration_assignment_to_block(matches[0], calibration_pressure),
+            reliability_pattern=reliability_pattern,
+            reliability_group=reliability_group,
+        )
     ]
 
 
@@ -2419,7 +2689,9 @@ def choose_blocks_to_run(args, participant_id):
             participant_id,
             "->",
             [block_condition_deadline_code(b) for b in blocks_to_run],
-            f"(reliability={blocks_to_run[0]['AUTOMATION_RELIABILITY_GROUP']})",
+            f"(calibration={blocks_to_run[0]['CALIBRATION_TIME_PRESSURE_CONDITION']}, "
+            f"pattern={blocks_to_run[0]['AUTOMATION_RELIABILITY_PATTERN']}, "
+            f"reliability={blocks_to_run[0]['AUTOMATION_RELIABILITY_GROUP']})",
         )
         return blocks_to_run
 
@@ -2429,7 +2701,8 @@ def choose_blocks_to_run(args, participant_id):
         participant_id,
         "->",
         [block_condition_deadline_code(b) for b in blocks_to_run],
-        f"(reliability={blocks_to_run[0]['AUTOMATION_RELIABILITY_GROUP']})",
+        f"(calibration={blocks_to_run[0]['CALIBRATION_TIME_PRESSURE_CONDITION']}, "
+        f"pattern={blocks_to_run[0]['AUTOMATION_RELIABILITY_PATTERN']})",
     )
     return blocks_to_run
 
@@ -2442,27 +2715,30 @@ def resolve_difficulty_mode(block_cfg):
     return "fixed_props"
 
 
-def resolve_fixed_delta_source(block_name, participant_id, fixed_delta_value, current_calibration, previous_calibration):
+def resolve_fixed_delta_source(block_cfg, participant_id, fixed_delta_value, current_calibration, previous_calibration):
+    block_name = block_cfg["name"]
+    pressure = block_time_pressure_condition(block_cfg)
+    calibration_pressure = calibration_time_pressure_condition(block_cfg)
     calib_delta_mean, calib_delta_sd = current_calibration
     prev_calib_delta_mean, prev_calib_delta_sd, prev_calib_delta_path = previous_calibration
 
     if calib_delta_mean is not None and calib_delta_sd is not None:
         print(
-            f"[{block_name}] Using CALIBRATION delta from current run "
+            f"[{block_name} {pressure}] Using current {calibration_pressure} CALIBRATION delta "
             f"(mean={calib_delta_mean}, sd={calib_delta_sd})"
         )
         return calib_delta_mean, calib_delta_sd
 
     if prev_calib_delta_mean is not None and prev_calib_delta_sd is not None:
         print(
-            f"[{block_name}] Using most recent prior CALIBRATION delta for participant "
+            f"[{block_name} {pressure}] Using most recent prior {calibration_pressure} CALIBRATION delta for participant "
             f"{participant_id} from {prev_calib_delta_path} "
             f"(mean={prev_calib_delta_mean}, sd={prev_calib_delta_sd})"
         )
         return prev_calib_delta_mean, prev_calib_delta_sd
 
     print(
-        f"[{block_name}] No CALIBRATION delta found for participant {participant_id}; "
+        f"[{block_name} {pressure}] No {calibration_pressure} CALIBRATION delta found for participant {participant_id}; "
         f"falling back to FIXED_DELTA_VALUE={fixed_delta_value}, sd=0.0"
     )
     return fixed_delta_value, 0.0
@@ -2481,7 +2757,7 @@ def prepare_block_state(block_cfg, participant_id, current_calibration, previous
 
     if difficulty_mode == "fixed_delta":
         fixed_delta_mean, fixed_delta_sd = resolve_fixed_delta_source(
-            block_name=block_cfg["name"],
+            block_cfg=block_cfg,
             participant_id=participant_id,
             fixed_delta_value=block_cfg["FIXED_DELTA_VALUE"],
             current_calibration=current_calibration,
@@ -2695,6 +2971,12 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "block": block_name,
         "block_idx": block_idx,
         "condition_deadline_code": block_condition_deadline_code(block_cfg),
+        "time_pressure_condition": block_time_pressure_condition(block_cfg),
+        "calibration_time_pressure_condition": calibration_time_pressure_condition(block_cfg),
+        "calibration_condition_deadline_code": block_cfg.get("CALIBRATION_CONDITION_DEADLINE_CODE"),
+        "calibration_trial_deadline_ms": calibration_trial_deadline_ms_for_block(block_cfg),
+        "calibration_trial_deadline_s": calibration_trial_deadline_s_for_block(block_cfg),
+        "automation_reliability_pattern": block_cfg.get("AUTOMATION_RELIABILITY_PATTERN", "none"),
         "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none"),
         "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg),
         "trial_deadline_s": trial_deadline_s_for_block(block_cfg),
@@ -2914,8 +3196,9 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
     return row
 
 
-def write_delta_summary(output_dir, participant_id, run_timestamp, block_name, block_idx, deltas_realised,
+def write_delta_summary(output_dir, participant_id, run_timestamp, block_cfg, block_idx, deltas_realised,
                         delta_mean, delta_step_up):
+    block_name = block_cfg["name"]
     delta_out_path = os.path.join(
         output_dir,
         f"delta_p{participant_id:03d}_{run_timestamp}_b{block_idx:02d}_{block_name}.csv"
@@ -2947,6 +3230,14 @@ def write_delta_summary(output_dir, participant_id, run_timestamp, block_name, b
         "run_timestamp": run_timestamp,
         "block": block_name,
         "block_idx": block_idx,
+        "condition_deadline_code": block_condition_deadline_code(block_cfg),
+        "time_pressure_condition": block_time_pressure_condition(block_cfg),
+        "calibration_time_pressure_condition": calibration_time_pressure_condition(block_cfg),
+        "calibration_condition_deadline_code": block_cfg.get("CALIBRATION_CONDITION_DEADLINE_CODE"),
+        "calibration_trial_deadline_ms": calibration_trial_deadline_ms_for_block(block_cfg),
+        "calibration_trial_deadline_s": calibration_trial_deadline_s_for_block(block_cfg),
+        "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg),
+        "trial_deadline_s": trial_deadline_s_for_block(block_cfg),
         "n_trials_total": len(deltas_realised),
         "burnin_trials_excluded": burn,
         "n_trials_post_burnin": len(deltas_post_burnin),
@@ -3107,23 +3398,36 @@ def main():
         quit_clean()
 
     participant_id = res["participant"]
+    assigned_calibration_pressure = calibration_pressure_for_participant(participant_id)
+    assigned_calibration_deadline_s = TIME_PRESSURE_DEADLINES_MS[assigned_calibration_pressure] / 1000.0
 
-    # Preload most recent CALIBRATION delta summary for this participant
-    # so single-block MANUAL/AUTOMATION runs can inherit it from a prior run.
-    prev_calib_delta_mean, prev_calib_delta_sd, prev_calib_delta_path = (
-        get_latest_calibration_delta_for_participant(participant_id, output_dir="output")
+    print(
+        f"[CALIBRATION ASSIGNMENT] Participant {participant_id} -> "
+        f"{assigned_calibration_pressure} calibration "
+        f"({format_deadline_s(assigned_calibration_deadline_s)}s deadline)"
     )
 
-    if prev_calib_delta_path is not None:
+    # Preload the assigned calibration summary so single-block MANUAL/AUTOMATION
+    # runs can inherit the participant's calibration delta from a prior run.
+    previous_calibration = get_latest_calibration_delta_for_participant(
+        participant_id,
+        output_dir="output",
+        time_pressure_condition=assigned_calibration_pressure,
+    )
+    prev_mean, prev_sd, prev_path = previous_calibration
+    if prev_path is not None:
         print(
-            f"[PREV CALIB] Loaded participant {participant_id} calibration delta "
-            f"from: {prev_calib_delta_path} "
-            f"(mean={prev_calib_delta_mean}, sd={prev_calib_delta_sd})"
+            f"[PREV CALIB {assigned_calibration_pressure}] Loaded participant {participant_id} calibration delta "
+            f"from: {prev_path} "
+            f"(mean={prev_mean}, sd={prev_sd})"
         )
     else:
-        print(f"[PREV CALIB] No prior CALIBRATION delta file found for participant {participant_id}")
+        print(
+            f"[PREV CALIB {assigned_calibration_pressure}] "
+            f"No prior CALIBRATION delta file found for participant {participant_id}"
+        )
         
-    # ---- key counterbalancing (every 6 participants) ----
+    # ---- key counterbalancing (within the 32-participant design cycle) ----
     km = key_mapping_for_participant(participant_id)
     KEY_BLACK_NAME = km["key_black_name"]
     KEY_WHITE_NAME = km["key_white_name"]
@@ -3133,8 +3437,7 @@ def main():
           "(reversed)" if km["flip"] else "(standard)")
 
     center = (WIDTH // 2, HEIGHT // 2 + S(20))
-    calib_delta_mean = None
-    calib_delta_sd = None
+    current_calibration = (None, None)
     all_results = []
     all_postblock_slider_rows = []
     all_questionnaire_rows = []
@@ -3151,8 +3454,8 @@ def main():
         block_state = prepare_block_state(
             block_cfg,
             participant_id,
-            current_calibration=(calib_delta_mean, calib_delta_sd),
-            previous_calibration=(prev_calib_delta_mean, prev_calib_delta_sd, prev_calib_delta_path),
+            current_calibration=current_calibration,
+            previous_calibration=previous_calibration,
         )
         block_results = []
         for t in range(block_cfg["N_TRIALS"]):
@@ -3201,15 +3504,14 @@ def main():
                 output_dir=output_dir,
                 participant_id=participant_id,
                 run_timestamp=run_ts,
-                block_name=block_cfg["name"],
+                block_cfg=block_cfg,
                 block_idx=b_idx,
                 deltas_realised=block_state["deltas_realised"],
                 delta_mean=block_state["delta_mean"],
                 delta_step_up=block_state["delta_step_up_setting"],
             )
             if block_cfg["name"] == "CALIBRATION":
-                calib_delta_mean = mean_delta
-                calib_delta_sd = sd_delta
+                current_calibration = (mean_delta, sd_delta)
 
         show_block_complete_screen(screen, clock, fonts["body"], block_cfg["name"], block_cfg=block_cfg)
         run_post_block_measures(
