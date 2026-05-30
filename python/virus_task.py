@@ -27,25 +27,31 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 # -----------------------------
 # Block definitions
 # -----------------------------
-RELIABILITY_BLOCK_SIZE = 50
-DYNAMIC_RELIABILITY_BASE_SCHEDULE = [
-    0.65, 0.85, 0.75, 0.95,
-    0.85, 0.65, 0.95, 0.75,
-    0.75, 0.65, 0.95, 0.85,
-    0.65, 0.75, 0.85, 0.95,
-    0.95, 0.75, 0.85, 0.65,
-    0.75, 0.95, 0.65, 0.85,
-]
-DYNAMIC_RELIABILITY_FAMILY_COUNT = 4
-POST_CALIBRATION_N_TRIALS = RELIABILITY_BLOCK_SIZE * len(DYNAMIC_RELIABILITY_BASE_SCHEDULE)
+CALIBRATION_TARGET_LEVELS = [0.65, 0.85]
+CALIBRATION_TARGET_LABELS = ["CAL65", "CAL85"]
+MAIN_BLOCK_ORDER_LABELS = ["SPLIT_MANUAL"]
+RELIABILITY_PHASE_SIZE = 400
+RELIABILITY_BLOCK_SIZE = RELIABILITY_PHASE_SIZE  # compatibility alias for existing output code
+RELIABILITY_DROP_SEQUENCE = [0.95, 0.70, 0.95]
+RELIABILITY_DROP_LABEL = "DROP95_70_95"
+AIDED_BLOCK_N_TRIALS = RELIABILITY_PHASE_SIZE * len(RELIABILITY_DROP_SEQUENCE)
+MANUAL_BLOCK_N_TRIALS = RELIABILITY_PHASE_SIZE
+MANUAL_SEGMENT_N_TRIALS = MANUAL_BLOCK_N_TRIALS // 2
+MANUAL_SEGMENT_LABELS = ("PRE_AUTOMATION", "POST_AUTOMATION")
+POST_CALIBRATION_N_TRIALS = AIDED_BLOCK_N_TRIALS + MANUAL_BLOCK_N_TRIALS
 CALIBRATION_TRIAL_DEADLINE_MS = 10000
 POST_CALIBRATION_TRIAL_DEADLINE_MS = 6000
 
-if len(DYNAMIC_RELIABILITY_BASE_SCHEDULE) != 24:
-    raise ValueError("Dynamic reliability schedule must contain 24 mini-blocks.")
-for reliability_level in (0.65, 0.75, 0.85, 0.95):
-    if DYNAMIC_RELIABILITY_BASE_SCHEDULE.count(reliability_level) != 6:
-        raise ValueError("Each dynamic reliability level must appear six times.")
+if len(CALIBRATION_TARGET_LEVELS) != len(CALIBRATION_TARGET_LABELS):
+    raise ValueError("Calibration target levels and labels must have matching lengths.")
+if not MAIN_BLOCK_ORDER_LABELS:
+    raise ValueError("Main block order must define at least one sequence label.")
+if len(RELIABILITY_DROP_SEQUENCE) != 3:
+    raise ValueError("Reliability-drop sequence must contain three phases.")
+if MANUAL_BLOCK_N_TRIALS % 2 != 0:
+    raise ValueError("Manual block trial count must split evenly into two segments.")
+if len(MANUAL_SEGMENT_LABELS) != 2:
+    raise ValueError("Manual segment labels must define exactly two segments.")
 
 BLOCKS = [
     # dict(
@@ -65,7 +71,7 @@ BLOCKS = [
         AUTOMATION_ON=False,      # automation off
         AID_ACCURACY=0.90,        # not used (automation off), but harmless
         STAIRCASE_ON=True,        # staircase on
-        TARGET_ACC=0.80,          # target accuracy for adaptive staircase
+        TARGET_ACC=CALIBRATION_TARGET_LEVELS[0],  # assigned by participant ID
         FIXED_DELTA_ON=False,     # fixed delta off because using staircase
         FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
         TRIAL_FEEDBACK_ON=True,
@@ -73,10 +79,23 @@ BLOCKS = [
         CONDITION_CODE="CAL",
     ),
     dict(
+        name="MANUAL",
+        N_TRIALS=MANUAL_SEGMENT_N_TRIALS,
+        AUTOMATION_ON=False,      # automation off
+        AID_ACCURACY=0.90,        # not used (automation off), but harmless
+        STAIRCASE_ON=False,       # use calibration-derived fixed difficulty
+        TARGET_ACC=0.80,          # not used (staircase off), but harmless
+        FIXED_DELTA_ON=True,
+        FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
+        TRIAL_FEEDBACK_ON=True,
+        TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
+        CONDITION_CODE="MAN",
+    ),
+    dict(
         name="AUTOMATION",
-        N_TRIALS=POST_CALIBRATION_N_TRIALS,
+        N_TRIALS=AIDED_BLOCK_N_TRIALS,
         AUTOMATION_ON=True,       # automation on
-        AID_ACCURACY=None,        # assigned dynamically in 50-trial mini-blocks
+        AID_ACCURACY=None,        # assigned by reliability-drop phase
         AID_TRANSPARENCY="none",
         AID_ONSET_MS=0,           # aid appears with the stimulus; not an experimental factor
         STAIRCASE_ON=False,       # staircase off
@@ -85,7 +104,7 @@ BLOCKS = [
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
-        CONDITION_CODE="DYNREL",
+        CONDITION_CODE="REL_DROP",
     ),
 ]
 
@@ -96,6 +115,10 @@ BLOCK_DEFAULTS = {
     "CONDITION_CODE": None,
     "CONDITION_DEADLINE_CODE": None,
     "AID_ONSET_MS": None,
+    "CALIBRATION_TARGET_GROUP": None,
+    "CALIBRATION_TARGET_ACC": None,
+    "MAIN_BLOCK_ORDER": None,
+    "MANUAL_SEGMENT": None,
     "DYNAMIC_RELIABILITY_FAMILY": None,
     "DYNAMIC_RELIABILITY_SCHEDULE": None,
     "DYNAMIC_RELIABILITY_BLOCK_SIZE": RELIABILITY_BLOCK_SIZE,
@@ -104,9 +127,20 @@ BLOCK_DEFAULTS = {
 BLOCK_INSTRUCTIONS = {
 
     "CALIBRATION": {
+        "title": "CALIBRATION BLOCK",
+        "slides": [
+            "You will now begin your first block of trials. "
+            "This block calibrates the difficulty of the task for you."
+        ],
+    },
+
+    "MANUAL": {
         "title": "MANUAL BLOCK",
         "slides": [
-            "You will now begin your first block of trials."
+            (
+            "In this block, you will classify each virus sample yourself. "
+            "The automated decision aid will not be available."
+            ),
         ],
     },
 
@@ -189,18 +223,41 @@ def response_window_instruction_slide(block_cfg) -> str:
 def automation_reliability_instruction_slide() -> str:
     return (
         "In the next block, the automated decision aid will not be equally reliable "
-        "throughout the block. Its recommendations may become more or less reliable "
+        "throughout the block. Its recommendations may become less reliable and then more reliable "
         "over time. Please monitor the aid carefully and continue to make the correct "
         "classification on each trial."
     )
 
 
-def reliability_family_index_for_participant(participant_id: int) -> int:
-    return (participant_id - 1) % DYNAMIC_RELIABILITY_FAMILY_COUNT
+def calibration_target_index_for_participant(participant_id: int) -> int:
+    return (participant_id - 1) % len(CALIBRATION_TARGET_LEVELS)
+
+
+def calibration_target_accuracy_for_participant(participant_id: int) -> float:
+    return CALIBRATION_TARGET_LEVELS[calibration_target_index_for_participant(participant_id)]
+
+
+def calibration_target_group_for_participant(participant_id: int) -> str:
+    return CALIBRATION_TARGET_LABELS[calibration_target_index_for_participant(participant_id)]
+
+
+def main_block_order_index_for_participant(participant_id: int) -> int:
+    return ((participant_id - 1) // len(CALIBRATION_TARGET_LEVELS)) % len(MAIN_BLOCK_ORDER_LABELS)
+
+
+def main_block_order_for_participant(participant_id: int) -> str:
+    return MAIN_BLOCK_ORDER_LABELS[main_block_order_index_for_participant(participant_id)]
+
+
+def with_manual_segment(block_cfg, manual_segment: str):
+    cfg = copy_block_config(block_cfg)
+    cfg["N_TRIALS"] = MANUAL_SEGMENT_N_TRIALS
+    cfg["MANUAL_SEGMENT"] = manual_segment
+    return cfg
 
 
 def reliability_family_label_for_participant(participant_id: int) -> str:
-    return f"F{reliability_family_index_for_participant(participant_id) + 1}"
+    return RELIABILITY_DROP_LABEL
 
 
 def rotate_schedule(schedule, offset):
@@ -209,8 +266,18 @@ def rotate_schedule(schedule, offset):
 
 
 def dynamic_reliability_schedule_for_participant(participant_id: int):
-    family_idx = reliability_family_index_for_participant(participant_id)
-    return rotate_schedule(DYNAMIC_RELIABILITY_BASE_SCHEDULE, family_idx)
+    return list(RELIABILITY_DROP_SEQUENCE)
+
+
+def apply_calibration_target_to_block(block_cfg, participant_id: int):
+    cfg = copy_block_config(block_cfg)
+    target_acc = calibration_target_accuracy_for_participant(participant_id)
+    cfg["CALIBRATION_TARGET_ACC"] = target_acc
+    cfg["CALIBRATION_TARGET_GROUP"] = calibration_target_group_for_participant(participant_id)
+    cfg["MAIN_BLOCK_ORDER"] = main_block_order_for_participant(participant_id)
+    if cfg["name"] == "CALIBRATION":
+        cfg["TARGET_ACC"] = target_acc
+    return cfg
 
 
 def apply_dynamic_reliability_to_block(block_cfg, participant_id: int):
@@ -231,20 +298,25 @@ def dynamic_reliability_metadata_for_trial(block_cfg, trial_number):
     if not schedule:
         raise ValueError("Automation block is missing DYNAMIC_RELIABILITY_SCHEDULE.")
 
-    reliability_block_idx = ((trial_number - 1) // block_size) + 1
-    if reliability_block_idx > len(schedule):
+    reliability_phase_idx = ((trial_number - 1) // block_size) + 1
+    if reliability_phase_idx > len(schedule):
         raise ValueError(
-            f"Trial {trial_number} exceeds dynamic reliability schedule length "
+            f"Trial {trial_number} exceeds reliability-drop sequence length "
             f"({len(schedule)} blocks of {block_size} trials)."
         )
 
-    aid_reliability_level = schedule[reliability_block_idx - 1]
+    aid_reliability_level = schedule[reliability_phase_idx - 1]
+    trial_in_phase = ((trial_number - 1) % block_size) + 1
     return {
         "dynamic_reliability_family": block_cfg.get("DYNAMIC_RELIABILITY_FAMILY"),
-        "reliability_block_idx": reliability_block_idx,
-        "trial_in_reliability_block": ((trial_number - 1) % block_size) + 1,
+        "reliability_block_idx": reliability_phase_idx,
+        "trial_in_reliability_block": trial_in_phase,
+        "reliability_phase_idx": reliability_phase_idx,
+        "trial_in_reliability_phase": trial_in_phase,
+        "reliability_phase_label": f"P{reliability_phase_idx}_{int(round(aid_reliability_level * 100))}",
         "aid_reliability_level": aid_reliability_level,
         "aid_accuracy_setting": aid_reliability_level,
+        "automation_reliability_group": "high" if aid_reliability_level >= 0.90 else "low",
     }
 
 
@@ -253,8 +325,12 @@ def empty_dynamic_reliability_metadata():
         "dynamic_reliability_family": None,
         "reliability_block_idx": None,
         "trial_in_reliability_block": None,
+        "reliability_phase_idx": None,
+        "trial_in_reliability_phase": None,
+        "reliability_phase_label": None,
         "aid_reliability_level": None,
         "aid_accuracy_setting": None,
+        "automation_reliability_group": None,
     }
 
 
@@ -830,11 +906,19 @@ def run_postblock_questionnaire(
             "block_idx": block_idx,
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
             "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
+            "calibration_target_group": block_cfg.get("CALIBRATION_TARGET_GROUP") if block_cfg else None,
+            "calibration_target_accuracy": block_cfg.get("CALIBRATION_TARGET_ACC") if block_cfg else None,
+            "main_block_order": block_cfg.get("MAIN_BLOCK_ORDER") if block_cfg else None,
+            "manual_segment": block_cfg.get("MANUAL_SEGMENT") if block_cfg else None,
             "dynamic_reliability_family": dynamic_meta["dynamic_reliability_family"],
             "reliability_block_idx": dynamic_meta["reliability_block_idx"],
             "trial_in_reliability_block": dynamic_meta["trial_in_reliability_block"],
+            "reliability_phase_idx": dynamic_meta["reliability_phase_idx"],
+            "trial_in_reliability_phase": dynamic_meta["trial_in_reliability_phase"],
+            "reliability_phase_label": dynamic_meta["reliability_phase_label"],
             "aid_reliability_level": dynamic_meta["aid_reliability_level"],
             "aid_accuracy_setting": dynamic_meta["aid_accuracy_setting"],
+            "automation_reliability_group": dynamic_meta["automation_reliability_group"],
             "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": idx,
@@ -1103,8 +1187,8 @@ def is_hard_quit_event(event) -> bool:
   
 def build_blocks_for_participant(participant_id: int, blocks_template):
     """
-    CALIBRATION stays fixed. The post-calibration automation block uses a
-    participant-ID-assigned dynamic reliability schedule.
+    CALIBRATION assigns participant-ID-based target accuracy. The main task then
+    splits the 400 manual trials around the 95% -> 70% -> 95% automation block.
     """
     calibration_blocks = [
         copy_block_config(b)
@@ -1114,17 +1198,34 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
     if len(calibration_blocks) != 1:
         raise ValueError("Exactly one CALIBRATION block must be defined.")
 
-    tail_blocks = [
+    manual_blocks = [
         copy_block_config(b)
         for b in blocks_template
-        if b["name"] != "CALIBRATION"
+        if b["name"] == "MANUAL"
     ]
-    if len(tail_blocks) != 1:
-        raise ValueError("The dynamic reliability design expects exactly one post-calibration block.")
+    if len(manual_blocks) != 1:
+        raise ValueError("Exactly one MANUAL block must be defined.")
+
+    automation_blocks = [
+        copy_block_config(b)
+        for b in blocks_template
+        if b["name"] == "AUTOMATION"
+    ]
+    if len(automation_blocks) != 1:
+        raise ValueError("Exactly one AUTOMATION block must be defined.")
+
+    calibration_block = apply_calibration_target_to_block(calibration_blocks[0], participant_id)
+    manual_block = apply_calibration_target_to_block(manual_blocks[0], participant_id)
+    manual_pre_block = with_manual_segment(manual_block, MANUAL_SEGMENT_LABELS[0])
+    manual_post_block = with_manual_segment(manual_block, MANUAL_SEGMENT_LABELS[1])
+    automation_block = apply_calibration_target_to_block(automation_blocks[0], participant_id)
+    automation_block = apply_dynamic_reliability_to_block(automation_block, participant_id)
 
     return [
-        copy_block_config(calibration_blocks[0]),
-        apply_dynamic_reliability_to_block(tail_blocks[0], participant_id),
+        calibration_block,
+        manual_pre_block,
+        automation_block,
+        manual_post_block,
     ]
 
 def key_mapping_for_participant(participant_id: int):
@@ -1424,7 +1525,7 @@ def run_postblock_slider_questions(
     if not ENABLE_POSTBLOCK_SLIDERS:
         return []
 
-    if block_name == "CALIBRATION":
+    if block_name in ("CALIBRATION", "MANUAL"):
         items = SLIDER_ITEMS_MANUAL
     elif block_name == "AUTOMATION":
         items = SLIDER_ITEMS_AUTOMATION
@@ -1468,11 +1569,19 @@ def run_postblock_slider_questions(
             "block_idx": block_idx,
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
             "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
+            "calibration_target_group": block_cfg.get("CALIBRATION_TARGET_GROUP") if block_cfg else None,
+            "calibration_target_accuracy": block_cfg.get("CALIBRATION_TARGET_ACC") if block_cfg else None,
+            "main_block_order": block_cfg.get("MAIN_BLOCK_ORDER") if block_cfg else None,
+            "manual_segment": block_cfg.get("MANUAL_SEGMENT") if block_cfg else None,
             "dynamic_reliability_family": dynamic_meta["dynamic_reliability_family"],
             "reliability_block_idx": dynamic_meta["reliability_block_idx"],
             "trial_in_reliability_block": dynamic_meta["trial_in_reliability_block"],
+            "reliability_phase_idx": dynamic_meta["reliability_phase_idx"],
+            "trial_in_reliability_phase": dynamic_meta["trial_in_reliability_phase"],
+            "reliability_phase_label": dynamic_meta["reliability_phase_label"],
             "aid_reliability_level": dynamic_meta["aid_reliability_level"],
             "aid_accuracy_setting": dynamic_meta["aid_accuracy_setting"],
+            "automation_reliability_group": dynamic_meta["automation_reliability_group"],
             "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": i,
@@ -2302,7 +2411,7 @@ def parse_cli_args():
         "--block",
         type=str,
         default=None,
-        help="Run only a selected block. Valid values: CALIBRATION, AUTOMATION",
+        help="Run only a selected block. Valid values: CALIBRATION, MANUAL, AUTOMATION",
     )
     args = parser.parse_args()
 
@@ -2326,14 +2435,25 @@ def select_single_block(block_name: str, blocks_template, participant_id: int):
 
     if len(matches) > 1:
         raise ValueError(
-            f"Block '{block_name}' has multiple variants; the dynamic reliability design "
-            "expects one automation block."
+            f"Block '{block_name}' has multiple variants; this design expects one block "
+            "of each type."
         )
 
-    if matches[0]["AUTOMATION_ON"]:
-        return [apply_dynamic_reliability_to_block(matches[0], participant_id)]
+    block = apply_calibration_target_to_block(matches[0], participant_id)
+    if block["name"] == "MANUAL":
+        return [with_manual_segment(block, "SINGLE_BLOCK")]
+    if block["AUTOMATION_ON"]:
+        return [apply_dynamic_reliability_to_block(block, participant_id)]
 
-    return [copy_block_config(matches[0])]
+    return [block]
+
+
+def block_run_label(block_cfg):
+    code = block_condition_code(block_cfg)
+    manual_segment = block_cfg.get("MANUAL_SEGMENT")
+    if manual_segment:
+        return f"{code}:{manual_segment}"
+    return code
 
 
 def create_display_surface():
@@ -2388,8 +2508,10 @@ def choose_blocks_to_run(args, participant_id):
             "[SINGLE BLOCK MODE]",
             participant_id,
             "->",
-            [block_condition_code(b) for b in blocks_to_run],
-            f"(dynamic_family={blocks_to_run[0].get('DYNAMIC_RELIABILITY_FAMILY')})",
+            [block_run_label(b) for b in blocks_to_run],
+            f"(calibration_group={blocks_to_run[0].get('CALIBRATION_TARGET_GROUP')}, "
+            f"main_block_order={blocks_to_run[0].get('MAIN_BLOCK_ORDER')}, "
+            f"reliability_sequence={blocks_to_run[0].get('DYNAMIC_RELIABILITY_FAMILY')})",
         )
         return blocks_to_run
 
@@ -2398,8 +2520,10 @@ def choose_blocks_to_run(args, participant_id):
         "[BLOCK ORDER]",
         participant_id,
         "->",
-        [block_condition_code(b) for b in blocks_to_run],
-        f"(dynamic_family={reliability_family_label_for_participant(participant_id)})",
+        [block_run_label(b) for b in blocks_to_run],
+        f"(calibration_group={calibration_target_group_for_participant(participant_id)}, "
+        f"main_block_order={main_block_order_for_participant(participant_id)}, "
+        f"reliability_sequence={reliability_family_label_for_participant(participant_id)})",
     )
     return blocks_to_run
 
@@ -2666,9 +2790,16 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "block_idx": block_idx,
         "condition_code": block_condition_code(block_cfg),
         "condition_deadline_code": block_condition_deadline_code(block_cfg),
+        "calibration_target_group": block_cfg.get("CALIBRATION_TARGET_GROUP"),
+        "calibration_target_accuracy": block_cfg.get("CALIBRATION_TARGET_ACC"),
+        "main_block_order": block_cfg.get("MAIN_BLOCK_ORDER"),
+        "manual_segment": block_cfg.get("MANUAL_SEGMENT"),
         "dynamic_reliability_family": trial_data["dynamic_reliability_family"],
         "reliability_block_idx": trial_data["reliability_block_idx"],
         "trial_in_reliability_block": trial_data["trial_in_reliability_block"],
+        "reliability_phase_idx": trial_data["reliability_phase_idx"],
+        "trial_in_reliability_phase": trial_data["trial_in_reliability_phase"],
+        "reliability_phase_label": trial_data["reliability_phase_label"],
         "aid_reliability_level": trial_data["aid_reliability_level"],
         "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg),
         "trial_deadline_s": trial_deadline_s_for_block(block_cfg),
@@ -2686,6 +2817,7 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "n_vwhite": trial_data["n_vwhite"],
         "auto_on": 1 if block_cfg["AUTOMATION_ON"] else 0,
         "aid_accuracy_setting": trial_data["aid_accuracy_setting"],
+        "automation_reliability_group": trial_data["automation_reliability_group"],
         "aid_transparency_level": block_state["aid_transparency"] if block_cfg["AUTOMATION_ON"] else None,
         "stimulus": trial_data["stimulus"],
         "aid_label": trial_data["aid_label"],
@@ -2877,8 +3009,12 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             "dynamic_reliability_family": reliability_metadata["dynamic_reliability_family"],
             "reliability_block_idx": reliability_metadata["reliability_block_idx"],
             "trial_in_reliability_block": reliability_metadata["trial_in_reliability_block"],
+            "reliability_phase_idx": reliability_metadata["reliability_phase_idx"],
+            "trial_in_reliability_phase": reliability_metadata["trial_in_reliability_phase"],
+            "reliability_phase_label": reliability_metadata["reliability_phase_label"],
             "aid_reliability_level": reliability_metadata["aid_reliability_level"],
             "aid_accuracy_setting": reliability_metadata["aid_accuracy_setting"],
+            "automation_reliability_group": reliability_metadata["automation_reliability_group"],
             "response": response,
             "correct": correct,
             "rt_ms": rt_ms,
@@ -2893,7 +3029,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
 
 
 def write_delta_summary(output_dir, participant_id, run_timestamp, block_name, block_idx, deltas_realised,
-                        delta_mean, delta_step_up):
+                        delta_mean, delta_step_up, calibration_target_group=None,
+                        calibration_target_accuracy=None, main_block_order=None):
     delta_out_path = os.path.join(
         output_dir,
         f"delta_p{participant_id:03d}_{run_timestamp}_b{block_idx:02d}_{block_name}.csv"
@@ -2925,6 +3062,9 @@ def write_delta_summary(output_dir, participant_id, run_timestamp, block_name, b
         "run_timestamp": run_timestamp,
         "block": block_name,
         "block_idx": block_idx,
+        "calibration_target_group": calibration_target_group,
+        "calibration_target_accuracy": calibration_target_accuracy,
+        "main_block_order": main_block_order,
         "n_trials_total": len(deltas_realised),
         "burnin_trials_excluded": burn,
         "n_trials_post_burnin": len(deltas_post_burnin),
@@ -2979,7 +3119,7 @@ def show_reliability_checkpoint_screen(screen, clock, font_body):
     draw_center_lines(
         screen,
         [
-            "BLOCK COMPLETE",
+            "SET COMPLETE",
             "You will answer a few questions before continuing",
         ],
         font_body,
@@ -2998,7 +3138,7 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
     block_idx = block_cfg["block_idx"]
     dynamic_meta = reliability_metadata or empty_dynamic_reliability_metadata()
 
-    if ENABLE_POSTBLOCK_SLIDERS and block_name in ("CALIBRATION", "AUTOMATION"):
+    if ENABLE_POSTBLOCK_SLIDERS and block_name in ("CALIBRATION", "MANUAL", "AUTOMATION"):
         slider_rows = run_postblock_slider_questions(
             screen=screen,
             clock=clock,
@@ -3074,7 +3214,7 @@ def save_combined_outputs(output_dir, participant_id, run_timestamp, all_results
 
 
 def compute_performance_score(all_results):
-    score_blocks = {"AUTOMATION"}
+    score_blocks = {"MANUAL", "AUTOMATION"}
     scored_trials = [row for row in all_results if row["block"] in score_blocks]
     if not scored_trials:
         return 0.0
@@ -3226,13 +3366,16 @@ def main():
                 deltas_realised=block_state["deltas_realised"],
                 delta_mean=block_state["delta_mean"],
                 delta_step_up=block_state["delta_step_up_setting"],
+                calibration_target_group=block_cfg.get("CALIBRATION_TARGET_GROUP"),
+                calibration_target_accuracy=block_cfg.get("CALIBRATION_TARGET_ACC"),
+                main_block_order=block_cfg.get("MAIN_BLOCK_ORDER"),
             )
             if block_cfg["name"] == "CALIBRATION":
                 calib_delta_mean = mean_delta
                 calib_delta_sd = sd_delta
 
         show_block_complete_screen(screen, clock, fonts["body"], block_cfg["name"], block_cfg=block_cfg)
-        if block_cfg["name"] == "CALIBRATION":
+        if block_cfg["name"] in ("CALIBRATION", "MANUAL"):
             run_post_block_measures(
                 screen,
                 clock,

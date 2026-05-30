@@ -43,6 +43,7 @@ run_task <- function(
   
   valid_blocks <- c(
     "CALIBRATION",
+    "MANUAL",
     "AUTOMATION"
   )
   

@@ -15,43 +15,56 @@ Based on Bartlett & McCarley RDC task.
 
 ## Current task design
 
-Calibration is unchanged and always occurs first. After calibration, participants complete one dynamic automation block in which aid reliability changes across 50-trial mini-blocks. The experimental goal is to test whether participants learn to track the aid's reliability as it changes over time.
+This design extends Wanghuan's reliability-drop design by additionally manipulating participants' unaided performance level through calibration. Calibration always occurs first. Participants are assigned deterministically from participant ID to one of two calibration targets:
+
+| Calibration group | Target unaided accuracy |
+| --- | ---: |
+| `CAL65` | 65% |
+| `CAL85` | 85% |
+
+After calibration, participants complete the first 200 trials of the manual comparison block, the full-length aided reliability-drop block, and then the remaining 200 manual comparison trials. The manual trials provide direct unaided-performance comparisons at the calibration-derived difficulty before and after the aided sequence.
 
 | Code | Mode | Response window | Trials |
 | --- | --- | ---: | ---: |
 | `CAL` | Manual calibration | 10 s | 300 |
-| `DYNREL` | Dynamic automation | 6 s | 1200 |
+| `MAN` | Manual comparison, pre-automation segment | 6 s | 200 |
+| `REL_DROP` | Aided reliability drop | 6 s | 1200 |
+| `MAN` | Manual comparison, post-automation segment | 6 s | 200 |
 
-The automation block uses the calibration-derived fixed difficulty for the participant. The aid appears with the stimulus, and aid onset is not manipulated.
+The manual and aided blocks both use the calibration-derived fixed difficulty for the participant. In the aided block, the aid appears with the stimulus, and aid onset is not manipulated.
 
-Automation reliability changes every 50 trials. The dynamic automation block contains 24 reliability mini-blocks, so each participant sees six mini-blocks at each aid-accuracy level:
+The aided block uses the reliability sequence `95% -> 70% -> 95%`. Each phase contains 400 trials:
 
-| Aid accuracy level | Mini-blocks per participant | Trials per mini-block |
+| Phase | Aid accuracy | Trials |
 | --- | ---: | ---: |
-| 65% | 6 | 50 |
-| 75% | 6 | 50 |
-| 85% | 6 | 50 |
-| 95% | 6 | 50 |
+| 1 | 95% | 400 |
+| 2 | 70% | 400 |
+| 3 | 95% | 400 |
 
-Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid's reliability may change over time, but they are not told the numeric reliability levels or the current mini-block's reliability.
+Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid's reliability may become less reliable and then more reliable over time, but they are not told the numeric reliability levels.
+
+## Research questions
+
+The critical phase is the 70% aided block. For `CAL65` participants, the 70% aid remains potentially useful because it is 5 percentage points more accurate than their calibrated unaided performance. For `CAL85` participants, the 70% aid is 15 percentage points less accurate than their own calibrated performance and should therefore be discounted or ignored.
+
+This design tests whether participants respond only to absolute changes in aid reliability, or whether they learn the relative value of the aid compared with their own competence. It also tests whether prior exposure to a highly reliable aid produces over-reliance when the aid later becomes only moderately reliable, especially when the aid is no longer objectively useful.
 
 ## Counterbalancing
 
-Dynamic reliability trajectories are assigned deterministically from participant ID. The base 24-mini-block schedule is:
-
-```text
-65, 85, 75, 95, 85, 65, 95, 75,
-75, 65, 95, 85, 65, 75, 85, 95,
-95, 75, 85, 65, 75, 95, 65, 85
-```
-
-The trajectory family is `(participant_id - 1) %% 4`, with four cyclic rotations of the base schedule. This preserves six mini-blocks per reliability level for every participant while counterbalancing which reliability levels occur early.
-
+- Calibration target: participant IDs alternate between `CAL65` and `CAL85`.
+- Main block sequence: all participants complete `CAL -> MAN/PRE_AUTOMATION -> REL_DROP -> MAN/POST_AUTOMATION`.
 - Key mapping: standard for participant IDs 1-8 within each 16-ID keymap cycle, flipped for participant IDs 9-16.
+
+This gives an even counterbalance over the two calibration groups:
+
+| Participant cycle position | Calibration group | Main block sequence |
+| ---: | --- | --- |
+| 1 | `CAL65` | `SPLIT_MANUAL` |
+| 2 | `CAL85` | `SPLIT_MANUAL` |
 
 The standard key mapping is `D = V-BLACK` and `J = V-WHITE`. The flipped key mapping is `J = V-BLACK` and `D = V-WHITE`.
 
-After each 50-trial automation mini-block, participants report perceived automation accuracy and self accuracy and complete the trust questionnaire.
+Participants report perceived self accuracy after calibration and after each manual segment. After each aided reliability phase, participants report perceived automation accuracy, perceived self accuracy, and trust in the aid.
 
 ## Output fields
 
@@ -59,21 +72,30 @@ The main trial and post-block output files include fields that identify the desi
 
 | Field | Meaning |
 | --- | --- |
-| `block` | `CALIBRATION` or `AUTOMATION` |
-| `condition_code` | `CAL` or `DYNREL` |
+| `block` | `CALIBRATION`, `MANUAL`, or `AUTOMATION` |
+| `condition_code` | `CAL`, `MAN`, or `REL_DROP` |
 | `condition_deadline_code` | Compatibility alias for `condition_code` |
-| `dynamic_reliability_family` | Participant-ID assigned trajectory family, `F1`-`F4` |
-| `reliability_block_idx` | Automation mini-block index, `1`-`24` |
-| `trial_in_reliability_block` | Trial index within the current 50-trial reliability mini-block |
-| `aid_reliability_level` | Current mini-block aid accuracy level |
+| `calibration_target_group` | Participant-ID assigned calibration group, `CAL65` or `CAL85` |
+| `calibration_target_accuracy` | Calibration target accuracy, `0.65` or `0.85` |
+| `main_block_order` | Fixed main-block sequence label, `SPLIT_MANUAL` |
+| `manual_segment` | Manual segment label, `PRE_AUTOMATION` or `POST_AUTOMATION`; blank for non-manual rows |
+| `dynamic_reliability_family` | Compatibility label for the aided sequence, `DROP95_70_95` |
+| `reliability_block_idx` | Compatibility alias for aided reliability phase index, `1`-`3` |
+| `trial_in_reliability_block` | Compatibility alias for trial index within the current reliability phase |
+| `reliability_phase_idx` | Aided reliability phase index, `1`-`3` |
+| `trial_in_reliability_phase` | Trial index within the current reliability phase |
+| `reliability_phase_label` | Phase label such as `P1_95`, `P2_70`, or `P3_95` |
+| `aid_reliability_level` | Current aided-phase aid accuracy level |
 | `aid_accuracy_setting` | Accuracy setting used to generate the aid recommendation on the current trial |
+| `automation_reliability_group` | High/low grouping derived from aid reliability |
 | `trial_deadline_ms` | Fixed response window in milliseconds |
 | `trial_deadline_s` | Fixed response window in seconds |
 
-Single-block runs can be selected for calibration-only or automation-only checks:
+Single-block runs can be selected for calibration-only, manual-only, or automation-only checks:
 
 ```r
 run_task(block = "CALIBRATION")
+run_task(block = "MANUAL")
 run_task(block = "AUTOMATION")
 ```
 
