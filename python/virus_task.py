@@ -51,7 +51,7 @@ AUTOMATION_RELIABILITY_PATTERNS = {
         "LP": "high",
     },
 }
-COUNTERBALANCE_CYCLE_N = 32
+COUNTERBALANCE_CYCLE_N = 16
 COUNTERBALANCE_RANDOM_SEED = 20260530
 POST_CALIBRATION_BLOCK_ORDERS = (
     (
@@ -81,11 +81,9 @@ POST_CALIBRATION_BLOCK_ORDERS = (
 )
 COUNTERBALANCE_FACTOR_ASSIGNMENTS = tuple(
     {
-        "calibration_pressure": calibration_pressure,
         "reliability_pattern": reliability_pattern,
         "key_flip": key_flip,
     }
-    for calibration_pressure in ("HP", "LP")
     for reliability_pattern in ("HP95_LP65", "HP65_LP95")
     for key_flip in (False, True)
 )
@@ -124,20 +122,6 @@ BLOCKS = [
     #     FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
     #     TRIAL_FEEDBACK_ON=True,
     # ),
-    dict(
-        name="CALIBRATION",
-        N_TRIALS=CALIBRATION_N_TRIALS,
-        AUTOMATION_ON=False,      # automation off
-        AID_ACCURACY=0.90,        # not used (automation off), but harmless
-        STAIRCASE_ON=True,        # staircase on
-        TARGET_ACC=0.80,          # target accuracy for adaptive staircase
-        FIXED_DELTA_ON=False,     # fixed delta off because using staircase
-        FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
-        TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=TIME_PRESSURE_DEADLINES_MS["HP"],
-        CONDITION_DEADLINE_CODE="CAL_HP",
-        TIME_PRESSURE_CONDITION="HP",
-    ),
     dict(
         name="MANUAL",
         N_TRIALS=POST_CALIBRATION_N_TRIALS,
@@ -354,6 +338,7 @@ def counterbalance_allocation_for_participant(participant_id: int):
         "post_calibration_block_order_idx": block_order_idx,
         "factor_assignment_idx": row["factor_assignment_idx"],
         "post_calibration_block_order": POST_CALIBRATION_BLOCK_ORDERS[block_order_idx],
+        "calibration_pressure": "LP",
         **factors,
     }
 
@@ -372,15 +357,9 @@ def reliability_pattern_for_participant(participant_id: int) -> str:
 
 def calibration_pressure_for_participant(participant_id: int) -> str:
     """
-    Assign the single calibration deadline from the 32-participant
-    counterbalancing table.
-
-    The table crosses four Latin-square post-calibration block orders with
-    calibration deadline, reliability pattern, and key mapping.
+    Every participant is calibrated under low time pressure.
     """
-    return counterbalance_allocation_for_participant(participant_id)[
-        "calibration_pressure"
-    ]
+    return "LP"
 
 
 def calibration_condition_deadline_code(pressure: str) -> str:
@@ -1294,11 +1273,12 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
         for b in blocks_template
     }
 
-    expected_cells = {
+    expected_cells = {("LP", "CALIBRATION")}
+    expected_cells.update(
         (pressure, block_name)
         for pressure in TIME_PRESSURE_DEADLINES_MS
-        for block_name in ("CALIBRATION", "MANUAL", "AUTOMATION")
-    }
+        for block_name in ("MANUAL", "AUTOMATION")
+    )
     missing_cells = expected_cells - set(blocks_by_cell)
     if missing_cells:
         raise ValueError(f"Missing block definitions for cells: {sorted(missing_cells)}")
@@ -1320,7 +1300,7 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
 
 def key_mapping_for_participant(participant_id: int):
     """
-    Flip key mapping within the 32-participant counterbalancing cycle:
+    Flip key mapping within the 16-participant counterbalancing cycle:
       - standard  (D->BLACK, J->WHITE)
       - flipped   (J->BLACK, D->WHITE)
     """
@@ -2621,7 +2601,7 @@ def select_single_block(block_name: str, blocks_template, participant_id: int, d
         raise ValueError(
             f"Participant {participant_id} is assigned to {calibration_pressure} calibration "
             f"({format_deadline_s(assigned_deadline_s)}s). "
-            "Run the assigned calibration deadline for this participant."
+            "Run the 4s LP calibration deadline for this participant."
         )
 
     reliability_pattern = "single_block" if matches[0]["AUTOMATION_ON"] else "none"
@@ -3427,7 +3407,7 @@ def main():
             f"No prior CALIBRATION delta file found for participant {participant_id}"
         )
         
-    # ---- key counterbalancing (within the 32-participant design cycle) ----
+    # ---- key counterbalancing (within the 16-participant design cycle) ----
     km = key_mapping_for_participant(participant_id)
     KEY_BLACK_NAME = km["key_black_name"]
     KEY_WHITE_NAME = km["key_white_name"]
