@@ -11,21 +11,14 @@ library("forcats")
 
 ONSET_LEVELS <- c(
   "Calibration",
-  "Aid before",
-  "Aid simultaneous",
-  "Aid after"
+  "Aid + stimulus",
+  "Aid first",
+  "Stimulus first, change allowed"
 )
-RELIABILITY_LEVELS <- c("high", "low", "none")
 
 ensure_onset_columns <- function(data) {
-  if (!"aid_onset_condition" %in% names(data)) {
-    data$aid_onset_condition <- NA_character_
-  }
-  if (!"aid_onset_ms" %in% names(data)) {
-    data$aid_onset_ms <- NA_real_
-  }
-  if (!"automation_reliability_group" %in% names(data)) {
-    data$automation_reliability_group <- NA_character_
+  if (!"aid_condition" %in% names(data)) {
+    data$aid_condition <- NA_character_
   }
   if (!"aid_accuracy_setting" %in% names(data)) {
     data$aid_accuracy_setting <- NA_real_
@@ -33,36 +26,15 @@ ensure_onset_columns <- function(data) {
   data
 }
 
-derive_reliability_group <- function(data) {
-  data %>%
-    mutate(
-      automation_reliability_group = case_when(
-        !is.na(automation_reliability_group) & automation_reliability_group != "" ~
-          as.character(automation_reliability_group),
-        suppressWarnings(as.numeric(aid_accuracy_setting)) >= 0.90 ~ "high",
-        suppressWarnings(as.numeric(aid_accuracy_setting)) < 0.90 &
-          !is.na(suppressWarnings(as.numeric(aid_accuracy_setting))) ~ "low",
-        TRUE ~ "none"
-      )
-    )
-}
-
-factor_reliability_group <- function(x) {
-  factor(x, levels = RELIABILITY_LEVELS)
-}
-
-make_block_onset <- function(block, aid_onset_condition, aid_onset_ms) {
-  onset <- case_when(
+make_block_onset <- function(block, aid_condition) {
+  condition <- case_when(
     as.character(block) == "CALIBRATION" ~ "Calibration",
-    !is.na(aid_onset_condition) & aid_onset_condition == "before" ~ "Aid before",
-    !is.na(aid_onset_condition) & aid_onset_condition == "simultaneous" ~ "Aid simultaneous",
-    !is.na(aid_onset_condition) & aid_onset_condition == "after" ~ "Aid after",
-    suppressWarnings(as.numeric(aid_onset_ms)) < 0 ~ "Aid before",
-    suppressWarnings(as.numeric(aid_onset_ms)) == 0 ~ "Aid simultaneous",
-    suppressWarnings(as.numeric(aid_onset_ms)) > 0 ~ "Aid after",
+    !is.na(aid_condition) & aid_condition == "simultaneous" ~ "Aid + stimulus",
+    !is.na(aid_condition) & aid_condition == "aid_first" ~ "Aid first",
+    !is.na(aid_condition) & aid_condition == "stimulus_first_change" ~ "Stimulus first, change allowed",
     TRUE ~ NA_character_
   )
-  factor(onset, levels = ONSET_LEVELS)
+  factor(condition, levels = ONSET_LEVELS)
 }
 
 # ------------------
@@ -70,8 +42,7 @@ make_block_onset <- function(block, aid_onset_condition, aid_onset_ms) {
 # ------------------
 dat <- read_csv("data/data_virus_postblock_all.csv", show_col_types = FALSE)
 dat <- dat %>%
-  ensure_onset_columns() %>%
-  derive_reliability_group()
+  ensure_onset_columns()
 str(dat)
 
 # ------------------
@@ -81,14 +52,13 @@ str(dat)
 dat_q <- dat %>%
   mutate(
     participant_id = factor(participant_id),
-    automation_reliability_group = factor_reliability_group(automation_reliability_group),
-    block_onset = make_block_onset(block, aid_onset_condition, aid_onset_ms),
+    block_onset = make_block_onset(block, aid_condition),
     question = factor(question, levels = unique(question))
   ) %>%
   filter(!is.na(participant_id), !is.na(block_onset), !is.na(question), !is.na(response))
 
 subj_q_summary <- dat_q %>%
-  group_by(participant_id, automation_reliability_group, block_onset, question) %>%
+  group_by(participant_id, block_onset, question) %>%
   summarise(
     response = mean(response, na.rm = TRUE),
     .groups = "drop"
@@ -130,7 +100,7 @@ get_morey_cf <- function(data, subject_col, within_cols, dv_col) {
 q_plot_dat <- get_morey_cf(
   data = subj_q_summary,
   subject_col = "participant_id",
-  within_cols = c("automation_reliability_group", "block_onset", "question"),
+  within_cols = c("block_onset", "question"),
   dv_col = "response"
 )
 
@@ -139,12 +109,12 @@ p_q <- ggplot(q_plot_dat, aes(x = block_onset, y = mean, group = 1)) +
   geom_line() +
   geom_point(size = 2.5) +
   geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.12) +
-  facet_grid(automation_reliability_group ~ question) +
+  facet_wrap(~ question) +
   scale_y_continuous(limits = c(1, 5), breaks = 1:5) +
   labs(
-    x = "Aid onset",
+    x = "Aid condition",
     y = "Mean response",
-    title = "Questionnaire responses by aid onset",
+    title = "Questionnaire responses by aid condition",
     subtitle = "Error bars are Morey-Cousineau within-subject SEs"
   ) +
   theme_classic() +
@@ -175,8 +145,7 @@ ggsave(
 # ------------------
 dat_slider_raw <- read_csv("data/data_virus_sliders_all.csv", show_col_types = FALSE)
 dat_slider_raw <- dat_slider_raw %>%
-  ensure_onset_columns() %>%
-  derive_reliability_group()
+  ensure_onset_columns()
 str(dat_slider_raw)
 
 # ------------------
@@ -185,8 +154,7 @@ str(dat_slider_raw)
 dat_slider <- dat_slider_raw %>%
   mutate(
     participant_id = factor(participant_id),
-    automation_reliability_group = factor_reliability_group(automation_reliability_group),
-    block_onset = make_block_onset(block, aid_onset_condition, aid_onset_ms),
+    block_onset = make_block_onset(block, aid_condition),
     question_key = factor(
       question_key,
       levels = c("perc_self_correct", "perc_auto_correct"),
@@ -203,7 +171,7 @@ dat_slider <- dat_slider_raw %>%
 # If there is ever more than one row per participant/block/question_key,
 # average within participant first
 subj_slider_summary <- dat_slider %>%
-  group_by(participant_id, automation_reliability_group, block_onset, question_key) %>%
+  group_by(participant_id, block_onset, question_key) %>%
   summarise(
     response_percent = mean(response_percent, na.rm = TRUE),
     .groups = "drop"
@@ -215,7 +183,7 @@ subj_slider_summary <- dat_slider %>%
 slider_plot_dat <- get_morey_cf(
   data = subj_slider_summary,
   subject_col = "participant_id",
-  within_cols = c("automation_reliability_group", "block_onset", "question_key"),
+  within_cols = c("block_onset", "question_key"),
   dv_col = "response_percent"
 )
 
@@ -230,15 +198,15 @@ p_slider <- ggplot(
   geom_line() +
   geom_point(size = 2.5) +
   geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.12) +
-  facet_grid(automation_reliability_group ~ question_key) +
+  facet_wrap(~ question_key) +
   scale_y_continuous(
     limits = c(0, 100),
     breaks = seq(0, 100, by = 20)
   ) +
   labs(
-    x = "Aid onset",
+    x = "Aid condition",
     y = "Mean slider response (%)",
-    title = "Slider responses by aid onset",
+    title = "Slider responses by aid condition",
     subtitle = "Error bars are Morey-Cousineau within-subject SEs"
   ) +
   theme_classic() +

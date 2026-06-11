@@ -15,68 +15,49 @@ Based on Bartlett & McCarley RDC task.
 
 ## Current task design
 
-The task uses a mixed design. Calibration is unchanged and always occurs first. After calibration, participants complete three automation blocks that manipulate aid onset relative to stimulus onset. There is no post-calibration manual block and response deadline is not manipulated; the automation blocks all use the same 6 s response window.
+The task uses a mixed design. Calibration is unchanged and always occurs first. After calibration, participants complete three automation blocks that manipulate when the automated aid and stimulus information become available. There is no post-calibration manual block. Automation decision phases remain on screen until the required response is made.
 
-| Code | Mode | Aid onset | Response window | Trials |
-| --- | --- | ---: | ---: | ---: |
-| `AB500` | Automation | 500 ms before stimulus | 6 s | 400 |
-| `AS0` | Automation | simultaneous with stimulus | 6 s | 400 |
-| `AA500` | Automation | 500 ms after stimulus | 6 s | 400 |
+| Code | Mode | Trial structure | Trials |
+| --- | --- | --- | ---: |
+| `SIM` | Automation | fixation -> masked aid preview 1000 ms -> fixation -> aid + stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 400 |
+| `AIDFIRST` | Automation | fixation -> aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 400 |
+| `STIMFIRST` | Automation | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> aid until decision 2 -> feedback | 400 |
 
-The calibration block contains 300 manual staircase trials with a 10 s response window. Automation blocks use the calibration-derived fixed difficulty for the participant.
+The calibration block contains 300 manual staircase trials with a 10 s response window and targets 85% unaided accuracy. Automation blocks use the calibration-derived fixed difficulty for the participant. The automated aid uses a single global reliability of 85% in all automation blocks.
 
-Automation reliability is a between-subjects factor:
-
-| Reliability group | Aid accuracy |
-| --- | ---: |
-| `high` | 95% |
-| `low` | 65% |
-
-Participant-facing automation instructions are qualitative rather than numeric. The high-reliability group is told that the aid is highly reliable but not perfect. The low-reliability group is told that the aid is reasonably reliable and that errors may be relatively common.
+Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid is reasonably reliable but not perfect, and that automation advice errors remain possible.
 
 ## Counterbalancing
 
-The post-calibration block order uses balanced rotations of the three aid-onset conditions:
+The post-calibration block order uses balanced rotations of the three aid-condition blocks:
 
 | Order | Sequence |
 | --- | --- |
-| `O1` | `AB500 -> AS0 -> AA500` |
-| `O2` | `AS0 -> AA500 -> AB500` |
-| `O3` | `AA500 -> AB500 -> AS0` |
+| `O1` | `SIM -> AIDFIRST -> STIMFIRST` |
+| `O2` | `AIDFIRST -> STIMFIRST -> SIM` |
+| `O3` | `STIMFIRST -> SIM -> AIDFIRST` |
 
-Reliability group, block order, and key mapping are assigned deterministically from participant ID:
+Block order and key mapping are assigned deterministically from participant ID:
 
-- Reliability: `high` for odd participant IDs, `low` for even participant IDs.
-- Block order: `floor((participant_id - 1) / 2) %% 3`, so each adjacent high/low pair receives the same order and the order advances every two participants.
-- Key mapping: standard for participant IDs 1-8 within each 16-ID keymap cycle, flipped for participant IDs 9-16.
+- Block order: `(participant_id - 1) %% 3`, so the order advances every participant.
+- Key mapping: standard for participant IDs 1-3 within each 6-ID counterbalancing cycle, flipped for participant IDs 4-6.
 
-The full joint cycle for reliability, order, and key mapping is 48 participants. The first 16 assignments are:
+The full joint cycle for order and key mapping is 6 participants:
 
-| Participant IDs in cycle | Reliability | Key mapping | Order |
-| --- | --- | --- | --- |
-| 1 | `high` | standard | `O1` |
-| 2 | `low` | standard | `O1` |
-| 3 | `high` | standard | `O2` |
-| 4 | `low` | standard | `O2` |
-| 5 | `high` | standard | `O3` |
-| 6 | `low` | standard | `O3` |
-| 7 | `high` | standard | `O1` |
-| 8 | `low` | standard | `O1` |
-| 9 | `high` | flipped | `O2` |
-| 10 | `low` | flipped | `O2` |
-| 11 | `high` | flipped | `O3` |
-| 12 | `low` | flipped | `O3` |
-| 13 | `high` | flipped | `O1` |
-| 14 | `low` | flipped | `O1` |
-| 15 | `high` | flipped | `O2` |
-| 16 | `low` | flipped | `O2` |
+| Participant IDs in cycle | Key mapping | Order |
+| --- | --- | --- |
+| 1 | standard | `O1` |
+| 2 | standard | `O2` |
+| 3 | standard | `O3` |
+| 4 | flipped | `O1` |
+| 5 | flipped | `O2` |
+| 6 | flipped | `O3` |
 
-For the planned sample of `N = 96`, this gives:
+For the planned sample of `N = 60`, this gives:
 
-- 48 participants in the high-reliability group and 48 in the low-reliability group.
-- 32 participants per block order overall.
-- 16 high-reliability and 16 low-reliability participants per order.
-- 48 standard-key and 48 flipped-key participants.
+- 20 participants per block order overall.
+- 30 standard-key and 30 flipped-key participants.
+- 10 participants in each order x key mapping cell.
 
 The standard key mapping is `D = V-BLACK` and `J = V-WHITE`. The flipped key mapping is `J = V-BLACK` and `D = V-WHITE`.
 
@@ -87,21 +68,26 @@ The main trial and post-block output files include fields that identify the desi
 | Field | Meaning |
 | --- | --- |
 | `block` | `CALIBRATION` or `AUTOMATION` |
-| `condition_code` | `CAL`, `AB500`, `AS0`, or `AA500` |
+| `condition_code` | `CAL`, `SIM`, `AIDFIRST`, or `STIMFIRST` |
 | `condition_deadline_code` | Compatibility alias for `condition_code` |
-| `automation_reliability_group` | `high`, `low`, or `none` |
-| `aid_accuracy_setting` | `0.95`, `0.65`, or blank for calibration |
-| `aid_onset_condition` | `before`, `simultaneous`, `after`, or blank for calibration |
-| `aid_onset_ms` | Configured aid onset relative to stimulus onset |
-| `aid_onset_ms_rel` | Realized aid onset relative to stimulus onset |
+| `automation_reliability_group` | Compatibility field; `none` in the current design |
+| `aid_accuracy_setting` | `0.85`, or blank for calibration |
+| `aid_condition` | `simultaneous`, `aid_first`, `stimulus_first_change`, or blank for calibration |
 | `trial_deadline_ms` | Fixed response window in milliseconds |
 | `trial_deadline_s` | Fixed response window in seconds |
+| `decision1_display`, `decision2_display` | Display type for each automation decision phase |
+| `decision1_response`, `decision1_correct`, `decision1_rt_s`, `decision1_rt_ms`, `decision1_matches_aid` | First automation classification fields |
+| `decision2_response`, `decision2_correct`, `decision2_rt_s`, `decision2_rt_ms`, `decision2_matches_aid` | Second automation classification fields |
+| `initial_response`, `initial_correct`, `initial_rt_s`, `initial_rt_ms` | Compatibility aliases for decision 1 |
+| `final_response`, `final_correct`, `final_rt_s`, `final_rt_ms` | Compatibility aliases for decision 2 |
+| `changed_response` | Whether decision 2 differs from decision 1 |
+| `response`, `correct`, `rt_s`, `rt_ms` | Primary-analysis aliases for decision 2 |
 
-Single-block automation runs require an explicit reliability group and aid onset, for example:
+Single-block automation runs require an explicit aid condition, for example:
 
 ```r
-run_task(block = "AUTOMATION", aid_onset_ms = -500, reliability_group = "high")
-run_task(block = "AUTOMATION", aid_onset_ms = 500, reliability_group = "low")
+run_task(block = "AUTOMATION", aid_condition = "simultaneous")
+run_task(block = "AUTOMATION", aid_condition = "stimulus_first_change")
 ```
 
 ## Author

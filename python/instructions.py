@@ -141,8 +141,13 @@ SLIDES = [
         "kind": "text",
         "title": "AID TIMING",
         "body": (
-            "Across automation blocks, the aid recommendation may appear before the virus sample, "
-            "at the same time as the virus sample, or shortly after the virus sample appears. "
+            "Across automation blocks, the order of information will vary. "
+            "Some screens will show information without requiring a response. "
+            "On some trials the aid recommendation and virus sample will appear together. "
+            "On some trials the aid recommendation will appear first as a preview, followed by the virus sample. "
+            "On other trials the virus sample will appear before the aid recommendation. "
+            "In the main automation blocks, you will make two classifications for each sample; "
+            "the second classification is your final answer. "
             "Your job is always to classify the sample as accurately as possible."
         ),
     },
@@ -152,9 +157,8 @@ SLIDES = [
         "body": (
             "We will keep an ongoing tally of your performance. "
             "At the end of the experiment you will receive a point-based bonus, up to $25, based on your performance score.\n\n"
-            "In the main automation blocks, you will have up to 6 seconds to respond on each trial. "
-            "Incorrect responses and responses not made within the response window will reduce your performance score, "
-            "so try to respond accurately within the available time.\n\n"
+            "In the main automation blocks, each decision phase will remain on screen until you respond. "
+            "Incorrect final responses will reduce your performance score, so try to respond accurately.\n\n"
             "You may take short breaks at any time between trials\n\n"
         ),
     },

@@ -24,7 +24,7 @@ print(latest_file)
 dat <- read_csv(latest_file, show_col_types = FALSE)
 
 WINDOW <- 25
-TARGET_ACC <- 0.80
+TARGET_ACC <- 0.85
 BURN_IN_TRIALS <- 50
 CALIB_SUMMARY_LAST_N <- 150
 
@@ -33,18 +33,14 @@ safe_max <- function(x, fallback = 0.25) {
   if (is.finite(value)) value else fallback
 }
 
-onset_label <- function(aid_onset_condition, aid_onset_ms) {
-  onset_ms <- suppressWarnings(as.numeric(aid_onset_ms))
+condition_label <- function(aid_condition) {
   out <- dplyr::case_when(
-    !is.na(aid_onset_condition) & aid_onset_condition == "before" ~ "Aid before",
-    !is.na(aid_onset_condition) & aid_onset_condition == "simultaneous" ~ "Aid simultaneous",
-    !is.na(aid_onset_condition) & aid_onset_condition == "after" ~ "Aid after",
-    onset_ms < 0 ~ "Aid before",
-    onset_ms == 0 ~ "Aid simultaneous",
-    onset_ms > 0 ~ "Aid after",
+    !is.na(aid_condition) & aid_condition == "simultaneous" ~ "Aid + stimulus",
+    !is.na(aid_condition) & aid_condition == "aid_first" ~ "Aid first",
+    !is.na(aid_condition) & aid_condition == "stimulus_first_change" ~ "Stimulus first, change allowed",
     TRUE ~ NA_character_
   )
-  factor(out, levels = c("Aid before", "Aid simultaneous", "Aid after"))
+  factor(out, levels = c("Aid + stimulus", "Aid first", "Stimulus first, change allowed"))
 }
 
 add_running_accuracy <- function(data) {
@@ -107,8 +103,7 @@ make_calibration_plot <- function(dat_calib) {
 
 make_automation_plot <- function(dat_auto) {
   dat_auto <- add_running_accuracy(dat_auto)
-  label <- unique(dat_auto$aid_onset_label)[1]
-  reliability <- unique(dat_auto$automation_reliability_group)[1]
+  label <- unique(dat_auto$aid_condition_label)[1]
   aid_acc <- mean(dat_auto$aid_correct_num, na.rm = TRUE)
   observed_acc <- mean(dat_auto$correct_num, na.rm = TRUE)
   delta_mean <- dat_auto$delta_fixed_mean[1]
@@ -127,8 +122,7 @@ make_automation_plot <- function(dat_auto) {
     labs(
       x = NULL,
       y = "Delta",
-      title = paste0(label, " automation block"),
-      subtitle = paste0("Reliability group: ", reliability)
+      title = paste0(label, " automation block")
     ) +
     theme_classic()
 
@@ -157,11 +151,11 @@ if (!nrow(dat_calib)) {
 p_calib <- make_calibration_plot(dat_calib)
 
 dat_auto <- dat %>%
-  mutate(aid_onset_label = onset_label(aid_onset_condition, aid_onset_ms)) %>%
-  filter(block == "AUTOMATION", !is.na(aid_onset_label))
+  mutate(aid_condition_label = condition_label(aid_condition)) %>%
+  filter(block == "AUTOMATION", !is.na(aid_condition_label))
 
 auto_plots <- dat_auto %>%
-  group_split(aid_onset_label, .keep = TRUE) %>%
+  group_split(aid_condition_label, .keep = TRUE) %>%
   lapply(make_automation_plot)
 
 p_combo <- wrap_plots(c(list(p_calib), auto_plots), ncol = 1)
@@ -172,7 +166,7 @@ if (!dir.exists("plots")) {
 }
 
 ggsave(
-  filename = "plots/combined_aid_onset.pdf",
+  filename = "plots/combined_aid_condition.pdf",
   plot = p_combo,
   device = cairo_pdf,
   width = 10,

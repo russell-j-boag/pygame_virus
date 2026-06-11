@@ -29,10 +29,13 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 # -----------------------------
 POST_CALIBRATION_N_TRIALS = 400
 CALIBRATION_TRIAL_DEADLINE_MS = 10000
-POST_CALIBRATION_TRIAL_DEADLINE_MS = 6000
-AUTOMATION_RELIABILITY_SETTINGS = {
-    "high": 0.95,
-    "low": 0.65,
+AUTOMATION_PRE_PHASE_MS = 1000
+CALIBRATION_TARGET_ACC = 0.85
+GLOBAL_AID_ACCURACY = 0.85
+AUTOMATION_AID_CONDITIONS = {
+    "simultaneous": "Aid + stimulus",
+    "aid_first": "Aid first",
+    "stimulus_first_change": "Stimulus first, change allowed",
 }
 
 BLOCKS = [
@@ -42,7 +45,7 @@ BLOCKS = [
     #     AUTOMATION_ON=False,      # automation off
     #     AID_ACCURACY=0.90,        # not used (automation off), but harmless
     #     STAIRCASE_ON=True,        # staircase on
-    #     TARGET_ACC=0.80,          # target accuracy for adaptive staircase
+    #     TARGET_ACC=CALIBRATION_TARGET_ACC,  # target accuracy for adaptive staircase
     #     FIXED_DELTA_ON=False,     # fixed delta off because using staircase
     #     FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
     #     TRIAL_FEEDBACK_ON=True,
@@ -51,64 +54,60 @@ BLOCKS = [
         name="CALIBRATION",
         N_TRIALS=300,
         AUTOMATION_ON=False,      # automation off
-        AID_ACCURACY=0.90,        # not used (automation off), but harmless
+        AID_ACCURACY=None,        # not used when automation is off
         STAIRCASE_ON=True,        # staircase on
-        TARGET_ACC=0.80,          # target accuracy for adaptive staircase
+        TARGET_ACC=CALIBRATION_TARGET_ACC,  # target accuracy for adaptive staircase
         FIXED_DELTA_ON=False,     # fixed delta off because using staircase
         FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=CALIBRATION_TRIAL_DEADLINE_MS,
         CONDITION_CODE="CAL",
-        AID_ONSET_CONDITION=None,
-        AID_ONSET_MS=None,
+        AID_CONDITION=None,
     ),
     dict(
         name="AUTOMATION",
         N_TRIALS=POST_CALIBRATION_N_TRIALS,
         AUTOMATION_ON=True,       # automation on
-        AID_ACCURACY=None,        # assigned by participant reliability group
+        AID_ACCURACY=GLOBAL_AID_ACCURACY,
         AID_TRANSPARENCY="none",
-        AID_ONSET_CONDITION="before",
-        AID_ONSET_MS=-500,
+        AID_CONDITION="simultaneous",
         STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=0.80,          # not used (staircase off), but harmless
+        TARGET_ACC=CALIBRATION_TARGET_ACC,  # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
         TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
-        CONDITION_CODE="AB500",
+        TRIAL_DEADLINE_MS=None,
+        CONDITION_CODE="SIM",
     ),
     dict(
         name="AUTOMATION",
         N_TRIALS=POST_CALIBRATION_N_TRIALS,
         AUTOMATION_ON=True,       # automation on
-        AID_ACCURACY=None,        # assigned by participant reliability group
+        AID_ACCURACY=GLOBAL_AID_ACCURACY,
         AID_TRANSPARENCY="none",
-        AID_ONSET_CONDITION="simultaneous",
-        AID_ONSET_MS=0,
+        AID_CONDITION="aid_first",
         STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=0.80,          # not used (staircase off), but harmless
+        TARGET_ACC=CALIBRATION_TARGET_ACC,  # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
         TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
-        CONDITION_CODE="AS0",
+        TRIAL_DEADLINE_MS=None,
+        CONDITION_CODE="AIDFIRST",
     ),
     dict(
         name="AUTOMATION",
         N_TRIALS=POST_CALIBRATION_N_TRIALS,
         AUTOMATION_ON=True,       # automation on
-        AID_ACCURACY=None,        # assigned by participant reliability group
+        AID_ACCURACY=GLOBAL_AID_ACCURACY,
         AID_TRANSPARENCY="none",
-        AID_ONSET_CONDITION="after",
-        AID_ONSET_MS=500,
+        AID_CONDITION="stimulus_first_change",
         STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=0.80,          # not used (staircase off), but harmless
+        TARGET_ACC=CALIBRATION_TARGET_ACC,  # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
         TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
-        CONDITION_CODE="AA500",
+        TRIAL_DEADLINE_MS=None,
+        CONDITION_CODE="STIMFIRST",
     ),
 ]
 
@@ -118,8 +117,7 @@ BLOCK_DEFAULTS = {
     "TRIAL_DEADLINE_MS": CALIBRATION_TRIAL_DEADLINE_MS,
     "CONDITION_CODE": None,
     "CONDITION_DEADLINE_CODE": None,
-    "AID_ONSET_CONDITION": None,
-    "AID_ONSET_MS": None,
+    "AID_CONDITION": None,
     "AUTOMATION_RELIABILITY_GROUP": "none",
 }
 
@@ -194,25 +192,24 @@ def format_deadline_s(deadline_s) -> str:
     return f"{deadline_s:g}"
 
 
-def aid_onset_ms_for_block(block_cfg):
-    return block_cfg.get("AID_ONSET_MS")
+def aid_condition_for_block(block_cfg):
+    return block_cfg.get("AID_CONDITION")
 
 
-def aid_onset_condition_for_block(block_cfg):
-    return block_cfg.get("AID_ONSET_CONDITION")
-
-
-def format_aid_onset_ms(aid_onset_ms) -> str:
-    if aid_onset_ms is None:
+def format_aid_condition(aid_condition) -> str:
+    if aid_condition is None:
         return "none"
-    if int(aid_onset_ms) == 0:
-        return "0 ms"
-    direction = "before" if int(aid_onset_ms) < 0 else "after"
-    return f"{abs(int(aid_onset_ms))} ms {direction}"
+    return AUTOMATION_AID_CONDITIONS.get(aid_condition, str(aid_condition))
 
 
 def response_window_instruction_slide(block_cfg) -> str:
     deadline_s = trial_deadline_s_for_block(block_cfg)
+    if deadline_s is None:
+        return (
+            "In this block, each decision phase will stay on screen until you respond. "
+            "Please respond as accurately as possible."
+        )
+
     deadline_text = format_deadline_s(deadline_s)
     return (
         f"In this block, each trial has a {deadline_text}-second response window. "
@@ -221,57 +218,53 @@ def response_window_instruction_slide(block_cfg) -> str:
     )
 
 
-def aid_onset_instruction_slide(block_cfg) -> str:
-    aid_onset_ms = aid_onset_ms_for_block(block_cfg)
-    onset_text = format_aid_onset_ms(aid_onset_ms)
-    if aid_onset_ms is None:
+def aid_condition_instruction_slide(block_cfg) -> str:
+    aid_condition = aid_condition_for_block(block_cfg)
+    if aid_condition is None:
         return ""
-    if int(aid_onset_ms) < 0:
-        timing_text = f"{onset_text} the virus sample appears"
-    elif int(aid_onset_ms) > 0:
-        timing_text = f"{onset_text} the virus sample appears"
-    else:
-        timing_text = "at the same time as the virus sample"
-    return (
-        "In this block, the automated decision aid recommendation will appear "
-        f"{timing_text}."
-    )
 
-
-def automation_reliability_instruction_slide(reliability_group: str) -> str:
-    if reliability_group == "high":
+    if aid_condition == "simultaneous":
         return (
-            "In the next block, although the automation is highly reliable, it is not perfect, "
-            "and automation advice errors are unlikely but still possible."
+            "In this block, each trial begins with a fixation cross, then a masked aid preview, "
+            "then another fixation cross. The automated aid recommendation and virus sample "
+            "will then appear together, and you will make your first classification. After another "
+            "fixation cross, a masked placeholder screen will appear and you will make your final "
+            "classification."
         )
 
-    if reliability_group == "low":
+    if aid_condition == "aid_first":
         return (
-            "In the next block, although the automation is reasonably reliable, it is not perfect, "
-            "and automation advice errors may be relatively common."
+            "In this block, each trial begins with a fixation cross. The automated aid "
+            "recommendation will then appear by itself, with no response required, followed by "
+            "another fixation cross. The virus sample will then appear by itself, and you will "
+            "make your first classification. After another fixation cross, a masked placeholder "
+            "screen will appear and you will make your final classification."
+        )
+
+    if aid_condition == "stimulus_first_change":
+        return (
+            "In this block, each trial begins with a fixation cross, then a masked aid preview, "
+            "then another fixation cross. The virus sample will then appear by itself and "
+            "you will make your first classification. After another fixation cross, the "
+            "automated aid recommendation will appear by itself and you will make your final "
+            "classification."
         )
 
     raise ValueError(
-        f"Unsupported automation reliability group '{reliability_group}'. "
-        f"Valid values: {sorted(AUTOMATION_RELIABILITY_SETTINGS)}"
+        f"Unsupported aid condition '{aid_condition}'. "
+        f"Valid values: {sorted(AUTOMATION_AID_CONDITIONS)}"
     )
 
 
-def reliability_group_for_participant(participant_id: int) -> str:
-    cycle_idx = (participant_id - 1) % 16
-    return "high" if (cycle_idx % 2) == 0 else "low"
+def automation_accuracy_instruction_slide() -> str:
+    return (
+        "In the next block, although the automation is reasonably reliable, it is not perfect, "
+        "and automation advice errors are still possible."
+    )
 
 
 def block_order_index_for_participant(participant_id: int) -> int:
-    return ((participant_id - 1) // 2) % 3
-
-
-def apply_reliability_to_block(block_cfg, reliability_group: str):
-    cfg = copy_block_config(block_cfg)
-    cfg["AUTOMATION_RELIABILITY_GROUP"] = reliability_group
-    if cfg["AUTOMATION_ON"]:
-        cfg["AID_ACCURACY"] = AUTOMATION_RELIABILITY_SETTINGS[reliability_group]
-    return cfg
+    return (participant_id - 1) % 3
 
 
 def transparency_instruction_slide(transparency_level: str) -> str:
@@ -370,10 +363,7 @@ DISH_EDGE = BLACK     # thin edge
 # V-BLACK cell proportions
 VBLACK_PROPORTION_LEVELS = [0.40, 0.42, 0.44, 0.46, 0.48, 0.52, 0.54, 0.56, 0.58, 0.60]
 
-# Automated aid onset is configured per automation block.
-# 0   = aid appears simultaneously with dot stimulus
-# >0  = aid delayed (ms after dot onset)
-# <0  = aid advanced (ms before dot onset)
+# Automated aid timing is configured as a behavior condition per automation block.
 AID_TRANSPARENCY_LEVELS = {"none", "low", "high"}
 
 # -----------------------------
@@ -838,8 +828,7 @@ def run_postblock_questionnaire(
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
             "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
             "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
-            "aid_onset_condition": aid_onset_condition_for_block(block_cfg) if block_cfg else None,
-            "aid_onset_ms": aid_onset_ms_for_block(block_cfg) if block_cfg else None,
+            "aid_condition": aid_condition_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": idx,
@@ -1110,9 +1099,8 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
     """
     CALIBRATION stays fixed.
 
-    The three post-calibration aid-onset cells are assigned with balanced
-    rotations. Reliability remains between subjects and key mapping uses the
-    existing participant-ID cycle.
+    The three post-calibration aid-condition cells are assigned with balanced
+    rotations. Key mapping uses the participant-ID cycle.
     """
     calibration_blocks = [
         copy_block_config(b)
@@ -1128,7 +1116,7 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
         if b["name"] != "CALIBRATION"
     ]
     if len(tail_blocks) != 3:
-        raise ValueError("The aid-onset design expects exactly three post-calibration blocks.")
+        raise ValueError("The aid-condition design expects exactly three post-calibration blocks.")
 
     all_orders = [
         [tail_blocks[(idx + offset) % len(tail_blocks)] for idx in range(len(tail_blocks))]
@@ -1136,24 +1124,20 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
     ]
 
     order_idx = block_order_index_for_participant(participant_id)
-    reliability_group = reliability_group_for_participant(participant_id)
-    ordered_tail = [
-        apply_reliability_to_block(b, reliability_group)
-        for b in all_orders[order_idx]
-    ]
-    return [apply_reliability_to_block(calibration_blocks[0], reliability_group)] + ordered_tail
+    ordered_tail = [copy_block_config(b) for b in all_orders[order_idx]]
+    return [copy_block_config(calibration_blocks[0])] + ordered_tail
 
 def key_mapping_for_participant(participant_id: int):
     """
-    Flip key mapping within the 16-participant counterbalancing cycle:
-      - p 1-8:   standard  (D->BLACK, J->WHITE)
-      - p 9-16:  flipped   (J->BLACK, D->WHITE)
-      - p 17-24: standard
-      - p 25-32: flipped
+    Flip key mapping within the 6-participant counterbalancing cycle:
+      - p 1-3:   standard  (D->BLACK, J->WHITE)
+      - p 4-6:   flipped   (J->BLACK, D->WHITE)
+      - p 7-9:   standard
+      - p 10-12: flipped
       ... etc
     """
-    cycle_idx = (participant_id - 1) % 16
-    flip = cycle_idx >= 8
+    cycle_idx = (participant_id - 1) % 6
+    flip = cycle_idx >= 3
 
     if not flip:
         key_black = pygame.K_d
@@ -1483,8 +1467,7 @@ def run_postblock_slider_questions(
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
             "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
             "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
-            "aid_onset_condition": aid_onset_condition_for_block(block_cfg) if block_cfg else None,
-            "aid_onset_ms": aid_onset_ms_for_block(block_cfg) if block_cfg else None,
+            "aid_condition": aid_condition_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": i,
@@ -1940,17 +1923,16 @@ def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
         slides = list(payload.get("slides", [payload.get("body", "")]))
 
         if block_cfg is not None and block_name == "AUTOMATION":
-            reliability_group = block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none")
             slides = (
                 slides[:1]
                 + [
-                    automation_reliability_instruction_slide(reliability_group),
-                    aid_onset_instruction_slide(block_cfg),
+                    automation_accuracy_instruction_slide(),
+                    aid_condition_instruction_slide(block_cfg),
                 ]
                 + slides[1:]
             )
             payload["title"] = (
-                f"{payload['title']} ({format_aid_onset_ms(aid_onset_ms_for_block(block_cfg)).upper()})"
+                f"{payload['title']} ({format_aid_condition(aid_condition_for_block(block_cfg)).upper()})"
             )
 
         if block_cfg is not None and block_name != "CALIBRATION":
@@ -2321,38 +2303,27 @@ def parse_cli_args():
         help="Run only a selected block. Valid values: CALIBRATION, AUTOMATION",
     )
     parser.add_argument(
-        "--aid-onset-ms",
-        type=int,
-        default=None,
-        help="Select an AUTOMATION block by aid onset relative to stimulus onset: -500, 0, or 500.",
-    )
-    parser.add_argument(
-        "--reliability-group",
+        "--aid-condition",
         type=str,
-        choices=sorted(AUTOMATION_RELIABILITY_SETTINGS),
+        choices=sorted(AUTOMATION_AID_CONDITIONS),
         default=None,
-        help="Automation reliability group for single-block AUTOMATION runs.",
+        help="Select an AUTOMATION block by aid condition.",
     )
     args = parser.parse_args()
 
     if args.block is not None:
         args.block = args.block.upper()
 
-    if args.aid_onset_ms is not None and args.block is None:
-        parser.error("--aid-onset-ms requires --block")
-    if args.aid_onset_ms is not None and args.block != "AUTOMATION":
-        parser.error("--aid-onset-ms can only be used with --block AUTOMATION")
-    if args.reliability_group is not None and args.block is None:
-        parser.error("--reliability-group requires --block")
-    if args.reliability_group is not None and args.block != "AUTOMATION":
-        parser.error("--reliability-group can only be used with --block AUTOMATION")
+    if args.aid_condition is not None and args.block is None:
+        parser.error("--aid-condition requires --block")
+    if args.aid_condition is not None and args.block != "AUTOMATION":
+        parser.error("--aid-condition can only be used with --block AUTOMATION")
 
     return args
-  
 
-def select_single_block(block_name: str, blocks_template, participant_id: int, aid_onset_ms=None, reliability_group=None):
+def select_single_block(block_name: str, blocks_template, participant_id: int, aid_condition=None):
     """
-    Return block configs matching block_name and, when needed, aid_onset_ms.
+    Return block configs matching block_name and, when needed, aid_condition.
     Raises a clear error if the block is not available in BLOCKS.
     """
     matches = [copy_block_config(b) for b in blocks_template if b["name"] == block_name]
@@ -2363,43 +2334,34 @@ def select_single_block(block_name: str, blocks_template, participant_id: int, a
             f"Unknown block '{block_name}'. Available blocks in this script: {available}"
         )
 
-    if aid_onset_ms is not None:
+    if aid_condition is not None:
         matches = [
             b for b in matches
-            if aid_onset_ms_for_block(b) == int(aid_onset_ms)
+            if aid_condition_for_block(b) == aid_condition
         ]
         if not matches:
             available = sorted(
                 set(
-                    format_aid_onset_ms(aid_onset_ms_for_block(b))
+                    aid_condition_for_block(b)
                     for b in blocks_template
                     if b["name"] == block_name
                 )
             )
             raise ValueError(
-                f"No {block_name} block has aid onset {format_aid_onset_ms(aid_onset_ms)}. "
-                f"Available aid onsets for this block: {available}"
+                f"No {block_name} block has aid condition '{aid_condition}'. "
+                f"Available aid conditions for this block: {available}"
             )
 
     if len(matches) > 1:
         available = sorted(
-            set(format_aid_onset_ms(aid_onset_ms_for_block(b)) for b in matches)
+            set(aid_condition_for_block(b) for b in matches)
         )
         raise ValueError(
-            f"Block '{block_name}' has multiple aid-onset variants. "
-            f"Pass --aid-onset-ms with one of: {available}"
+            f"Block '{block_name}' has multiple aid-condition variants. "
+            f"Pass --aid-condition with one of: {available}"
         )
 
-    if matches[0]["AUTOMATION_ON"] and reliability_group is None:
-        raise ValueError(
-            "Single-block AUTOMATION runs require --reliability-group "
-            f"with one of: {sorted(AUTOMATION_RELIABILITY_SETTINGS)}"
-        )
-
-    selected_reliability_group = reliability_group or reliability_group_for_participant(participant_id)
-    return [
-        apply_reliability_to_block(matches[0], selected_reliability_group)
-    ]
+    return [copy_block_config(matches[0])]
 
 
 def create_display_surface():
@@ -2449,15 +2411,13 @@ def choose_blocks_to_run(args, participant_id):
             args.block,
             BLOCKS,
             participant_id=participant_id,
-            aid_onset_ms=args.aid_onset_ms,
-            reliability_group=args.reliability_group,
+            aid_condition=args.aid_condition,
         )
         print(
             "[SINGLE BLOCK MODE]",
             participant_id,
             "->",
             [block_condition_code(b) for b in blocks_to_run],
-            f"(reliability={blocks_to_run[0]['AUTOMATION_RELIABILITY_GROUP']})",
         )
         return blocks_to_run
 
@@ -2467,7 +2427,6 @@ def choose_blocks_to_run(args, participant_id):
         participant_id,
         "->",
         [block_condition_code(b) for b in blocks_to_run],
-        f"(reliability={blocks_to_run[0]['AUTOMATION_RELIABILITY_GROUP']})",
     )
     return blocks_to_run
 
@@ -2580,7 +2539,8 @@ def show_block_intro(screen, clock, fonts, block_cfg, key_black_name, key_white_
     )
     pygame.display.flip()
     wait_for_keypress(clock, min_show_ms=250)
-    fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+    if not block_cfg["AUTOMATION_ON"]:
+        fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
 
 
 def pick_trial_vblack_prop(block_state, trial_index):
@@ -2659,15 +2619,10 @@ def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, m
         )
 
 
-def maybe_run_advanced_aid_phase(screen, clock, aid_payload, ui_payload, aid_onset_ms):
-    if aid_onset_ms is None or aid_onset_ms >= 0:
-        return False, None
+def run_blank_phase(screen, clock, duration_ms):
+    t0 = pygame.time.get_ticks()
 
-    pre_ms = abs(aid_onset_ms)
-    pre_start_perf = time.perf_counter()
-    pre_aid_onset_perf = None
-
-    while (time.perf_counter() - pre_start_perf) * 1000.0 < pre_ms:
+    while pygame.time.get_ticks() - t0 < duration_ms:
         clock.tick(FPS)
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -2676,25 +2631,232 @@ def maybe_run_advanced_aid_phase(screen, clock, aid_payload, ui_payload, aid_ons
                 quit_clean()
 
         screen.fill(BG)
-        draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
-        draw_samples_left_label(screen, ui_payload["fonts"]["small"], ui_payload["trials_left"])
-        draw_aid_recommendation_top_center(
-            screen,
-            ui_payload["fonts"]["aid_label"],
-            ui_payload["fonts"]["aid"],
-            aid_payload["label"],
-            show_value=True,
-            transparency_level=aid_payload["transparency_level"],
-            evidence_black_pct=aid_payload["evidence_black_pct"],
-            evidence_white_pct=aid_payload["evidence_white_pct"],
-        )
-
-        if pre_aid_onset_perf is None:
-            pre_aid_onset_perf = time.perf_counter()
-
         pygame.display.flip()
 
-    return True, pre_aid_onset_perf
+
+def draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=False):
+    fonts = ui_payload["fonts"]
+    key_names = ui_payload["key_names"]
+
+    screen.fill(BG)
+    draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
+    draw_samples_left_label(screen, fonts["small"], ui_payload["trials_left"])
+    draw_aid_recommendation_top_center(
+        screen,
+        fonts["aid_label"],
+        fonts["aid"],
+        aid_payload["label"],
+        show_value=True,
+        transparency_level=aid_payload["transparency_level"],
+        evidence_black_pct=aid_payload["evidence_black_pct"],
+        evidence_white_pct=aid_payload["evidence_white_pct"],
+    )
+
+    if show_prompt:
+        draw_trial_prompt_stacked(
+            screen,
+            fonts["small"],
+            HEIGHT - S(80),
+            key_names["black"],
+            key_names["white"],
+        )
+
+
+def draw_masked_placeholder_frame(screen, ui_payload, center=None, show_stimulus_placeholder=False, show_prompt=False):
+    fonts = ui_payload["fonts"]
+    key_names = ui_payload["key_names"]
+
+    screen.fill(BG)
+    draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
+    draw_samples_left_label(screen, fonts["small"], ui_payload["trials_left"])
+
+    dish_top_limit = None
+    if show_stimulus_placeholder and center is not None:
+        dish_top_limit = center[1] - DISH_RADIUS
+
+    draw_aid_recommendation_top_center(
+        screen,
+        fonts["aid_label"],
+        fonts["aid"],
+        rec_label="#####",
+        show_value=True,
+        transparency_level="none",
+        dish_top_limit=dish_top_limit,
+    )
+
+    if show_stimulus_placeholder and center is not None:
+        draw_petri_dish(screen, center, DISH_RADIUS)
+        placeholder_img = fonts["aid"].render("#####", True, LIGHT_GREY)
+        placeholder_rect = placeholder_img.get_rect(center=center)
+        screen.blit(placeholder_img, placeholder_rect)
+
+    if show_prompt:
+        draw_trial_prompt_stacked(
+            screen,
+            fonts["small"],
+            HEIGHT - S(80),
+            key_names["black"],
+            key_names["white"],
+        )
+
+
+def run_aid_preview_phase(screen, clock, aid_payload, ui_payload, duration_ms):
+    t0 = pygame.time.get_ticks()
+
+    while pygame.time.get_ticks() - t0 < duration_ms:
+        clock.tick(FPS)
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                pass
+            if ev.type == pygame.KEYDOWN and is_hard_quit_event(ev):
+                quit_clean()
+
+        draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=False)
+        pygame.display.flip()
+
+
+def run_masked_preview_phase(screen, clock, ui_payload, duration_ms):
+    t0 = pygame.time.get_ticks()
+
+    while pygame.time.get_ticks() - t0 < duration_ms:
+        clock.tick(FPS)
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                pass
+            if ev.type == pygame.KEYDOWN and is_hard_quit_event(ev):
+                quit_clean()
+
+        draw_masked_placeholder_frame(screen, ui_payload, show_prompt=False)
+        pygame.display.flip()
+
+
+def collect_key_response(screen, clock, keymap, draw_frame_fn, deadline_ms=None, update_fn=None):
+    phase_start_ticks = pygame.time.get_ticks()
+    phase_start_perf = time.perf_counter()
+
+    while True:
+        clock.tick(FPS)
+        now = pygame.time.get_ticks()
+
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                pass
+            if ev.type == pygame.KEYDOWN:
+                if is_hard_quit_event(ev):
+                    quit_clean()
+                if ev.key == keymap["key_black"]:
+                    return {
+                        "response": "BLACK",
+                        "rt_ms": (time.perf_counter() - phase_start_perf) * 1000.0,
+                    }
+                if ev.key == keymap["key_white"]:
+                    return {
+                        "response": "WHITE",
+                        "rt_ms": (time.perf_counter() - phase_start_perf) * 1000.0,
+                    }
+
+        if deadline_ms is not None and (now - phase_start_ticks) >= deadline_ms:
+            return {"response": "TIMEOUT", "rt_ms": None}
+
+        if update_fn is not None:
+            update_fn()
+
+        ms_left = None
+        if deadline_ms is not None:
+            ms_left = deadline_ms - (now - phase_start_ticks)
+
+        draw_frame_fn(ms_left)
+        pygame.display.flip()
+
+
+def collect_stimulus_response(screen, clock, dot_layer, dots, center, keymap, aid_payload,
+                              ui_payload, show_aid=False, deadline_ms=None):
+    def update_fn():
+        update_dots(dots, center, DISH_RADIUS)
+
+    def draw_frame(ms_left):
+        draw_trial_frame(
+            screen,
+            dot_layer,
+            dots,
+            center,
+            {
+                "mode": "automation" if show_aid else "none",
+                "label": aid_payload["label"],
+                "visible": bool(show_aid),
+                "transparency_level": aid_payload["transparency_level"],
+                "evidence_black_pct": aid_payload["evidence_black_pct"],
+                "evidence_white_pct": aid_payload["evidence_white_pct"],
+            },
+            ui_payload,
+            ms_left=ms_left,
+        )
+
+    return collect_key_response(
+        screen,
+        clock,
+        keymap,
+        draw_frame_fn=draw_frame,
+        deadline_ms=deadline_ms,
+        update_fn=update_fn,
+    )
+
+
+def collect_aid_only_response(screen, clock, keymap, aid_payload, ui_payload):
+    def draw_frame(ms_left):
+        draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=True)
+
+    return collect_key_response(
+        screen,
+        clock,
+        keymap,
+        draw_frame_fn=draw_frame,
+        deadline_ms=None,
+        update_fn=None,
+    )
+
+
+def collect_masked_response(screen, clock, center, keymap, ui_payload):
+    def draw_frame(ms_left):
+        draw_masked_placeholder_frame(
+            screen,
+            ui_payload,
+            center=center,
+            show_stimulus_placeholder=True,
+            show_prompt=True,
+        )
+
+    return collect_key_response(
+        screen,
+        clock,
+        keymap,
+        draw_frame_fn=draw_frame,
+        deadline_ms=None,
+        update_fn=None,
+    )
+
+
+def response_correct(response, stimulus):
+    if response in ("BLACK", "WHITE"):
+        return response == stimulus
+    return None
+
+
+def response_matches_aid(response, aid_label):
+    if response in ("BLACK", "WHITE") and aid_label in ("BLACK", "WHITE"):
+        return response == aid_label
+    return None
+
+
+def make_decision_record(result, stimulus, aid_label, display_type):
+    response = result["response"]
+    return {
+        "response": response,
+        "correct": response_correct(response, stimulus),
+        "rt_ms": result["rt_ms"],
+        "display": display_type,
+        "matches_aid": response_matches_aid(response, aid_label),
+    }
 
 
 def update_staircase_state(block_state, is_correct, trial_in_block, target_acc):
@@ -2735,7 +2897,7 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "condition_code": block_condition_code(block_cfg),
         "condition_deadline_code": block_condition_deadline_code(block_cfg),
         "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none"),
-        "aid_onset_condition": aid_onset_condition_for_block(block_cfg),
+        "aid_condition": aid_condition_for_block(block_cfg),
         "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg),
         "trial_deadline_s": trial_deadline_s_for_block(block_cfg),
         "trial": trial_number,
@@ -2756,8 +2918,27 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "stimulus": trial_data["stimulus"],
         "aid_label": trial_data["aid_label"],
         "aid_correct": trial_data["aid_correct"],
-        "aid_onset_ms": aid_onset_ms_for_block(block_cfg),
-        "aid_onset_ms_rel": trial_data["aid_onset_ms_rel"],
+        "decision1_display": trial_data["decision1_display"],
+        "decision1_response": trial_data["decision1_response"],
+        "decision1_correct": trial_data["decision1_correct"],
+        "decision1_rt_s": (trial_data["decision1_rt_ms"] / 1000.0) if trial_data["decision1_rt_ms"] is not None else None,
+        "decision1_rt_ms": trial_data["decision1_rt_ms"],
+        "decision1_matches_aid": trial_data["decision1_matches_aid"],
+        "decision2_display": trial_data["decision2_display"],
+        "decision2_response": trial_data["decision2_response"],
+        "decision2_correct": trial_data["decision2_correct"],
+        "decision2_rt_s": (trial_data["decision2_rt_ms"] / 1000.0) if trial_data["decision2_rt_ms"] is not None else None,
+        "decision2_rt_ms": trial_data["decision2_rt_ms"],
+        "decision2_matches_aid": trial_data["decision2_matches_aid"],
+        "initial_response": trial_data["initial_response"],
+        "initial_correct": trial_data["initial_correct"],
+        "initial_rt_s": (trial_data["initial_rt_ms"] / 1000.0) if trial_data["initial_rt_ms"] is not None else None,
+        "initial_rt_ms": trial_data["initial_rt_ms"],
+        "final_response": trial_data["final_response"],
+        "final_correct": trial_data["final_correct"],
+        "final_rt_s": (trial_data["final_rt_ms"] / 1000.0) if trial_data["final_rt_ms"] is not None else None,
+        "final_rt_ms": trial_data["final_rt_ms"],
+        "changed_response": trial_data["changed_response"],
         "response": response,
         "correct": trial_data["correct"] if response in ("BLACK", "WHITE") else None,
         "feedback": feedback_msg if block_cfg["TRIAL_FEEDBACK_ON"] else None,
@@ -2817,110 +2998,132 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
     }
     aid_render_payload = {
         "label": aid_label,
-        "visible": False,
         "transparency_level": block_state["aid_transparency"],
         "evidence_black_pct": evidence_black_pct,
         "evidence_white_pct": evidence_white_pct,
     }
 
-    aid_visible = False
-    aid_onset_perf = None
-    aid_onset_ms = aid_onset_ms_for_block(block_cfg)
+    decision1 = {
+        "response": None,
+        "correct": None,
+        "rt_ms": None,
+        "display": None,
+        "matches_aid": None,
+    }
+    decision2 = dict(decision1)
+
     if block_cfg["AUTOMATION_ON"]:
-        aid_visible, pre_aid_onset_perf = maybe_run_advanced_aid_phase(
+        fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+        aid_condition = aid_condition_for_block(block_cfg)
+
+        if aid_condition == "simultaneous":
+            run_masked_preview_phase(screen, clock, ui_payload, AUTOMATION_PRE_PHASE_MS)
+            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision1_result = collect_stimulus_response(
+                screen, clock, dot_layer, dots, center, keymap,
+                aid_render_payload, ui_payload, show_aid=True, deadline_ms=None,
+            )
+            decision1 = make_decision_record(
+                decision1_result, stimulus, aid_label, display_type="aid_stimulus"
+            )
+            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision2_result = collect_masked_response(
+                screen, clock, center, keymap, ui_payload,
+            )
+            decision2 = make_decision_record(
+                decision2_result, stimulus, aid_label, display_type="masked_placeholder"
+            )
+
+        elif aid_condition == "aid_first":
+            run_aid_preview_phase(
+                screen, clock, aid_render_payload, ui_payload,
+                duration_ms=AUTOMATION_PRE_PHASE_MS,
+            )
+            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision1_result = collect_stimulus_response(
+                screen, clock, dot_layer, dots, center, keymap,
+                aid_render_payload, ui_payload, show_aid=False, deadline_ms=None,
+            )
+            decision1 = make_decision_record(
+                decision1_result, stimulus, aid_label, display_type="stimulus_only"
+            )
+            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision2_result = collect_masked_response(
+                screen, clock, center, keymap, ui_payload,
+            )
+            decision2 = make_decision_record(
+                decision2_result, stimulus, aid_label, display_type="masked_placeholder"
+            )
+
+        elif aid_condition == "stimulus_first_change":
+            run_masked_preview_phase(screen, clock, ui_payload, AUTOMATION_PRE_PHASE_MS)
+            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision1_result = collect_stimulus_response(
+                screen, clock, dot_layer, dots, center, keymap,
+                aid_render_payload, ui_payload, show_aid=False, deadline_ms=None,
+            )
+            decision1 = make_decision_record(
+                decision1_result, stimulus, aid_label, display_type="stimulus_only"
+            )
+
+            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision2_result = collect_aid_only_response(
+                screen, clock, keymap, aid_render_payload, ui_payload,
+            )
+            decision2 = make_decision_record(
+                decision2_result, stimulus, aid_label, display_type="aid_only"
+            )
+
+        else:
+            raise ValueError(
+                f"Unsupported aid condition '{aid_condition}'. "
+                f"Valid values: {sorted(AUTOMATION_AID_CONDITIONS)}"
+            )
+
+        response = decision2["response"]
+        rt_ms = decision2["rt_ms"]
+        correct = response_correct(response, stimulus)
+        correct_for_feedback = bool(correct)
+        final_response = response
+        final_rt_ms = rt_ms
+        final_correct = correct
+        initial_response = decision1["response"]
+        initial_rt_ms = decision1["rt_ms"]
+        initial_correct = decision1["correct"]
+
+    else:
+        final = collect_stimulus_response(
             screen,
             clock,
-            aid_render_payload,
-            ui_payload,
-            aid_onset_ms,
-        )
-    else:
-        pre_aid_onset_perf = None
-
-    responded = False
-    response = None
-    stim_onset_perf = None
-    resp_perf = None
-    trial_start_ticks = pygame.time.get_ticks()
-    trial_deadline_ms = trial_deadline_ms_for_block(block_cfg)
-
-    while not responded:
-        clock.tick(FPS)
-        now = pygame.time.get_ticks()
-
-        for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
-                pass
-            if ev.type == pygame.KEYDOWN:
-                if is_hard_quit_event(ev):
-                    quit_clean()
-                if ev.key == keymap["key_black"]:
-                    responded = True
-                    response = "BLACK"
-                    resp_perf = time.perf_counter()
-                elif ev.key == keymap["key_white"]:
-                    responded = True
-                    response = "WHITE"
-                    resp_perf = time.perf_counter()
-
-        if trial_deadline_ms is not None and (now - trial_start_ticks) >= trial_deadline_ms:
-            responded = True
-            response = "TIMEOUT"
-
-        update_dots(dots, center, DISH_RADIUS)
-
-        if stim_onset_perf is None:
-            stim_onset_perf = time.perf_counter()
-            if pre_aid_onset_perf is not None:
-                aid_onset_perf = pre_aid_onset_perf
-
-        if block_cfg["AUTOMATION_ON"] and aid_onset_ms is not None and aid_onset_ms >= 0 and stim_onset_perf is not None:
-            elapsed_ms = (time.perf_counter() - stim_onset_perf) * 1000.0
-            if (not aid_visible) and (elapsed_ms >= aid_onset_ms):
-                aid_visible = True
-                aid_onset_perf = time.perf_counter()
-
-        aid_mode = "none"
-        if block_cfg["AUTOMATION_ON"]:
-            aid_mode = "automation"
-        elif block_cfg.get("SHOW_AID_MASKED", False):
-            aid_mode = "masked"
-
-        ms_left = None
-        if trial_deadline_ms is not None:
-            ms_left = trial_deadline_ms - (now - trial_start_ticks)
-
-        draw_trial_frame(
-            screen,
             dot_layer,
             dots,
             center,
-            {
-                "mode": aid_mode,
-                "label": aid_label,
-                "visible": aid_visible,
-                "transparency_level": block_state["aid_transparency"],
-                "evidence_black_pct": evidence_black_pct,
-                "evidence_white_pct": evidence_white_pct,
-            },
+            keymap,
+            aid_render_payload,
             ui_payload,
-            ms_left=ms_left,
+            show_aid=False,
+            deadline_ms=trial_deadline_ms_for_block(block_cfg),
         )
-        pygame.display.flip()
+        response = final["response"]
+        rt_ms = final["rt_ms"]
+        correct = response_correct(response, stimulus)
+        correct_for_feedback = bool(correct)
+        final_response = response
+        final_rt_ms = rt_ms
+        final_correct = correct
+        initial_response = None
+        initial_rt_ms = None
+        initial_correct = None
 
-    rt_ms = None
-    if stim_onset_perf is not None and resp_perf is not None:
-        rt_ms = (resp_perf - stim_onset_perf) * 1000.0
+    if initial_response in ("BLACK", "WHITE") and final_response in ("BLACK", "WHITE"):
+        changed_response = initial_response != final_response
+    else:
+        changed_response = None
 
-    aid_onset_ms_rel = None
-    if stim_onset_perf is not None and aid_onset_perf is not None:
-        aid_onset_ms_rel = (aid_onset_perf - stim_onset_perf) * 1000.0
-
-    correct = response == stimulus
-    feedback_msg = maybe_show_feedback(screen, clock, fonts, response, correct, block_cfg["TRIAL_FEEDBACK_ON"])
+    feedback_msg = maybe_show_feedback(screen, clock, fonts, response, correct_for_feedback, block_cfg["TRIAL_FEEDBACK_ON"])
     step_down_now, step_up_now = update_staircase_state(
         block_state,
-        correct,
+        correct_for_feedback,
         trial_number,
         block_cfg["TARGET_ACC"],
     )
@@ -2942,7 +3145,23 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             "stimulus": stimulus,
             "aid_label": aid_label,
             "aid_correct": aid_correct,
-            "aid_onset_ms_rel": aid_onset_ms_rel,
+            "decision1_display": decision1["display"],
+            "decision1_response": decision1["response"],
+            "decision1_correct": decision1["correct"],
+            "decision1_rt_ms": decision1["rt_ms"],
+            "decision1_matches_aid": decision1["matches_aid"],
+            "decision2_display": decision2["display"],
+            "decision2_response": decision2["response"],
+            "decision2_correct": decision2["correct"],
+            "decision2_rt_ms": decision2["rt_ms"],
+            "decision2_matches_aid": decision2["matches_aid"],
+            "initial_response": initial_response,
+            "initial_correct": initial_correct,
+            "initial_rt_ms": initial_rt_ms,
+            "final_response": final_response,
+            "final_correct": final_correct,
+            "final_rt_ms": final_rt_ms,
+            "changed_response": changed_response,
             "response": response,
             "correct": correct,
             "rt_ms": rt_ms,
@@ -3228,7 +3447,8 @@ def main():
                         bg_color=BG_INSTRUCTIONS,
                         text_color=WHITE,
                     )
-                fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+                if not block_cfg["AUTOMATION_ON"]:
+                    fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
 
         os.makedirs(output_dir, exist_ok=True)
         block_csv_path = os.path.join(
