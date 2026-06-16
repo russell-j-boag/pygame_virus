@@ -105,6 +105,22 @@ SLIDES = [
         "callout": "timer",
     },
     {
+        "kind": "text",
+        "title": "4 SECOND DEADLINE",
+        "body": (
+            "In some blocks, the deadline will be 4 seconds. "
+            "This means you should make your response within 4 seconds."
+        ),
+    },
+    {
+        "kind": "text",
+        "title": "2 SECOND DEADLINE",
+        "body": (
+            "In other blocks, the deadline will be 2 seconds. "
+            "This means you should make your response within 2 seconds."
+        ),
+    },
+    {
         "kind": "example_task_display",
         "callout": "aid",
     },
