@@ -52,7 +52,6 @@ AUTOMATION_RELIABILITY_PATTERNS = {
     },
 }
 COUNTERBALANCE_CYCLE_N = 16
-COUNTERBALANCE_RANDOM_SEED = 20260530
 POST_CALIBRATION_BLOCK_ORDERS = (
     (
         ("HP", "MANUAL"),
@@ -90,17 +89,14 @@ COUNTERBALANCE_FACTOR_ASSIGNMENTS = tuple(
 
 
 def build_counterbalance_table():
-    rows = [
+    return tuple(
         {
             "post_calibration_block_order_idx": order_idx,
             "factor_assignment_idx": factor_idx,
         }
         for order_idx in range(len(POST_CALIBRATION_BLOCK_ORDERS))
         for factor_idx in range(len(COUNTERBALANCE_FACTOR_ASSIGNMENTS))
-    ]
-    rng = random.Random(COUNTERBALANCE_RANDOM_SEED)
-    rng.shuffle(rows)
-    return tuple(rows)
+    )
 
 
 COUNTERBALANCE_TABLE = build_counterbalance_table()

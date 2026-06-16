@@ -55,13 +55,34 @@ The Latin-square orders are:
 | `O3` | `M_LP -> A_LP -> A_HP -> M_HP` |
 | `O4` | `A_LP -> M_HP -> M_LP -> A_HP` |
 
-These four orders are crossed with reliability pattern and key mapping, giving `4 x 2 x 2 = 16` allocation cells per cycle. For example, a participant assigned to order `O4` receives:
+These four orders are crossed with reliability pattern and key mapping, giving `4 x 2 x 2 = 16` allocation cells per cycle. The cycle is intentionally not shuffled: participant numbers advance through block order first, then reliability pattern, then key mapping. For example, a participant assigned to order `O4` receives:
 
 ```text
 CAL_LP -> A_LP -> M_HP -> M_LP -> A_HP
 ```
 
 Within each 16-participant cycle, there are 4 participants per Latin-square order, 8 per reliability pattern, 8 per key mapping, and 1 per full `order x reliability pattern x key mapping` cell.
+
+The 16-participant cycle is:
+
+| Participant | Order | Reliability pattern | Key mapping |
+| ---: | --- | --- | --- |
+| `1` | `O1` | `HP95_LP65` | standard |
+| `2` | `O1` | `HP95_LP65` | flipped |
+| `3` | `O1` | `HP65_LP95` | standard |
+| `4` | `O1` | `HP65_LP95` | flipped |
+| `5` | `O2` | `HP95_LP65` | standard |
+| `6` | `O2` | `HP95_LP65` | flipped |
+| `7` | `O2` | `HP65_LP95` | standard |
+| `8` | `O2` | `HP65_LP95` | flipped |
+| `9` | `O3` | `HP95_LP65` | standard |
+| `10` | `O3` | `HP95_LP65` | flipped |
+| `11` | `O3` | `HP65_LP95` | standard |
+| `12` | `O3` | `HP65_LP95` | flipped |
+| `13` | `O4` | `HP95_LP65` | standard |
+| `14` | `O4` | `HP95_LP65` | flipped |
+| `15` | `O4` | `HP65_LP95` | standard |
+| `16` | `O4` | `HP65_LP95` | flipped |
 
 For the planned sample of `N = 96`, the 16-participant cycle repeats six times. This gives 24 participants per Latin-square order, 48 per reliability pattern, 48 per key mapping, and 6 participants per full `order x reliability pattern x key mapping` cell.
 
