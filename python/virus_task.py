@@ -214,9 +214,9 @@ BLOCK_DEFAULTS = {
 BLOCK_INSTRUCTIONS = {
 
     "CALIBRATION": {
-        "title": "CALIBRATION BLOCK",
+        "title": "MANUAL BLOCK",
         "slides": [
-            "You will now complete calibration trials for this response deadline."
+            "You will now complete your first block of trials."
         ],
     },
 
@@ -2150,11 +2150,6 @@ def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
             slides = slides[:1] + [automation_reliability_instruction_slide(reliability_group)] + slides[1:]
 
         if block_cfg is not None:
-            deadline_s = trial_deadline_s_for_block(block_cfg)
-            pressure = block_time_pressure_condition(block_cfg)
-            payload["title"] = (
-                f"{payload['title']} ({pressure}, {format_deadline_s(deadline_s)}s DEADLINE)"
-            )
             slides = [time_pressure_instruction_slide(block_cfg)] + slides
 
         payload["slides"] = slides
