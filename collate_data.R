@@ -5,10 +5,102 @@ rm(list = ls())
 library("dplyr")
 library("readr")
 library("stringr")
-library("tidyverse")
-library("zoo")
-library("patchwork")
+library("purrr")
 
+TRIAL_COLUMNS <- c(
+  "participant_id",
+  "run_timestamp",
+  "key_black",
+  "key_white",
+  "keymap_flip",
+  "block",
+  "block_idx",
+  "condition_deadline_code",
+  "time_pressure_condition",
+  "trial_deadline_s",
+  "automation_reliability_pattern",
+  "automation_reliability_group",
+  "trial",
+  "global_trial",
+  "difficulty_mode",
+  "delta_fixed_mean",
+  "delta_fixed_sd",
+  "delta_stair_realised",
+  "delta_stair_mean",
+  "delta_step_down_used",
+  "delta_step_up_used",
+  "vblack_prop",
+  "n_vblack",
+  "n_vwhite",
+  "auto_on",
+  "aid_accuracy_setting",
+  "aid_transparency_level",
+  "stimulus",
+  "aid_label",
+  "aid_correct",
+  "aid_onset_ms",
+  "aid_onset_ms_rel",
+  "response",
+  "correct",
+  "feedback",
+  "rt_s"
+)
+
+TRIAL_SUMMARY_COLUMNS <- c(
+  "participant_id",
+  "block",
+  "block_idx",
+  "condition_deadline_code",
+  "time_pressure_condition",
+  "automation_reliability_pattern",
+  "automation_reliability_group",
+  "trial_deadline_s",
+  "trial",
+  "vblack_prop",
+  "stimulus",
+  "auto_on",
+  "aid_accuracy_setting",
+  "aid_label",
+  "aid_correct",
+  "response",
+  "rt_s",
+  "correct",
+  "feedback"
+)
+
+POSTBLOCK_COLUMNS <- c(
+  "participant_id",
+  "block",
+  "block_idx",
+  "condition_deadline_code",
+  "time_pressure_condition",
+  "trial_deadline_s",
+  "automation_reliability_pattern",
+  "automation_reliability_group",
+  "question_idx",
+  "question",
+  "left_anchor",
+  "right_anchor",
+  "response",
+  "scale_min",
+  "scale_max"
+)
+
+SLIDER_COLUMNS <- c(
+  "participant_id",
+  "run_timestamp",
+  "block",
+  "block_idx",
+  "condition_deadline_code",
+  "time_pressure_condition",
+  "trial_deadline_s",
+  "automation_reliability_pattern",
+  "automation_reliability_group",
+  "question_idx",
+  "question_key",
+  "question",
+  "response_percent"
+)
 
 # 1) First collate all choice-RT results files ----------------------------
 
@@ -41,13 +133,8 @@ nrow(latest_per_participant)
 dat <- latest_per_participant %>%
   mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
   pull(data) %>%
-  bind_rows()
-
-# Normalise trial index naming across exports.
-if (!"trial_idx" %in% names(dat) && "trial" %in% names(dat)) {
-  dat <- dat %>%
-    mutate(trial_idx = trial)
-}
+  bind_rows() %>%
+  select(all_of(TRIAL_COLUMNS))
 
 # Inspect combined data
 head(dat)
@@ -62,42 +149,8 @@ write_csv(dat, "data/data_virus_all.csv")
 dat <- latest_per_participant %>%
   mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
   pull(data) %>%
-  bind_rows()
-
-if (!"trial" %in% names(dat) && "trial_idx" %in% names(dat)) {
-  dat <- dat %>%
-    mutate(trial = trial_idx)
-}
-
-dat <- dat %>%
-  select(
-    participant_id,
-    block,
-    block_idx,
-    any_of(c(
-      "condition_deadline_code",
-      "time_pressure_condition",
-      "calibration_time_pressure_condition",
-      "calibration_condition_deadline_code",
-      "calibration_trial_deadline_ms",
-      "calibration_trial_deadline_s",
-      "automation_reliability_pattern",
-      "automation_reliability_group",
-      "trial_deadline_ms",
-      "trial_deadline_s"
-    )),
-    trial,
-    vblack_prop,
-    stimulus,
-    auto_on,
-    aid_accuracy_setting,
-    aid_label,
-    aid_correct,
-    response,
-    rt_s,
-    correct,
-    feedback
-  )
+  bind_rows() %>%
+  select(all_of(TRIAL_SUMMARY_COLUMNS))
 
 dat <- data.frame(dat)
 
@@ -141,7 +194,8 @@ print(latest_per_participant %>% select(participant_id, path, mtime))
 dat <- latest_per_participant %>%
   mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
   pull(data) %>%
-  bind_rows()
+  bind_rows() %>%
+  select(all_of(POSTBLOCK_COLUMNS))
 
 # Inspect combined data
 head(dat)
@@ -183,28 +237,8 @@ print(latest_per_participant %>% select(participant_id, path, mtime))
 dat <- latest_per_participant %>%
   mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
   pull(data) %>%
-  bind_rows()
-
-# Normalise slider column names across exports (both legacy and current names).
-if (!"question_key" %in% names(dat) && "slider_key" %in% names(dat)) {
-  dat <- dat %>%
-    mutate(question_key = slider_key)
-}
-
-if (!"slider_key" %in% names(dat) && "question_key" %in% names(dat)) {
-  dat <- dat %>%
-    mutate(slider_key = question_key)
-}
-
-if (!"response_percent" %in% names(dat) && "response" %in% names(dat)) {
-  dat <- dat %>%
-    mutate(response_percent = response)
-}
-
-if (!"response" %in% names(dat) && "response_percent" %in% names(dat)) {
-  dat <- dat %>%
-    mutate(response = response_percent)
-}
+  bind_rows() %>%
+  select(all_of(SLIDER_COLUMNS))
 
 # Inspect combined data
 head(dat)

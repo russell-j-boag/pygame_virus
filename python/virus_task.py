@@ -282,6 +282,24 @@ def trial_deadline_s_for_block(block_cfg):
     return deadline_ms / 1000.0
 
 
+def output_block_metadata(block_cfg, include_reliability=True):
+    metadata = {
+        "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
+        "time_pressure_condition": block_time_pressure_condition(block_cfg) if block_cfg else None,
+        "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
+    }
+    if include_reliability:
+        metadata.update({
+            "automation_reliability_pattern": (
+                block_cfg.get("AUTOMATION_RELIABILITY_PATTERN", "none") if block_cfg else None
+            ),
+            "automation_reliability_group": (
+                block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None
+            ),
+        })
+    return metadata
+
+
 def format_deadline_s(deadline_s) -> str:
     if deadline_s is None:
         return "no deadline"
@@ -983,18 +1001,7 @@ def run_postblock_questionnaire(
             "participant_id": participant_id,
             "block": block_name,
             "block_idx": block_idx,
-            "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
-            "time_pressure_condition": block_time_pressure_condition(block_cfg) if block_cfg else None,
-            "calibration_time_pressure_condition": calibration_time_pressure_condition(block_cfg) if block_cfg else None,
-            "calibration_condition_deadline_code": (
-                block_cfg.get("CALIBRATION_CONDITION_DEADLINE_CODE") if block_cfg else None
-            ),
-            "calibration_trial_deadline_ms": calibration_trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
-            "calibration_trial_deadline_s": calibration_trial_deadline_s_for_block(block_cfg) if block_cfg else None,
-            "automation_reliability_pattern": block_cfg.get("AUTOMATION_RELIABILITY_PATTERN", "none") if block_cfg else None,
-            "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
-            "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
-            "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
+            **output_block_metadata(block_cfg),
             "question_idx": idx,
             "question": item["question"],
             "left_anchor": item["left_anchor"],
@@ -1627,18 +1634,7 @@ def run_postblock_slider_questions(
             "run_timestamp": run_ts,
             "block": block_name,
             "block_idx": block_idx,
-            "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
-            "time_pressure_condition": block_time_pressure_condition(block_cfg) if block_cfg else None,
-            "calibration_time_pressure_condition": calibration_time_pressure_condition(block_cfg) if block_cfg else None,
-            "calibration_condition_deadline_code": (
-                block_cfg.get("CALIBRATION_CONDITION_DEADLINE_CODE") if block_cfg else None
-            ),
-            "calibration_trial_deadline_ms": calibration_trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
-            "calibration_trial_deadline_s": calibration_trial_deadline_s_for_block(block_cfg) if block_cfg else None,
-            "automation_reliability_pattern": block_cfg.get("AUTOMATION_RELIABILITY_PATTERN", "none") if block_cfg else None,
-            "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
-            "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
-            "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
+            **output_block_metadata(block_cfg),
             "question_idx": i,
             "question_key": it["key"],
             "question": it["question"],
@@ -2029,6 +2025,542 @@ def run_participant_number_screen(screen, clock, font) -> Dict[str, Any]:
         draw_text(screen, font, "Continue", label_col, btn_rect.center)
 
         pygame.display.flip()
+
+
+def draw_participant_number_screen_state(screen, font, entry="", active=True, cursor_on=True):
+    prompt = "Enter participant number:"
+
+    base_h = font.get_linesize()
+    gap = int(base_h * 1.2)
+
+    input_w = S(260)
+    input_h = int(base_h * 1.6)
+    btn_w = S(180)
+    btn_h = int(base_h * 1.8)
+
+    cx = WIDTH // 2
+    cy = HEIGHT // 2
+
+    prompt_y = cy - 2 * gap
+    input_rect = pygame.Rect(cx - input_w // 2, cy - input_h // 2, input_w, input_h)
+    btn_rect = pygame.Rect(cx - btn_w // 2, input_rect.bottom + gap, btn_w, btn_h)
+
+    screen.fill(BG_INSTRUCTIONS)
+    draw_text(screen, font, prompt, WHITE, (cx, prompt_y))
+
+    border_col = WHITE if active else (140, 140, 140)
+    pygame.draw.rect(screen, border_col, input_rect, max(1, S(2)))
+
+    show = entry
+    if active and cursor_on:
+        show = entry + "|"
+
+    pad_x = S(10)
+    text_surf = font.render(show, True, WHITE)
+    text_pos = (input_rect.left + pad_x, input_rect.centery - text_surf.get_height() // 2)
+    screen.blit(text_surf, text_pos)
+
+    enabled = entry.isdigit() and len(entry) > 0
+    if enabled:
+        pygame.draw.rect(screen, (50, 50, 50), btn_rect, 0)
+        pygame.draw.rect(screen, WHITE, btn_rect, max(1, S(3)))
+        label_col = WHITE
+    else:
+        pygame.draw.rect(screen, (35, 35, 35), btn_rect, 0)
+        pygame.draw.rect(screen, (110, 110, 110), btn_rect, max(1, S(2)))
+        label_col = (140, 140, 140)
+
+    draw_text(screen, font, "Continue", label_col, btn_rect.center)
+    return {"input_rect": input_rect, "button_rect": btn_rect}
+
+
+def draw_main_instruction_screen_state(
+    screen,
+    font_title,
+    font_body,
+    font_body_bold,
+    key_black_name: str,
+    key_white_name: str,
+    button_enabled=True,
+):
+    title = "VIRUS DETECTION TASK"
+
+    intro = (
+        "As a reminder, we have identified two dangerous viruses. Unfortunately, the two strains are "
+        "difficult to tell apart. Both are speckled BLACK and WHITE. The only difference "
+        "visually is that one strain tends to have a little more BLACK, and the other "
+        "tends to have a little more WHITE. For simplicity, we will call them V-BLACK and V-WHITE. "
+        "You'll be shown a similar number of V-BLACK and V-WHITE samples. \n"
+        "Your job is to evaluate the following samples to determine which virus is present.\n"
+    )
+
+    press1 = f"Press {key_black_name} if the sample looks more BLACK overall (V-BLACK)"
+    press2 = f"Press {key_white_name} if the sample looks more WHITE overall (V-WHITE)"
+    speed = "Try to respond as quickly and accurately as possible\n"
+
+    content_x = S(120)
+    content_w = WIDTH - S(240)
+
+    line_spacing = S(10)
+    blank_spacing = S(30)
+
+    gap_title_to_body = S(30)
+    gap_between_blocks = S(12)
+    gap_before_speed = S(30)
+    gap_body_to_button = S(40)
+
+    btn_w = S(220)
+    btn_h = S(64)
+    btn_rect = pygame.Rect(WIDTH // 2 - btn_w // 2, 0, btn_w, btn_h)
+
+    title_h = font_title.get_height()
+    intro_h = _measure_wrapped_height(intro, font_body, content_w, line_spacing, blank_spacing)
+    press1_h = _measure_wrapped_height(press1, font_body_bold, content_w, line_spacing, blank_spacing)
+    press2_h = _measure_wrapped_height(press2, font_body_bold, content_w, line_spacing, blank_spacing)
+    speed_h = _measure_wrapped_height(speed, font_body, content_w, line_spacing, blank_spacing)
+
+    total_h = (
+        title_h
+        + gap_title_to_body
+        + intro_h
+        + gap_between_blocks + press1_h
+        + gap_between_blocks + press2_h
+        + gap_before_speed + speed_h
+        + gap_body_to_button
+        + btn_h
+    )
+
+    start_y = HEIGHT // 2 - total_h // 2
+    btn_rect.y = start_y + total_h - btn_h
+
+    screen.fill(BG_INSTRUCTIONS)
+
+    y = start_y
+    title_img = font_title.render(title, True, WHITE)
+    screen.blit(title_img, (WIDTH // 2 - title_img.get_width() // 2, y))
+
+    body_rect = (content_x, 0, content_w, HEIGHT)
+
+    y += title_h + gap_title_to_body
+    y = _draw_wrapped_at(screen, intro, font_body, WHITE, body_rect, y, line_spacing, blank_spacing)
+    y += gap_between_blocks
+    y = _draw_wrapped_at(screen, press1, font_body_bold, WHITE, body_rect, y, line_spacing, blank_spacing)
+    y += gap_between_blocks
+    y = _draw_wrapped_at(screen, press2, font_body_bold, WHITE, body_rect, y, line_spacing, blank_spacing)
+    y += gap_before_speed
+    _draw_wrapped_at(screen, speed, font_body, WHITE, body_rect, y, line_spacing, blank_spacing)
+
+    draw_button(screen, btn_rect, "Continue", font_body, enabled=button_enabled)
+    return {"button_rect": btn_rect}
+
+
+def draw_block_instruction_slide_state(
+    screen,
+    font_title,
+    font_body,
+    block_name: str,
+    block_cfg=None,
+    slide_idx=0,
+    button_enabled=True,
+):
+    payload = get_block_instruction_payload(block_name, block_cfg=block_cfg)
+    title = payload["title"]
+    slides = payload["slides"]
+    body = slides[slide_idx]
+
+    btn_w = S(220)
+    btn_h = S(64)
+    btn_rect = pygame.Rect(WIDTH // 2 - btn_w // 2, 0, btn_w, btn_h)
+
+    content_x = S(120)
+    content_w = WIDTH - S(240)
+
+    line_spacing = S(10)
+    blank_spacing = S(30)
+
+    gap_title_to_body = S(26)
+    gap_body_to_button = S(32)
+
+    title_h = font_title.get_height() if slide_idx == 0 else 0
+    body_h = _measure_wrapped_height(body, font_body, content_w, line_spacing, blank_spacing)
+
+    total_h = title_h + gap_title_to_body + body_h + gap_body_to_button + btn_h
+    start_y = HEIGHT // 2 - total_h // 2
+
+    y = start_y
+    if slide_idx == 0:
+        y += title_h + gap_title_to_body
+
+    button_y = y + body_h + gap_body_to_button
+    btn_rect.y = int(button_y)
+
+    screen.fill(BG_INSTRUCTIONS)
+
+    y_draw = start_y
+    if slide_idx == 0:
+        title_img = font_title.render(title, True, WHITE)
+        screen.blit(title_img, (WIDTH // 2 - title_img.get_width() // 2, y_draw))
+        y_draw += title_h + gap_title_to_body
+
+    body_rect = (content_x, 0, content_w, HEIGHT)
+    _draw_wrapped_at(
+        screen,
+        body,
+        font_body,
+        WHITE,
+        body_rect,
+        y_draw,
+        line_spacing=line_spacing,
+        blank_spacing=blank_spacing,
+    )
+
+    draw_button(screen, btn_rect, "Continue", font_body, enabled=button_enabled)
+    return {"button_rect": btn_rect}
+
+
+def draw_begin_block_screen_state(screen, font_body, block_cfg):
+    screen.fill(BG_INSTRUCTIONS)
+    draw_center_lines(
+        screen,
+        [block_title(block_cfg["name"], block_cfg=block_cfg), "Press any key to begin"],
+        font_body,
+        WHITE,
+        rect=(0, 0, WIDTH, HEIGHT),
+        line_spacing=S(14),
+        vert_center=True,
+    )
+
+
+def draw_fixation_screen_state(screen):
+    screen.fill(BG)
+    draw_fixation_cross(
+        screen,
+        center=(WIDTH // 2, HEIGHT // 2),
+        size=FIX_SIZE,
+        color=FIX_COLOR,
+        thickness=FIX_THICKNESS,
+    )
+
+
+def draw_feedback_screen_state(
+    screen,
+    font,
+    msg,
+    bg_color=BG,
+    text_color=WHITE,
+    prompt_text="Press any key to continue",
+    prompt_font=None,
+    prompt_color=WHITE,
+):
+    if prompt_font is None:
+        prompt_font = font
+
+    screen.fill(bg_color)
+
+    img = font.render(msg, True, text_color)
+    screen.blit(
+        img,
+        (WIDTH // 2 - img.get_width() // 2, HEIGHT // 2 - img.get_height() // 2),
+    )
+
+    pimg = prompt_font.render(prompt_text, True, prompt_color)
+    screen.blit(
+        pimg,
+        (WIDTH // 2 - pimg.get_width() // 2, HEIGHT // 2 + img.get_height() // 2 + S(16)),
+    )
+
+
+def draw_block_complete_screen_state(screen, font_body, block_name, block_cfg=None):
+    screen.fill(BG_INSTRUCTIONS)
+    draw_center_lines(
+        screen,
+        [
+            f"{block_title(block_name, block_cfg=block_cfg)} COMPLETE",
+            "Press any key to continue",
+        ],
+        font_body,
+        WHITE,
+        rect=(0, 0, WIDTH, HEIGHT),
+        line_spacing=S(14),
+        vert_center=True,
+    )
+
+
+def draw_questionnaire_intro_screen_state(screen, font_title, font_body):
+    title = "AUTOMATED DECISION AID"
+    body = (
+        "The following questionnaire relates to your trust in the Automated Decision Aid. "
+        "For each item, the scale ranges from strongly disagree to strongly agree. "
+        "Please indicate how much you agree or disagree with the following statements "
+        "by choosing the appropriate response on the scale."
+    )
+    prompt = "Press any key to continue"
+
+    screen.fill(BG_INSTRUCTIONS)
+
+    content_width = WIDTH - S(240)
+    content_x = S(120)
+
+    line_spacing = S(10)
+    blank_spacing = S(24)
+
+    body_items = layout_rich_text_blocks(body, font_body, max_width=content_width)
+    body_height = measure_rich_block_height(
+        body_items,
+        font_body,
+        line_spacing=line_spacing,
+        blank_spacing=blank_spacing,
+    )
+
+    title_height = font_title.get_height()
+    prompt_height = font_body.get_height()
+    block_gap = S(30)
+
+    total_height = title_height + block_gap + body_height + block_gap + prompt_height
+    start_y = HEIGHT // 2 - total_height // 2
+
+    title_img = font_title.render(title, True, WHITE)
+    screen.blit(title_img, (WIDTH // 2 - title_img.get_width() // 2, start_y))
+
+    body_y = start_y + title_height + block_gap
+    draw_rich_text_centered(
+        surface=screen,
+        text=body,
+        font=font_body,
+        base_color=WHITE,
+        rect=(content_x, body_y, content_width, body_height),
+        line_spacing=line_spacing,
+        blank_spacing=blank_spacing,
+        vert_center=False,
+    )
+
+    prompt_y = body_y + body_height + block_gap
+    draw_text(screen, font_body, prompt, WHITE, (WIDTH // 2, prompt_y + prompt_height // 2))
+
+
+def draw_likert_question_screen_state(
+    screen,
+    font,
+    item,
+    scale_min=QUESTION_SCALE_MIN,
+    scale_max=QUESTION_SCALE_MAX,
+    current_idx=None,
+    slider_moved=False,
+    button_enabled=False,
+):
+    question = item["question"]
+    valid_values = list(range(scale_min, scale_max + 1))
+    anchor_labels = [
+        "Strongly disagree",
+        "Disagree",
+        "Neither agree nor disagree",
+        "Agree",
+        "Strongly agree",
+    ]
+
+    if current_idx is None:
+        current_idx = len(valid_values) // 2
+    current_idx = _clamp_int(current_idx, 0, len(valid_values) - 1)
+
+    content_w = WIDTH - S(240)
+    content_x = S(120)
+    cx = WIDTH // 2
+
+    track_w = min(S(760), content_w)
+    track_h = max(2, S(8))
+    knob_r = max(6, S(12))
+
+    track_x = cx - track_w // 2
+    track_y = HEIGHT // 2
+
+    if len(valid_values) == 1:
+        tick_xs = [track_x + track_w // 2]
+    else:
+        tick_xs = [
+            track_x + int(round(i * track_w / (len(valid_values) - 1)))
+            for i in range(len(valid_values))
+        ]
+
+    btn_w = S(220)
+    btn_h = S(64)
+    btn_rect = pygame.Rect(cx - btn_w // 2, track_y + S(170), btn_w, btn_h)
+    q_rect = (content_x, track_y - S(220), content_w, S(180))
+
+    screen.fill(BG_INSTRUCTIONS)
+
+    draw_rich_text_centered(
+        surface=screen,
+        text=question,
+        font=font,
+        base_color=WHITE,
+        rect=q_rect,
+        line_spacing=S(10),
+        blank_spacing=S(18),
+        vert_center=True,
+    )
+
+    current_label = anchor_labels[current_idx]
+    label_font = load_font(FONT_LIGHT, max(10, S(FONT_BODY_BASE)))
+    draw_rich_text_centered(
+        surface=screen,
+        text=current_label,
+        font=label_font,
+        base_color=WHITE,
+        rect=(content_x, track_y - S(85), content_w, S(40)),
+        line_spacing=S(4),
+        blank_spacing=S(8),
+        vert_center=True,
+    )
+
+    track_rect = pygame.Rect(track_x, track_y, track_w, track_h)
+    pygame.draw.rect(screen, LIGHT_GREY, track_rect, border_radius=max(1, S(6)))
+
+    knob_x = tick_xs[current_idx]
+    fill_w = knob_x - track_x
+    if fill_w > 0:
+        fill_rect = pygame.Rect(track_x, track_y, fill_w, track_h)
+        pygame.draw.rect(screen, WHITE, fill_rect, border_radius=max(1, S(6)))
+
+    for tx in tick_xs:
+        pygame.draw.line(
+            screen,
+            WHITE,
+            (tx, track_y - S(10)),
+            (tx, track_y + track_h + S(10)),
+            max(1, S(2)),
+        )
+
+    knob_y = track_y + track_h // 2
+    pygame.draw.circle(screen, WHITE, (knob_x, knob_y), knob_r)
+
+    end_label_font = load_font(FONT_LIGHT, max(9, S(FONT_SMALL_BASE)))
+    left_img = end_label_font.render(anchor_labels[0], True, WHITE)
+    right_img = end_label_font.render(anchor_labels[-1], True, WHITE)
+    labels_y = track_y + S(26)
+    screen.blit(left_img, (track_x, labels_y))
+    screen.blit(right_img, (track_x + track_w - right_img.get_width(), labels_y))
+
+    hint_y = track_y + S(120)
+    draw_text(screen, font, "Drag the slider to respond", WHITE, (cx, hint_y))
+
+    draw_button(screen, btn_rect, "Continue", font, enabled=slider_moved and button_enabled)
+    return {"button_rect": btn_rect}
+
+
+def draw_slider_question_screen_state(
+    screen,
+    font_title,
+    font_body,
+    question: str,
+    initial_value: int = 50,
+    anchors=None,
+    slider_moved=False,
+    button_enabled=False,
+):
+    if anchors is None:
+        anchors = [
+            (0, "All incorrect"),
+            (50, "Half correct and half incorrect"),
+            (100, "All correct"),
+        ]
+
+    value = _clamp_int(int(initial_value), 0, 100)
+
+    content_w = WIDTH - S(240)
+    content_x = S(120)
+
+    track_w = min(S(760), content_w)
+    track_h = max(2, S(8))
+    knob_r = max(6, S(12))
+
+    cx = WIDTH // 2
+    track_x = cx - track_w // 2
+    track_y = HEIGHT // 2
+    track_rect = pygame.Rect(track_x, track_y, track_w, track_h)
+
+    btn_w = S(220)
+    btn_h = S(64)
+    btn_rect = pygame.Rect(cx - btn_w // 2, track_y + S(240), btn_w, btn_h)
+    q_rect = (content_x, track_y - S(240), content_w, S(180))
+
+    def value_to_x(v):
+        return track_x + int(round((v / 100.0) * track_w))
+
+    tick_positions = [value_to_x(v) for v, _ in anchors]
+
+    screen.fill(BG_INSTRUCTIONS)
+
+    draw_rich_text_centered(
+        surface=screen,
+        text=question,
+        font=font_body,
+        base_color=WHITE,
+        rect=q_rect,
+        line_spacing=S(10),
+        blank_spacing=S(18),
+        vert_center=True,
+    )
+
+    val_txt = f"{value}%"
+    val_img = font_title.render(val_txt, True, WHITE)
+    screen.blit(val_img, (cx - val_img.get_width() // 2, track_y - S(80)))
+
+    pygame.draw.rect(screen, LIGHT_GREY, track_rect, border_radius=max(1, S(6)))
+
+    fill_w = value_to_x(value) - track_x
+    if fill_w > 0:
+        fill_rect = pygame.Rect(track_x, track_y, fill_w, track_h)
+        pygame.draw.rect(screen, WHITE, fill_rect, border_radius=max(1, S(6)))
+
+    for tx in tick_positions:
+        pygame.draw.line(
+            screen,
+            WHITE,
+            (tx, track_y - S(10)),
+            (tx, track_y + track_h + S(10)),
+            max(1, S(2)),
+        )
+
+    knob_x = value_to_x(value)
+    knob_y = track_y + track_h // 2
+    pygame.draw.circle(screen, WHITE, (knob_x, knob_y), knob_r)
+
+    label_font = load_font(FONT_LIGHT, max(8, S(FONT_SMALL_BASE)))
+    label_y = track_y + S(34)
+    for (_val, text), tx in zip(anchors, tick_positions):
+        draw_rich_text_centered(
+            surface=screen,
+            text=text,
+            font=label_font,
+            base_color=WHITE,
+            rect=(tx - S(140), label_y, S(280), S(110)),
+            line_spacing=S(4),
+            blank_spacing=S(8),
+            vert_center=False,
+        )
+
+    hint_y = track_y + S(170)
+    draw_text(screen, font_body, "Drag the slider to respond", WHITE, (cx, hint_y))
+
+    draw_button(screen, btn_rect, "Continue", font_body, enabled=slider_moved and button_enabled)
+    return {"button_rect": btn_rect}
+
+
+def draw_final_complete_screen_state(screen, font_body, perf_score=80.0):
+    screen.fill(BG_INSTRUCTIONS)
+    draw_center_lines(
+        screen,
+        [
+            "EXPERIMENT COMPLETE",
+            f"Performance score: {perf_score:.1f}% correct",
+            "Please alert the experimenter now",
+        ],
+        font_body,
+        WHITE,
+        rect=(0, 0, WIDTH, HEIGHT),
+        line_spacing=S(14),
+        vert_center=True,
+    )
 
 
 def run_instructions(screen, font_title, font_body, font_body_bold, clock,
@@ -2941,16 +3473,7 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "keymap_flip": keymap["flip"],
         "block": block_name,
         "block_idx": block_idx,
-        "condition_deadline_code": block_condition_deadline_code(block_cfg),
-        "time_pressure_condition": block_time_pressure_condition(block_cfg),
-        "calibration_time_pressure_condition": calibration_time_pressure_condition(block_cfg),
-        "calibration_condition_deadline_code": block_cfg.get("CALIBRATION_CONDITION_DEADLINE_CODE"),
-        "calibration_trial_deadline_ms": calibration_trial_deadline_ms_for_block(block_cfg),
-        "calibration_trial_deadline_s": calibration_trial_deadline_s_for_block(block_cfg),
-        "automation_reliability_pattern": block_cfg.get("AUTOMATION_RELIABILITY_PATTERN", "none"),
-        "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none"),
-        "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg),
-        "trial_deadline_s": trial_deadline_s_for_block(block_cfg),
+        **output_block_metadata(block_cfg),
         "trial": trial_number,
         "global_trial": global_trial_index,
         "difficulty_mode": difficulty_mode,
@@ -2975,7 +3498,6 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "correct": trial_data["correct"] if response in ("BLACK", "WHITE") else None,
         "feedback": feedback_msg if block_cfg["TRIAL_FEEDBACK_ON"] else None,
         "rt_s": (rt_ms / 1000.0) if rt_ms is not None else None,
-        "rt_ms": rt_ms,
     }
 
 
@@ -3201,14 +3723,7 @@ def write_delta_summary(output_dir, participant_id, run_timestamp, block_cfg, bl
         "run_timestamp": run_timestamp,
         "block": block_name,
         "block_idx": block_idx,
-        "condition_deadline_code": block_condition_deadline_code(block_cfg),
-        "time_pressure_condition": block_time_pressure_condition(block_cfg),
-        "calibration_time_pressure_condition": calibration_time_pressure_condition(block_cfg),
-        "calibration_condition_deadline_code": block_cfg.get("CALIBRATION_CONDITION_DEADLINE_CODE"),
-        "calibration_trial_deadline_ms": calibration_trial_deadline_ms_for_block(block_cfg),
-        "calibration_trial_deadline_s": calibration_trial_deadline_s_for_block(block_cfg),
-        "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg),
-        "trial_deadline_s": trial_deadline_s_for_block(block_cfg),
+        **output_block_metadata(block_cfg, include_reliability=False),
         "n_trials_total": len(deltas_realised),
         "burnin_trials_excluded": burn,
         "n_trials_post_burnin": len(deltas_post_burnin),

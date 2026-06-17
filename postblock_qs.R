@@ -9,65 +9,17 @@ library("patchwork")
 library("ggplot2")
 library("forcats")
 
-BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION", "AUTOMATION1", "AUTOMATION2")
-BLOCK_LABELS <- c("Calibration", "Manual", "Automation", "Auto95", "Auto65")
-# Current task deadlines are 2s (HP) and 4s (LP). No-deadline and 3s/6s labels
-# are retained only for older exports.
+BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION")
+BLOCK_LABELS <- c("Calibration", "Manual", "Automation")
 BLOCK_DEADLINE_LEVELS <- c(
   "Calibration 2s",
   "Calibration 4s",
   "Manual 2s",
   "Manual 4s",
   "Automation 2s",
-  "Automation 4s",
-  "Auto95 2s",
-  "Auto95 4s",
-  "Auto65 2s",
-  "Auto65 4s",
-  "Manual",
-  "Automation",
-  "Auto95",
-  "Auto65",
-  "Calibration",
-  "Manual 3s",
-  "Manual 6s",
-  "Automation 3s",
-  "Automation 6s",
-  "Auto95 3s",
-  "Auto95 6s",
-  "Auto65 3s",
-  "Auto65 6s"
+  "Automation 4s"
 )
 RELIABILITY_LEVELS <- c("high", "low", "none")
-
-ensure_deadline_columns <- function(data) {
-  if (!"trial_deadline_s" %in% names(data)) {
-    data$trial_deadline_s <- NA_real_
-  }
-  if (!"automation_reliability_group" %in% names(data)) {
-    data$automation_reliability_group <- NA_character_
-  }
-  if (!"aid_accuracy_setting" %in% names(data)) {
-    data$aid_accuracy_setting <- NA_real_
-  }
-  data
-}
-
-derive_reliability_group <- function(data) {
-  data %>%
-    mutate(
-      automation_reliability_group = case_when(
-        !is.na(automation_reliability_group) & automation_reliability_group != "" ~
-          as.character(automation_reliability_group),
-        as.character(block) == "AUTOMATION1" ~ "high",
-        as.character(block) == "AUTOMATION2" ~ "low",
-        suppressWarnings(as.numeric(aid_accuracy_setting)) >= 0.90 ~ "high",
-        suppressWarnings(as.numeric(aid_accuracy_setting)) < 0.90 &
-          !is.na(suppressWarnings(as.numeric(aid_accuracy_setting))) ~ "low",
-        TRUE ~ "none"
-      )
-    )
-}
 
 factor_reliability_group <- function(x) {
   factor(x, levels = RELIABILITY_LEVELS)
@@ -97,9 +49,6 @@ make_block_deadline <- function(block, deadline_s) {
 # Load data
 # ------------------
 dat <- read_csv("data/data_virus_postblock_all.csv", show_col_types = FALSE)
-dat <- dat %>%
-  ensure_deadline_columns() %>%
-  derive_reliability_group()
 str(dat)
 
 # ------------------
@@ -202,9 +151,6 @@ ggsave(
 # Load slider data
 # ------------------
 dat_slider_raw <- read_csv("data/data_virus_sliders_all.csv", show_col_types = FALSE)
-dat_slider_raw <- dat_slider_raw %>%
-  ensure_deadline_columns() %>%
-  derive_reliability_group()
 str(dat_slider_raw)
 
 # ------------------

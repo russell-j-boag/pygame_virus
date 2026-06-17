@@ -99,15 +99,12 @@ The main trial and post-block output files include fields that identify the desi
 | `block` | `CALIBRATION`, `MANUAL`, or `AUTOMATION` |
 | `condition_deadline_code` | `CAL_LP`, `M_HP`, `A_HP`, `M_LP`, or `A_LP` |
 | `time_pressure_condition` | `HP` or `LP` |
-| `calibration_time_pressure_condition` | Calibration pressure, always `LP` |
-| `calibration_condition_deadline_code` | Calibration code, always `CAL_LP` |
-| `calibration_trial_deadline_ms` | Calibration deadline in milliseconds, always `4000` |
-| `calibration_trial_deadline_s` | Calibration deadline in seconds, always `4.0` |
 | `automation_reliability_pattern` | `HP95_LP65`, `HP65_LP95`, `single_block`, or `none` |
 | `automation_reliability_group` | `high`, `low`, or `none` |
 | `aid_accuracy_setting` | `0.95`, `0.65`, or blank for manual/calibration |
-| `trial_deadline_ms` | Response deadline in milliseconds |
 | `trial_deadline_s` | Response deadline in seconds |
+
+Seconds are the canonical exported timing unit for deadlines and response times. The fixed LP calibration metadata (`CAL_LP`, 4 s) is part of the task design and is not repeated as separate calibration columns in every row.
 
 Single-block calibration runs must use the 4 s LP calibration deadline. The task will stop with an error if a 2 s HP calibration deadline is requested. Single-block automation runs require an explicit reliability group, for example:
 

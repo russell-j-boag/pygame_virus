@@ -67,39 +67,6 @@ factor_deadline <- function(x) {
   factor(deadline_chr, levels = DEADLINE_LEVELS)
 }
 
-ensure_deadline_columns <- function(data) {
-  if (!"condition_deadline_code" %in% names(data)) {
-    data$condition_deadline_code <- NA_character_
-  }
-  if (!"automation_reliability_group" %in% names(data)) {
-    data$automation_reliability_group <- NA_character_
-  }
-  if (!"trial_deadline_ms" %in% names(data)) {
-    data$trial_deadline_ms <- NA_real_
-  }
-  if (!"trial_deadline_s" %in% names(data)) {
-    data$trial_deadline_s <- NA_real_
-  }
-  if (!"aid_accuracy_setting" %in% names(data)) {
-    data$aid_accuracy_setting <- NA_real_
-  }
-  data
-}
-
-derive_reliability_group <- function(data) {
-  data %>%
-    mutate(
-      automation_reliability_group = case_when(
-        !is.na(automation_reliability_group) & automation_reliability_group != "" ~
-          as.character(automation_reliability_group),
-        suppressWarnings(as.numeric(aid_accuracy_setting)) >= 0.90 ~ "high",
-        suppressWarnings(as.numeric(aid_accuracy_setting)) < 0.90 &
-          !is.na(suppressWarnings(as.numeric(aid_accuracy_setting))) ~ "low",
-        TRUE ~ "none"
-      )
-    )
-}
-
 get_axis_limits <- function(y, se = NULL, pad_prop = 0.06) {
   if (is.null(se)) {
     lo <- min(y, na.rm = TRUE)
@@ -162,16 +129,16 @@ restrict_calibration_trials <- function(
   
   data %>%
     mutate(
-      .trial_idx_num = suppressWarnings(as.integer(!!trial_sym))
+      .trial_num = suppressWarnings(as.integer(!!trial_sym))
     ) %>%
     group_by(!!participant_sym, !!block_sym) %>%
-    arrange(.trial_idx_num, .by_group = TRUE) %>%
+    arrange(.trial_num, .by_group = TRUE) %>%
     filter(
       as.character(!!block_sym) != calibration_label |
         row_number() > pmax(dplyr::n() - last_n, 0)
     ) %>%
     ungroup() %>%
-    select(-.trial_idx_num)
+    select(-.trial_num)
 }
 
 summarise_morey_mean <- function(
@@ -275,16 +242,6 @@ trial_dat_raw <- read_csv("data/data_virus_all.csv", show_col_types = FALSE)
 slider_dat_raw <- read_csv("data/data_virus_sliders_all.csv", show_col_types = FALSE)
 postblock_dat_raw <- read_csv("data/data_virus_postblock_all.csv", show_col_types = FALSE)
 
-trial_dat_raw <- trial_dat_raw %>%
-  ensure_deadline_columns() %>%
-  derive_reliability_group()
-slider_dat_raw <- slider_dat_raw %>%
-  ensure_deadline_columns() %>%
-  derive_reliability_group()
-postblock_dat_raw <- postblock_dat_raw %>%
-  ensure_deadline_columns() %>%
-  derive_reliability_group()
-
 if (!dir.exists(PLOT_DIR)) dir.create(PLOT_DIR, recursive = TRUE)
 
 dat <- trial_dat_raw %>%
@@ -332,7 +289,7 @@ subj_acc <- dat %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, facet_group, x_group) %>%
   summarise(
@@ -366,7 +323,7 @@ make_rt_summary <- function(data, correct_value, rt_mode = "mean", rt_probs = c(
     restrict_calibration_trials(
       participant_col = participant_id,
       block_col = block,
-      trial_col = trial_idx
+      trial_col = trial
     )
   
   if (rt_mode == "mean") {
@@ -569,7 +526,7 @@ dat_block_acc <- dat_block %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   )
 
 subj_block_acc_summary <- dat_block_acc %>%
@@ -584,7 +541,7 @@ subj_block_rt_summary <- dat_block %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, block_simple) %>%
   summarise(
@@ -617,7 +574,7 @@ subj_slider_block_summary <- slider_dat_raw %>%
   mutate(
     block_simple = factor_display_block(block),
     rating_type = factor(
-      slider_key,
+      question_key,
       levels = c("perc_self_correct", "perc_auto_correct"),
       labels = c("Self-rated own accuracy", "Self-rated aid accuracy")
     )
@@ -626,11 +583,11 @@ subj_slider_block_summary <- slider_dat_raw %>%
     !is.na(participant_id),
     !is.na(block_simple),
     !is.na(rating_type),
-    !is.na(response)
+    !is.na(response_percent)
   ) %>%
   group_by(participant_id, rating_type, block_simple) %>%
   summarise(
-    rated_acc = mean(response, na.rm = TRUE) / 100,
+    rated_acc = mean(response_percent, na.rm = TRUE) / 100,
     .groups = "drop"
   )
 
@@ -825,7 +782,7 @@ subj_stim_acc_summary <- dat_stim %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, stimulus, block_simple) %>%
   summarise(
@@ -838,7 +795,7 @@ subj_stim_rt_summary <- dat_stim %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, stimulus, block_simple) %>%
   summarise(
@@ -975,7 +932,7 @@ id_acc_summary <- dat_id %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, block_simple) %>%
   summarise(
@@ -988,7 +945,7 @@ id_rt_summary <- dat_id %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, block_simple) %>%
   summarise(
@@ -1104,7 +1061,7 @@ calib_manual_acc <- dat %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, block_simple) %>%
   summarise(
@@ -1447,16 +1404,16 @@ self_rated_aid_acc <- slider_dat_raw %>%
     participant_id = as.character(participant_id),
     block = as.character(block),
     automation_reliability_group = as.character(automation_reliability_group),
-    response = as.numeric(response)
+    response_percent = as.numeric(response_percent)
   ) %>%
   filter(
     block %in% names(AUTO_BLOCK_LABELS),
-    slider_key == "perc_auto_correct",
-    !is.na(response)
+    question_key == "perc_auto_correct",
+    !is.na(response_percent)
   ) %>%
   group_by(participant_id, block, automation_reliability_group) %>%
   summarise(
-    self_rated_aid_accuracy = mean(response, na.rm = TRUE) / 100,
+    self_rated_aid_accuracy = mean(response_percent, na.rm = TRUE) / 100,
     .groups = "drop"
   ) %>%
   mutate(
