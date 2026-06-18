@@ -42,9 +42,17 @@ run_task <- function(
 ) {
   
   valid_blocks <- c(
+    "CAL",
+    "MAN/PRE_AUTOMATION",
+    "REL_DROP",
+    "MAN/POST_AUTOMATION",
     "CALIBRATION",
     "MANUAL",
-    "AUTOMATION"
+    "AUTOMATION",
+    "PRE_AUTOMATION",
+    "POST_AUTOMATION",
+    "MAN_PRE",
+    "MAN_POST"
   )
   
   # Validate block if provided

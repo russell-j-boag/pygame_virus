@@ -11,6 +11,7 @@ run_instructions()
 run_task()
 
 # # You can also run one block at a time by selecting a specific block:
-# run_task(block = "CALIBRATION")
-# run_task(block = "MANUAL")
-# run_task(block = "AUTOMATION")
+# run_task(block = "CAL")
+# run_task(block = "MAN/PRE_AUTOMATION")
+# run_task(block = "REL_DROP")
+# run_task(block = "MAN/POST_AUTOMATION")

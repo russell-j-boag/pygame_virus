@@ -39,8 +39,21 @@ MANUAL_BLOCK_N_TRIALS = RELIABILITY_PHASE_SIZE
 MANUAL_SEGMENT_N_TRIALS = MANUAL_BLOCK_N_TRIALS // 2
 MANUAL_SEGMENT_LABELS = ("PRE_AUTOMATION", "POST_AUTOMATION")
 POST_CALIBRATION_N_TRIALS = AIDED_BLOCK_N_TRIALS + MANUAL_BLOCK_N_TRIALS
-CALIBRATION_TRIAL_DEADLINE_MS = 10000
-POST_CALIBRATION_TRIAL_DEADLINE_MS = 6000
+CALIBRATION_TRIAL_DEADLINE_MS = 5000
+POST_CALIBRATION_TRIAL_DEADLINE_MS = 5000
+BLOCK_SELECTOR_ALIASES = {
+    "CAL": ("CALIBRATION", None),
+    "CALIBRATION": ("CALIBRATION", None),
+    "MAN/PRE_AUTOMATION": ("MANUAL", "PRE_AUTOMATION"),
+    "MAN_PRE": ("MANUAL", "PRE_AUTOMATION"),
+    "PRE_AUTOMATION": ("MANUAL", "PRE_AUTOMATION"),
+    "REL_DROP": ("AUTOMATION", None),
+    "AUTOMATION": ("AUTOMATION", None),
+    "MAN/POST_AUTOMATION": ("MANUAL", "POST_AUTOMATION"),
+    "MAN_POST": ("MANUAL", "POST_AUTOMATION"),
+    "POST_AUTOMATION": ("MANUAL", "POST_AUTOMATION"),
+    "MANUAL": ("MANUAL", "SINGLE_BLOCK"),
+}
 
 if len(CALIBRATION_TARGET_LEVELS) != len(CALIBRATION_TARGET_LABELS):
     raise ValueError("Calibration target levels and labels must have matching lengths.")
@@ -88,6 +101,7 @@ BLOCKS = [
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
         TRIAL_FEEDBACK_ON=True,
+        SHOW_AID_MASKED=True,
         TRIAL_DEADLINE_MS=POST_CALIBRATION_TRIAL_DEADLINE_MS,
         CONDITION_CODE="MAN",
     ),
@@ -127,10 +141,9 @@ BLOCK_DEFAULTS = {
 BLOCK_INSTRUCTIONS = {
 
     "CALIBRATION": {
-        "title": "CALIBRATION BLOCK",
+        "title": "MANUAL BLOCK",
         "slides": [
-            "You will now begin your first block of trials. "
-            "This block calibrates the difficulty of the task for you."
+            "You will now complete your first block of trials."
         ],
     },
 
@@ -138,8 +151,8 @@ BLOCK_INSTRUCTIONS = {
         "title": "MANUAL BLOCK",
         "slides": [
             (
-            "In this block, you will classify each virus sample yourself. "
-            "The automated decision aid will not be available."
+            "In this block, there is no special information shown at the top of the display.\n"
+            "There is simply a string '#####', which you should ignore."
             ),
         ],
     },
@@ -210,22 +223,15 @@ def aid_onset_ms_for_block(block_cfg):
     return block_cfg.get("AID_ONSET_MS")
 
 
-def response_window_instruction_slide(block_cfg) -> str:
-    deadline_s = trial_deadline_s_for_block(block_cfg)
-    deadline_text = format_deadline_s(deadline_s)
-    return (
-        f"In this block, each trial has a {deadline_text}-second response window. "
-        "If you do not respond within this window, the trial will be recorded as too slow. "
-        "Please respond as accurately as possible."
-    )
+def response_instruction_slide() -> str:
+    return "Please respond as quickly and accurately as possible."
 
 
 def automation_reliability_instruction_slide() -> str:
     return (
-        "In the next block, the automated decision aid will not be equally reliable "
-        "throughout the block. Its recommendations may become less reliable and then more reliable "
-        "over time. Please monitor the aid carefully and continue to make the correct "
-        "classification on each trial."
+        "In the next block, the automated decision aid will provide a recommendation "
+        "on each trial. Its recommendations may be correct or incorrect. Please monitor "
+        "the aid carefully and continue to make the correct classification on each trial."
     )
 
 
@@ -2543,8 +2549,10 @@ def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
                 + slides[1:]
             )
 
-        if block_cfg is not None and block_name != "CALIBRATION":
-            slides = [response_window_instruction_slide(block_cfg)] + slides
+        if block_cfg is not None and block_name in ("MANUAL", "AUTOMATION"):
+            slides = [response_instruction_slide()] + slides
+        elif block_cfg is not None and block_name != "CALIBRATION":
+            slides = [response_instruction_slide()] + slides
 
         payload["slides"] = slides
 
@@ -2908,7 +2916,11 @@ def parse_cli_args():
         "--block",
         type=str,
         default=None,
-        help="Run only a selected block. Valid values: CALIBRATION, MANUAL, AUTOMATION",
+        help=(
+            "Run only a selected block. Current values: CAL, MAN/PRE_AUTOMATION, "
+            "REL_DROP, MAN/POST_AUTOMATION. Legacy aliases are also accepted: "
+            "CALIBRATION, MANUAL, AUTOMATION."
+        ),
     )
     args = parser.parse_args()
 
@@ -2918,10 +2930,17 @@ def parse_cli_args():
     return args
   
 
-def select_single_block(block_name: str, blocks_template, participant_id: int):
+def select_single_block(block_selector: str, blocks_template, participant_id: int):
     """
-    Return the single block config matching block_name.
+    Return the single block config matching a current-design block selector.
     """
+    if block_selector not in BLOCK_SELECTOR_ALIASES:
+        available = sorted(BLOCK_SELECTOR_ALIASES)
+        raise ValueError(
+            f"Unknown block selector '{block_selector}'. Available selectors: {available}"
+        )
+
+    block_name, manual_segment = BLOCK_SELECTOR_ALIASES[block_selector]
     matches = [copy_block_config(b) for b in blocks_template if b["name"] == block_name]
 
     if not matches:
@@ -2938,7 +2957,7 @@ def select_single_block(block_name: str, blocks_template, participant_id: int):
 
     block = apply_calibration_target_to_block(matches[0], participant_id)
     if block["name"] == "MANUAL":
-        return [with_manual_segment(block, "SINGLE_BLOCK")]
+        return [with_manual_segment(block, manual_segment)]
     if block["AUTOMATION_ON"]:
         return [apply_dynamic_reliability_to_block(block, participant_id)]
 
@@ -3611,24 +3630,6 @@ def show_block_complete_screen(screen, clock, font_body, block_name, block_cfg=N
     wait_for_keypress(clock, min_show_ms=250)
 
 
-def show_reliability_checkpoint_screen(screen, clock, font_body):
-    screen.fill(BG_INSTRUCTIONS)
-    draw_center_lines(
-        screen,
-        [
-            "SET COMPLETE",
-            "You will answer a few questions before continuing",
-        ],
-        font_body,
-        WHITE,
-        rect=(0, 0, WIDTH, HEIGHT),
-        line_spacing=S(14),
-        vert_center=True,
-    )
-    pygame.display.flip()
-    wait_for_keypress(clock, min_show_ms=250)
-
-
 def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp, block_cfg, output_dir,
                             all_postblock_slider_rows, all_questionnaire_rows, reliability_metadata=None):
     block_name = block_cfg["name"]
@@ -3818,7 +3819,6 @@ def main():
             is_last_trial = t == block_cfg["N_TRIALS"] - 1
             if is_reliability_checkpoint_trial(block_cfg, trial_number):
                 reliability_metadata = dynamic_reliability_metadata_for_trial(block_cfg, trial_number)
-                show_reliability_checkpoint_screen(screen, clock, fonts["body"])
                 run_post_block_measures(
                     screen,
                     clock,

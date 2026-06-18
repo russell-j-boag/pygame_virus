@@ -39,10 +39,10 @@ After calibration, participants complete the first 200 trials of the manual comp
 
 | Code | Mode | Response window | Trials |
 | --- | --- | ---: | ---: |
-| `CAL` | Manual calibration | 10 s | 300 |
-| `MAN` | Manual comparison, pre-automation segment | 6 s | 200 |
-| `REL_DROP` | Aided reliability drop | 6 s | 1200 |
-| `MAN` | Manual comparison, post-automation segment | 6 s | 200 |
+| `CAL` | Manual calibration | 5 s | 300 |
+| `MAN` | Manual comparison, pre-automation segment | 5 s | 200 |
+| `REL_DROP` | Aided reliability drop | 5 s | 1200 |
+| `MAN` | Manual comparison, post-automation segment | 5 s | 200 |
 
 The manual and aided blocks both use the calibration-derived fixed difficulty for the participant. In the aided block, the aid appears with the stimulus, and aid onset is not manipulated.
 
@@ -54,7 +54,7 @@ The aided block uses the reliability sequence `95% -> 70% -> 95%`. Each phase co
 | 2 | 70% | 400 |
 | 3 | 95% | 400 |
 
-Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid's reliability may become less reliable and then more reliable over time, but they are not told the numeric reliability levels.
+Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid's recommendations may be correct or incorrect, but they are not told whether, when, or how the aid's reliability changes over time.
 
 ## Research questions
 
@@ -106,15 +106,16 @@ The main trial and post-block output files include fields that identify the desi
 | `trial_deadline_ms` | Fixed response window in milliseconds |
 | `trial_deadline_s` | Fixed response window in seconds |
 
-Single-block runs can be selected for calibration-only, manual-only, or automation-only checks:
+Single-block runs can be selected for the current task sequence:
 
 ```r
-run_task(block = "CALIBRATION")
-run_task(block = "MANUAL")
-run_task(block = "AUTOMATION")
+run_task(block = "CAL")
+run_task(block = "MAN/PRE_AUTOMATION")
+run_task(block = "REL_DROP")
+run_task(block = "MAN/POST_AUTOMATION")
 ```
 
-In single-block mode, `MANUAL` runs one 200-trial manual segment labelled `SINGLE_BLOCK`.
+Legacy aliases `CALIBRATION`, `MANUAL`, and `AUTOMATION` remain accepted for development checks.
 
 ## Author
 Russell J. Boag
