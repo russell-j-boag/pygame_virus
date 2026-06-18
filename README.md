@@ -13,6 +13,19 @@ Based on Bartlett & McCarley RDC task.
 - Run `0-setup_pygame.R` to install the required versions of python and pygame
 - Use `1-run_virus_task.R` to launch task and pre-task instructions using the helper functions
 
+## Screenshot review deck
+
+Use the `r-pygame` Python interpreter to render static screenshots and assemble a PowerPoint review deck:
+
+```sh
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/capture_instruction_screenshots.py --overwrite
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/capture_virus_task_screenshots.py --overwrite --participant 1
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/build_screenshot_deck.py --overwrite
+```
+
+The generated `instruction_screenshots/`, `virus_task_screenshots/`, and `screenshots_review.pptx` artifacts are local review outputs and are ignored by git.
+The deck builder requires `pandoc` and Pillow.
+
 ## Current task design
 
 This design extends Wanghuan's reliability-drop design by additionally manipulating participants' unaided performance level through calibration. Calibration always occurs first. Participants are assigned deterministically from participant ID to one of two calibration targets:
