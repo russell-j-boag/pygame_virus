@@ -98,7 +98,7 @@ run_task <- function(
   }
   
   # Add deadline argument for blocks with HP/LP pressure variants.
-  # Single-block CALIBRATION runs use the 4 s LP calibration deadline.
+  # Single-block CALIBRATION runs use the 3 s LP calibration deadline.
   if (!is.null(deadline_s)) {
     args <- c(args, "--deadline-s", as.character(deadline_s))
   }

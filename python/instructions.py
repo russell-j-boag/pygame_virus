@@ -106,11 +106,11 @@ SLIDES = [
     },
     {
         "kind": "example_task_display",
-        "callout": "deadline_4s",
+        "callout": "deadline_3s",
     },
     {
         "kind": "example_task_display",
-        "callout": "deadline_2s",
+        "callout": "deadline_1_5s",
     },
     {
         "kind": "example_task_display",
@@ -569,7 +569,7 @@ def draw_example_task_display(
     timer_rect = draw_countdown_timer(
         surface=screen,
         font=font_body,
-        ms_left=4200,
+        ms_left=1300,
         x=PB_PAD,
         y=PB_PAD,
         color=WHITE,
@@ -649,19 +649,19 @@ def draw_example_task_slide(
     callout_body_font = font_small
     AID_ARROW_PAD = S(12)
     
-    if callout in ("timer", "deadline_4s", "deadline_2s"):
+    if callout in ("timer", "deadline_3s", "deadline_1_5s"):
         timer_callouts = {
             "timer": (
                 "Timer",
                 "The countdown timer shows how many seconds remain in the trial",
             ),
-            "deadline_4s": (
-                "4 second deadline",
-                "In some blocks, the deadline will be 4 seconds. This means you should make your response within 4 seconds.",
+            "deadline_3s": (
+                "3 second deadline",
+                "In some blocks, the deadline will be 3 seconds. This means you should make your response within 3 seconds.",
             ),
-            "deadline_2s": (
-                "2 second deadline",
-                "In other blocks, the deadline will be 2 seconds. This means you should make your response within 2 seconds.",
+            "deadline_1_5s": (
+                "1.5 second deadline",
+                "In other blocks, the deadline will be 1.5 seconds. This means you should make your response within 1.5 seconds.",
             ),
         }
         timer_title, timer_body = timer_callouts[callout]

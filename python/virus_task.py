@@ -30,8 +30,8 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 POST_CALIBRATION_N_TRIALS = 400
 CALIBRATION_N_TRIALS = 300
 TIME_PRESSURE_DEADLINES_MS = {
-    "HP": 2000,
-    "LP": 4000,
+    "HP": 1500,
+    "LP": 3000,
 }
 TIME_PRESSURE_LABELS = {
     "HP": "high pressure",
@@ -3048,7 +3048,7 @@ def parse_cli_args():
         "--deadline-s",
         type=float,
         default=None,
-        help="Select the 2s or 4s pressure variant when --block has multiple deadlines.",
+        help="Select the 1.5s or 3s pressure variant when --block has multiple deadlines.",
     )
     parser.add_argument(
         "--reliability-group",
@@ -3124,7 +3124,7 @@ def select_single_block(block_name: str, blocks_template, participant_id: int, d
         raise ValueError(
             f"Participant {participant_id} is assigned to {calibration_pressure} calibration "
             f"({format_deadline_s(assigned_deadline_s)}s). "
-            "Run the 4s LP calibration deadline for this participant."
+            "Run the 3s LP calibration deadline for this participant."
         )
 
     reliability_pattern = "single_block" if matches[0]["AUTOMATION_ON"] else "none"
