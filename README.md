@@ -89,22 +89,17 @@ The main trial and post-block output files include fields that identify the desi
 | --- | --- |
 | `block` | `CALIBRATION`, `MANUAL`, or `AUTOMATION` |
 | `condition_code` | `CAL`, `MAN`, or `REL_DROP` |
-| `condition_deadline_code` | Compatibility alias for `condition_code` |
 | `calibration_target_group` | Participant-ID assigned calibration group, `CAL65` or `CAL85` |
 | `calibration_target_accuracy` | Calibration target accuracy, `0.65` or `0.85` |
 | `main_block_order` | Fixed main-block sequence label, `SPLIT_MANUAL` |
 | `manual_segment` | Manual segment label, `PRE_AUTOMATION` or `POST_AUTOMATION`; blank for non-manual rows |
-| `dynamic_reliability_family` | Compatibility label for the aided sequence, `DROP95_70_95` |
-| `reliability_block_idx` | Compatibility alias for aided reliability phase index, `1`-`3` |
-| `trial_in_reliability_block` | Compatibility alias for trial index within the current reliability phase |
 | `reliability_phase_idx` | Aided reliability phase index, `1`-`3` |
 | `trial_in_reliability_phase` | Trial index within the current reliability phase |
 | `reliability_phase_label` | Phase label such as `P1_95`, `P2_70`, or `P3_95` |
 | `aid_reliability_level` | Current aided-phase aid accuracy level |
-| `aid_accuracy_setting` | Accuracy setting used to generate the aid recommendation on the current trial |
 | `automation_reliability_group` | High/low grouping derived from aid reliability |
-| `trial_deadline_ms` | Fixed response window in milliseconds |
 | `trial_deadline_s` | Fixed response window in seconds |
+| `rt_s` | Response time in seconds; this is the canonical RT field |
 
 Single-block runs can be selected for the current task sequence:
 

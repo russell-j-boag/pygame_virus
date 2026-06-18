@@ -77,14 +77,8 @@ ensure_design_columns <- function(data) {
   if (!"automation_reliability_group" %in% names(data)) {
     data$automation_reliability_group <- NA_character_
   }
-  if (!"trial_deadline_ms" %in% names(data)) {
-    data$trial_deadline_ms <- NA_real_
-  }
   if (!"trial_deadline_s" %in% names(data)) {
     data$trial_deadline_s <- NA_real_
-  }
-  if (!"aid_accuracy_setting" %in% names(data)) {
-    data$aid_accuracy_setting <- NA_real_
   }
   data
 }
@@ -95,9 +89,9 @@ derive_reliability_group <- function(data) {
       automation_reliability_group = case_when(
         !is.na(automation_reliability_group) & automation_reliability_group != "" ~
           as.character(automation_reliability_group),
-        suppressWarnings(as.numeric(aid_accuracy_setting)) >= 0.90 ~ "high",
-        suppressWarnings(as.numeric(aid_accuracy_setting)) < 0.90 &
-          !is.na(suppressWarnings(as.numeric(aid_accuracy_setting))) ~ "low",
+        suppressWarnings(as.numeric(aid_reliability_level)) >= 0.90 ~ "high",
+        suppressWarnings(as.numeric(aid_reliability_level)) < 0.90 &
+          !is.na(suppressWarnings(as.numeric(aid_reliability_level))) ~ "low",
         TRUE ~ "none"
       )
     )

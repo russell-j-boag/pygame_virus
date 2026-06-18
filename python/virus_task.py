@@ -196,10 +196,6 @@ def block_condition_code(block_cfg) -> str:
     return block_cfg["name"]
 
 
-def block_condition_deadline_code(block_cfg) -> str:
-    return block_condition_code(block_cfg)
-
-
 def trial_deadline_ms_for_block(block_cfg):
     return block_cfg.get("TRIAL_DEADLINE_MS", CALIBRATION_TRIAL_DEADLINE_MS)
 
@@ -314,28 +310,20 @@ def dynamic_reliability_metadata_for_trial(block_cfg, trial_number):
     aid_reliability_level = schedule[reliability_phase_idx - 1]
     trial_in_phase = ((trial_number - 1) % block_size) + 1
     return {
-        "dynamic_reliability_family": block_cfg.get("DYNAMIC_RELIABILITY_FAMILY"),
-        "reliability_block_idx": reliability_phase_idx,
-        "trial_in_reliability_block": trial_in_phase,
         "reliability_phase_idx": reliability_phase_idx,
         "trial_in_reliability_phase": trial_in_phase,
         "reliability_phase_label": f"P{reliability_phase_idx}_{int(round(aid_reliability_level * 100))}",
         "aid_reliability_level": aid_reliability_level,
-        "aid_accuracy_setting": aid_reliability_level,
         "automation_reliability_group": "high" if aid_reliability_level >= 0.90 else "low",
     }
 
 
 def empty_dynamic_reliability_metadata():
     return {
-        "dynamic_reliability_family": None,
-        "reliability_block_idx": None,
-        "trial_in_reliability_block": None,
         "reliability_phase_idx": None,
         "trial_in_reliability_phase": None,
         "reliability_phase_label": None,
         "aid_reliability_level": None,
-        "aid_accuracy_setting": None,
         "automation_reliability_group": None,
     }
 
@@ -911,21 +899,15 @@ def run_postblock_questionnaire(
             "block": block_name,
             "block_idx": block_idx,
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
-            "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
             "calibration_target_group": block_cfg.get("CALIBRATION_TARGET_GROUP") if block_cfg else None,
             "calibration_target_accuracy": block_cfg.get("CALIBRATION_TARGET_ACC") if block_cfg else None,
             "main_block_order": block_cfg.get("MAIN_BLOCK_ORDER") if block_cfg else None,
             "manual_segment": block_cfg.get("MANUAL_SEGMENT") if block_cfg else None,
-            "dynamic_reliability_family": dynamic_meta["dynamic_reliability_family"],
-            "reliability_block_idx": dynamic_meta["reliability_block_idx"],
-            "trial_in_reliability_block": dynamic_meta["trial_in_reliability_block"],
             "reliability_phase_idx": dynamic_meta["reliability_phase_idx"],
             "trial_in_reliability_phase": dynamic_meta["trial_in_reliability_phase"],
             "reliability_phase_label": dynamic_meta["reliability_phase_label"],
             "aid_reliability_level": dynamic_meta["aid_reliability_level"],
-            "aid_accuracy_setting": dynamic_meta["aid_accuracy_setting"],
             "automation_reliability_group": dynamic_meta["automation_reliability_group"],
-            "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": idx,
             "question": item["question"],
@@ -1574,21 +1556,15 @@ def run_postblock_slider_questions(
             "block": block_name,
             "block_idx": block_idx,
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
-            "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
             "calibration_target_group": block_cfg.get("CALIBRATION_TARGET_GROUP") if block_cfg else None,
             "calibration_target_accuracy": block_cfg.get("CALIBRATION_TARGET_ACC") if block_cfg else None,
             "main_block_order": block_cfg.get("MAIN_BLOCK_ORDER") if block_cfg else None,
             "manual_segment": block_cfg.get("MANUAL_SEGMENT") if block_cfg else None,
-            "dynamic_reliability_family": dynamic_meta["dynamic_reliability_family"],
-            "reliability_block_idx": dynamic_meta["reliability_block_idx"],
-            "trial_in_reliability_block": dynamic_meta["trial_in_reliability_block"],
             "reliability_phase_idx": dynamic_meta["reliability_phase_idx"],
             "trial_in_reliability_phase": dynamic_meta["trial_in_reliability_phase"],
             "reliability_phase_label": dynamic_meta["reliability_phase_label"],
             "aid_reliability_level": dynamic_meta["aid_reliability_level"],
-            "aid_accuracy_setting": dynamic_meta["aid_accuracy_setting"],
             "automation_reliability_group": dynamic_meta["automation_reliability_group"],
-            "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": i,
             "question_key": it["key"],
@@ -1600,8 +1576,8 @@ def run_postblock_slider_questions(
     if rows:
         os.makedirs(output_dir, exist_ok=True)
         suffix = ""
-        if dynamic_meta["reliability_block_idx"] is not None:
-            suffix = f"_rb{int(dynamic_meta['reliability_block_idx']):02d}"
+        if dynamic_meta["reliability_phase_idx"] is not None:
+            suffix = f"_rb{int(dynamic_meta['reliability_phase_idx']):02d}"
         path = os.path.join(
             output_dir,
             f"results_p{participant_id:03d}_{run_ts}_b{block_idx:02d}_{block_name}{suffix}_POSTBLOCK_SLIDERS.csv"
@@ -3301,23 +3277,17 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "run_timestamp": run_timestamp,
         "key_black": keymap["key_black_name"],
         "key_white": keymap["key_white_name"],
-        "keymap_flip": keymap["flip"],
         "block": block_name,
         "block_idx": block_idx,
         "condition_code": block_condition_code(block_cfg),
-        "condition_deadline_code": block_condition_deadline_code(block_cfg),
         "calibration_target_group": block_cfg.get("CALIBRATION_TARGET_GROUP"),
         "calibration_target_accuracy": block_cfg.get("CALIBRATION_TARGET_ACC"),
         "main_block_order": block_cfg.get("MAIN_BLOCK_ORDER"),
         "manual_segment": block_cfg.get("MANUAL_SEGMENT"),
-        "dynamic_reliability_family": trial_data["dynamic_reliability_family"],
-        "reliability_block_idx": trial_data["reliability_block_idx"],
-        "trial_in_reliability_block": trial_data["trial_in_reliability_block"],
         "reliability_phase_idx": trial_data["reliability_phase_idx"],
         "trial_in_reliability_phase": trial_data["trial_in_reliability_phase"],
         "reliability_phase_label": trial_data["reliability_phase_label"],
         "aid_reliability_level": trial_data["aid_reliability_level"],
-        "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg),
         "trial_deadline_s": trial_deadline_s_for_block(block_cfg),
         "trial": trial_number,
         "global_trial": global_trial_index,
@@ -3331,10 +3301,7 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "vblack_prop": trial_data["vblack_prop"],
         "n_vblack": trial_data["n_vblack"],
         "n_vwhite": trial_data["n_vwhite"],
-        "auto_on": 1 if block_cfg["AUTOMATION_ON"] else 0,
-        "aid_accuracy_setting": trial_data["aid_accuracy_setting"],
         "automation_reliability_group": trial_data["automation_reliability_group"],
-        "aid_transparency_level": block_state["aid_transparency"] if block_cfg["AUTOMATION_ON"] else None,
         "stimulus": trial_data["stimulus"],
         "aid_label": trial_data["aid_label"],
         "aid_correct": trial_data["aid_correct"],
@@ -3342,7 +3309,6 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "correct": trial_data["correct"] if response in ("BLACK", "WHITE") else None,
         "feedback": feedback_msg if block_cfg["TRIAL_FEEDBACK_ON"] else None,
         "rt_s": (rt_ms / 1000.0) if rt_ms is not None else None,
-        "rt_ms": rt_ms,
     }
 
 
@@ -3385,7 +3351,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
     if block_cfg["AUTOMATION_ON"]:
         aid_label, aid_correct = make_aid_recommendation(
             stimulus,
-            accuracy=reliability_metadata["aid_accuracy_setting"],
+            accuracy=reliability_metadata["aid_reliability_level"],
         )
     else:
         aid_label, aid_correct = None, None
@@ -3522,14 +3488,10 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             "stimulus": stimulus,
             "aid_label": aid_label,
             "aid_correct": aid_correct,
-            "dynamic_reliability_family": reliability_metadata["dynamic_reliability_family"],
-            "reliability_block_idx": reliability_metadata["reliability_block_idx"],
-            "trial_in_reliability_block": reliability_metadata["trial_in_reliability_block"],
             "reliability_phase_idx": reliability_metadata["reliability_phase_idx"],
             "trial_in_reliability_phase": reliability_metadata["trial_in_reliability_phase"],
             "reliability_phase_label": reliability_metadata["reliability_phase_label"],
             "aid_reliability_level": reliability_metadata["aid_reliability_level"],
-            "aid_accuracy_setting": reliability_metadata["aid_accuracy_setting"],
             "automation_reliability_group": reliability_metadata["automation_reliability_group"],
             "response": response,
             "correct": correct,
@@ -3678,8 +3640,8 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
             quit_clean()
         if questionnaire_rows:
             suffix = ""
-            if dynamic_meta["reliability_block_idx"] is not None:
-                suffix = f"_rb{int(dynamic_meta['reliability_block_idx']):02d}"
+            if dynamic_meta["reliability_phase_idx"] is not None:
+                suffix = f"_rb{int(dynamic_meta['reliability_phase_idx']):02d}"
             q_path = os.path.join(
                 output_dir,
                 f"results_p{participant_id:03d}_{run_timestamp}_b{block_idx:02d}_{block_name}{suffix}_POSTBLOCK.csv"
