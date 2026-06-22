@@ -5,8 +5,8 @@ The deck is ordered as:
   1. instruction_screenshots/*.png
   2. virus_task_screenshots/*.png
 
-Pandoc writes the Office package, then this script patches each slide image to
-full slide height while preserving the screenshot aspect ratio.
+Pandoc writes the Office package, then this script patches the slide canvas to
+the screenshot aspect ratio and places each image full slide height.
 """
 
 from __future__ import annotations
@@ -132,12 +132,42 @@ def slide_size(pptx_path: Path) -> tuple[int, int]:
     return int(slide_size_el.attrib["cx"]), int(slide_size_el.attrib["cy"])
 
 
-def image_placement(path: Path, slide_w: int, slide_h: int) -> tuple[int, int, int, int]:
+def image_pixel_size(path: Path) -> tuple[int, int]:
     with Image.open(path) as img:
         pixel_w, pixel_h = img.size
 
     if pixel_w <= 0 or pixel_h <= 0:
         raise RuntimeError(f"invalid image size for {path}: {pixel_w}x{pixel_h}")
+
+    return pixel_w, pixel_h
+
+
+def common_image_aspect(image_paths: list[Path]) -> tuple[int, int]:
+    ref_w, ref_h = image_pixel_size(image_paths[0])
+    for path in image_paths[1:]:
+        pixel_w, pixel_h = image_pixel_size(path)
+        if pixel_w * ref_h != ref_w * pixel_h:
+            raise RuntimeError(
+                "screenshots do not share one aspect ratio; regenerate both "
+                "screenshot folders at the same resolution before building the deck "
+                f"({image_paths[0]} is {ref_w}x{ref_h}, {path} is {pixel_w}x{pixel_h})"
+            )
+
+    return ref_w, ref_h
+
+
+def target_slide_size(pptx_path: Path, image_paths: list[Path]) -> tuple[int, int]:
+    _, source_slide_h = slide_size(pptx_path)
+    pixel_w, pixel_h = common_image_aspect(image_paths)
+    slide_w = int(round(source_slide_h * (pixel_w / pixel_h)))
+    if slide_w <= 0:
+        raise RuntimeError(f"invalid target slide width computed from {pixel_w}x{pixel_h}")
+
+    return slide_w, source_slide_h
+
+
+def image_placement(path: Path, slide_w: int, slide_h: int) -> tuple[int, int, int, int]:
+    pixel_w, pixel_h = image_pixel_size(path)
 
     height = slide_h
     width = int(round(height * (pixel_w / pixel_h)))
@@ -168,8 +198,25 @@ def patch_slide_xml(xml_bytes: bytes, image_path: Path, slide_w: int, slide_h: i
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
+def patch_presentation_xml(xml_bytes: bytes, slide_w: int, slide_h: int) -> bytes:
+    root = ET.fromstring(xml_bytes)
+    slide_size_el = root.find("p:sldSz", NS)
+    if slide_size_el is None:
+        raise RuntimeError("generated PPTX is missing ppt/presentation.xml slide size")
+
+    slide_size_el.attrib.update(
+        {
+            "cx": str(slide_w),
+            "cy": str(slide_h),
+            "type": "custom",
+        }
+    )
+
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
 def patch_full_height_images(input_pptx: Path, output_pptx: Path, image_paths: list[Path]) -> None:
-    slide_w, slide_h = slide_size(input_pptx)
+    slide_w, slide_h = target_slide_size(input_pptx, image_paths)
     slide_name_re = re.compile(r"^ppt/slides/slide(\d+)\.xml$")
 
     with zipfile.ZipFile(input_pptx) as src, zipfile.ZipFile(
@@ -179,8 +226,9 @@ def patch_full_height_images(input_pptx: Path, output_pptx: Path, image_paths: l
     ) as dst:
         for info in src.infolist():
             data = src.read(info.filename)
-            match = slide_name_re.match(info.filename)
-            if match:
+            if info.filename == "ppt/presentation.xml":
+                data = patch_presentation_xml(data, slide_w, slide_h)
+            elif match := slide_name_re.match(info.filename):
                 slide_idx = int(match.group(1))
                 if 1 <= slide_idx <= len(image_paths):
                     data = patch_slide_xml(data, image_paths[slide_idx - 1], slide_w, slide_h)

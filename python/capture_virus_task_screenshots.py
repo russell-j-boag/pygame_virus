@@ -4,7 +4,7 @@ Render key Virus Detection Task screens to PNG without running full blocks.
 Use the r-pygame interpreter from AGENTS.md, for example:
 
     /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python \
-        python/capture_virus_task_screenshots.py --resolution 1280x720 --overwrite
+        python/capture_virus_task_screenshots.py --overwrite
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import virus_task as task
 
 
 DEFAULT_OUTPUT_DIR = Path("virus_task_screenshots")
-DEFAULT_RESOLUTION = "1280x720"
+DEFAULT_RESOLUTION = "current"
 DEFAULT_PARTICIPANT = 1
 FILENAME_SAFE_RE = re.compile(r"[^a-z0-9]+")
 
@@ -64,7 +64,7 @@ def parse_args() -> argparse.Namespace:
         "--resolution",
         default=DEFAULT_RESOLUTION,
         help=(
-            "Capture size. Use 'current' for the current display size, or "
+            "Capture size. Defaults to 'current' for the current display size, or "
             "an explicit WIDTHxHEIGHT value such as 1280x720."
         ),
     )
@@ -431,8 +431,8 @@ def main() -> int:
         print(f"capture_virus_task_screenshots: error: {exc}", file=sys.stderr)
         if args.resolution.lower() == "current":
             print(
-                "Tip: if this session cannot access the display, retry with "
-                "--resolution 1280x720.",
+                "Tip: if this session cannot access the display, retry with an "
+                "explicit display size such as --resolution 1440x900.",
                 file=sys.stderr,
             )
         return 1
