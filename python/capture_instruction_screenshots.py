@@ -4,7 +4,7 @@ Render every standalone instruction slide to PNG.
 Use the r-pygame interpreter from AGENTS.md, for example:
 
     /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python \
-        python/capture_instruction_screenshots.py --resolution 1280x720 --overwrite
+        python/capture_instruction_screenshots.py --overwrite
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
         "--resolution",
         default=DEFAULT_RESOLUTION,
         help=(
-            "Capture size. Use 'current' for the current display size, or "
+            "Capture size. Defaults to 'current' for the current display size, or "
             "an explicit WIDTHxHEIGHT value such as 1280x720."
         ),
     )
@@ -214,8 +214,8 @@ def main() -> int:
         print(f"capture_instruction_screenshots: error: {exc}", file=sys.stderr)
         if args.resolution.lower() == "current":
             print(
-                "Tip: if this session cannot access the display, retry with "
-                "--resolution 1280x720.",
+                "Tip: if this session cannot access the display, retry with an "
+                "explicit display size such as --resolution 1440x900.",
                 file=sys.stderr,
             )
         return 1

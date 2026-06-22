@@ -13,6 +13,21 @@ Based on Bartlett & McCarley RDC task.
 - Run `0-setup_pygame.R` to install the required versions of python and pygame
 - Use `1-run_virus_task.R` to launch task and pre-task instructions using the helper functions
 
+## Screenshot review deck
+
+Use the `r-pygame` Python interpreter to render static screenshots and assemble a PowerPoint review deck:
+
+```sh
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/capture_instruction_screenshots.py --overwrite
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/capture_virus_task_screenshots.py --overwrite --participant 1
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/build_screenshot_deck.py --overwrite
+```
+
+By default, the screenshot scripts use the current display size so the PNGs match the participant-facing display aspect ratio. If the shell cannot access the display, pass the display size explicitly, for example `--resolution 1440x900`, to both screenshot commands.
+The deck builder sizes the PowerPoint slides to the screenshot aspect ratio rather than PowerPoint's default slide shape.
+The generated `instruction_screenshots/`, `virus_task_screenshots/`, and `screenshots_review.pptx` artifacts are local review outputs and are ignored by git.
+The deck builder requires `pandoc` and Pillow.
+
 ## Current task design
 
 The task uses a two-level time-pressure design. High pressure (`HP`) uses a 1.5 s response deadline and low pressure (`LP`) uses a 3 s response deadline.
