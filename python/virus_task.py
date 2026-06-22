@@ -328,11 +328,19 @@ def empty_dynamic_reliability_metadata():
     }
 
 
-def is_reliability_checkpoint_trial(block_cfg, trial_number):
-    if not block_cfg.get("AUTOMATION_ON", False):
-        return False
-    block_size = block_cfg.get("DYNAMIC_RELIABILITY_BLOCK_SIZE", RELIABILITY_BLOCK_SIZE)
-    return trial_number % block_size == 0
+def postblock_reliability_metadata_for_block(block_cfg):
+    meta = empty_dynamic_reliability_metadata()
+    if block_cfg.get("AUTOMATION_ON", False):
+        meta["reliability_phase_label"] = block_cfg.get("DYNAMIC_RELIABILITY_FAMILY") or RELIABILITY_DROP_LABEL
+    return meta
+
+
+def postblock_scope_for_block(block_cfg, reliability_metadata=None):
+    if block_cfg["name"] == "AUTOMATION":
+        if reliability_metadata and reliability_metadata.get("reliability_phase_idx") is not None:
+            return "reliability_phase"
+        return "full_automation_block"
+    return "completed_block"
 
 
 def transparency_instruction_slide(transparency_level: str) -> str:
@@ -879,7 +887,8 @@ def run_postblock_questionnaire(
         return []
 
     responses = []
-    dynamic_meta = reliability_metadata or empty_dynamic_reliability_metadata()
+    dynamic_meta = reliability_metadata or postblock_reliability_metadata_for_block(block_cfg or {})
+    postblock_scope = postblock_scope_for_block(block_cfg, reliability_metadata) if block_cfg else "completed_block"
 
     for idx, item in enumerate(QUESTION_ITEMS, start=1):
         resp = run_likert_question(
@@ -908,6 +917,7 @@ def run_postblock_questionnaire(
             "reliability_phase_label": dynamic_meta["reliability_phase_label"],
             "aid_reliability_level": dynamic_meta["aid_reliability_level"],
             "automation_reliability_group": dynamic_meta["automation_reliability_group"],
+            "postblock_scope": postblock_scope,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": idx,
             "question": item["question"],
@@ -1521,7 +1531,8 @@ def run_postblock_slider_questions(
         return []  # no sliders for other blocks
 
     rows = []
-    dynamic_meta = reliability_metadata or empty_dynamic_reliability_metadata()
+    dynamic_meta = reliability_metadata or postblock_reliability_metadata_for_block(block_cfg or {})
+    postblock_scope = postblock_scope_for_block(block_cfg, reliability_metadata) if block_cfg else "completed_block"
     for i, it in enumerate(items, start=1):
         if it["key"] == "perc_self_correct":
             anchors = [
@@ -1565,6 +1576,7 @@ def run_postblock_slider_questions(
             "reliability_phase_label": dynamic_meta["reliability_phase_label"],
             "aid_reliability_level": dynamic_meta["aid_reliability_level"],
             "automation_reliability_group": dynamic_meta["automation_reliability_group"],
+            "postblock_scope": postblock_scope,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": i,
             "question_key": it["key"],
@@ -1575,12 +1587,9 @@ def run_postblock_slider_questions(
     # Save per-block sliders CSV
     if rows:
         os.makedirs(output_dir, exist_ok=True)
-        suffix = ""
-        if dynamic_meta["reliability_phase_idx"] is not None:
-            suffix = f"_rb{int(dynamic_meta['reliability_phase_idx']):02d}"
         path = os.path.join(
             output_dir,
-            f"results_p{participant_id:03d}_{run_ts}_b{block_idx:02d}_{block_name}{suffix}_POSTBLOCK_SLIDERS.csv"
+            f"results_p{participant_id:03d}_{run_ts}_b{block_idx:02d}_{block_name}_POSTBLOCK_SLIDERS.csv"
         )
         write_csv_rows(path, rows)
         print(f"[{block_name}] Post-block slider responses saved to: {path}")
@@ -3596,7 +3605,7 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
                             all_postblock_slider_rows, all_questionnaire_rows, reliability_metadata=None):
     block_name = block_cfg["name"]
     block_idx = block_cfg["block_idx"]
-    dynamic_meta = reliability_metadata or empty_dynamic_reliability_metadata()
+    dynamic_meta = reliability_metadata or postblock_reliability_metadata_for_block(block_cfg)
 
     if ENABLE_POSTBLOCK_SLIDERS and block_name in ("CALIBRATION", "MANUAL", "AUTOMATION"):
         slider_rows = run_postblock_slider_questions(
@@ -3639,12 +3648,9 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
         if isinstance(questionnaire_rows, dict) and questionnaire_rows.get("quit"):
             quit_clean()
         if questionnaire_rows:
-            suffix = ""
-            if dynamic_meta["reliability_phase_idx"] is not None:
-                suffix = f"_rb{int(dynamic_meta['reliability_phase_idx']):02d}"
             q_path = os.path.join(
                 output_dir,
-                f"results_p{participant_id:03d}_{run_timestamp}_b{block_idx:02d}_{block_name}{suffix}_POSTBLOCK.csv"
+                f"results_p{participant_id:03d}_{run_timestamp}_b{block_idx:02d}_{block_name}_POSTBLOCK.csv"
             )
             write_csv_rows(q_path, questionnaire_rows)
             print(f"[{block_name}] Questionnaire saved to: {q_path}")
@@ -3779,23 +3785,7 @@ def main():
             all_results.append(row)
 
             is_last_trial = t == block_cfg["N_TRIALS"] - 1
-            if is_reliability_checkpoint_trial(block_cfg, trial_number):
-                reliability_metadata = dynamic_reliability_metadata_for_trial(block_cfg, trial_number)
-                run_post_block_measures(
-                    screen,
-                    clock,
-                    fonts,
-                    participant_id,
-                    run_ts,
-                    block_cfg,
-                    output_dir,
-                    all_postblock_slider_rows,
-                    all_questionnaire_rows,
-                    reliability_metadata=reliability_metadata,
-                )
-                if not is_last_trial:
-                    fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
-            elif not is_last_trial:
+            if not is_last_trial:
                 if not block_cfg["TRIAL_FEEDBACK_ON"]:
                     press_any_key_screen(
                         screen=screen,
@@ -3834,7 +3824,7 @@ def main():
                 calib_delta_sd = sd_delta
 
         show_block_complete_screen(screen, clock, fonts["body"], block_cfg["name"], block_cfg=block_cfg)
-        if block_cfg["name"] in ("CALIBRATION", "MANUAL"):
+        if block_cfg["name"] in ("CALIBRATION", "MANUAL", "AUTOMATION"):
             run_post_block_measures(
                 screen,
                 clock,

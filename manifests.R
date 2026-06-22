@@ -64,6 +64,15 @@ factor_auto_block <- function(block, aid_onset_condition, aid_onset_ms) {
   factor(as.character(onset), levels = AUTOMATION_BLOCK_LEVELS)
 }
 
+factor_reliability_drop_block <- function(block, condition_code) {
+  label <- case_when(
+    as.character(block) == "AUTOMATION" & as.character(condition_code) == "REL_DROP" ~ "Reliability drop",
+    as.character(block) == "AUTOMATION" ~ "Automation",
+    TRUE ~ NA_character_
+  )
+  factor(label, levels = c("Reliability drop", "Automation"))
+}
+
 ensure_design_columns <- function(data) {
   if (!"condition_code" %in% names(data)) {
     data$condition_code <- NA_character_
@@ -79,6 +88,9 @@ ensure_design_columns <- function(data) {
   }
   if (!"trial_deadline_s" %in% names(data)) {
     data$trial_deadline_s <- NA_real_
+  }
+  if (!"postblock_scope" %in% names(data)) {
+    data$postblock_scope <- NA_character_
   }
   data
 }
@@ -1446,8 +1458,8 @@ empirical_aid_acc <- trial_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
     block = as.character(block),
-    automation_reliability_group = as.character(automation_reliability_group),
-    block_label = factor_auto_block(block, aid_onset_condition, aid_onset_ms),
+    condition_code = as.character(condition_code),
+    block_label = factor_reliability_drop_block(block, condition_code),
     aid_correct_num = case_when(
       aid_correct %in% c(TRUE, 1, "1", "TRUE", "True", "true") ~ 1,
       aid_correct %in% c(FALSE, 0, "0", "FALSE", "False", "false") ~ 0,
@@ -1455,43 +1467,39 @@ empirical_aid_acc <- trial_dat_raw %>%
     )
   ) %>%
   filter(block == "AUTOMATION", !is.na(block_label), !is.na(aid_correct_num)) %>%
-  group_by(participant_id, block, block_label, automation_reliability_group) %>%
+  group_by(participant_id, block, block_label) %>%
   summarise(
     empirical_aid_accuracy = mean(aid_correct_num, na.rm = TRUE),
     n_trials = dplyr::n(),
     .groups = "drop"
-  ) %>%
-  mutate(
-    automation_reliability_group = factor_reliability_group(automation_reliability_group)
   )
 
 self_rated_aid_acc <- slider_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
     block = as.character(block),
-    automation_reliability_group = as.character(automation_reliability_group),
-    block_label = factor_auto_block(block, aid_onset_condition, aid_onset_ms),
+    condition_code = as.character(condition_code),
+    postblock_scope = as.character(postblock_scope),
+    block_label = factor_reliability_drop_block(block, condition_code),
     response = as.numeric(response)
   ) %>%
   filter(
     block == "AUTOMATION",
     !is.na(block_label),
+    is.na(postblock_scope) | postblock_scope == "" | postblock_scope == "full_automation_block",
     slider_key == "perc_auto_correct",
     !is.na(response)
   ) %>%
-  group_by(participant_id, block, block_label, automation_reliability_group) %>%
+  group_by(participant_id, block, block_label) %>%
   summarise(
     self_rated_aid_accuracy = mean(response, na.rm = TRUE) / 100,
     .groups = "drop"
-  ) %>%
-  mutate(
-    automation_reliability_group = factor_reliability_group(automation_reliability_group)
   )
 
 aid_accuracy_diff <- empirical_aid_acc %>%
   inner_join(
     self_rated_aid_acc,
-    by = c("participant_id", "block", "block_label", "automation_reliability_group")
+    by = c("participant_id", "block", "block_label")
   ) %>%
   mutate(
     aid_accuracy_difference = empirical_aid_accuracy - self_rated_aid_accuracy
@@ -1502,19 +1510,25 @@ trust_ratings <- postblock_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
     block = as.character(block),
-    automation_reliability_group = as.character(automation_reliability_group),
-    block_label = factor_auto_block(block, aid_onset_condition, aid_onset_ms),
+    condition_code = as.character(condition_code),
+    postblock_scope = as.character(postblock_scope),
+    block_label = factor_reliability_drop_block(block, condition_code),
     question_idx = as.integer(question_idx),
     response = as.numeric(response)
   ) %>%
-  filter(block == "AUTOMATION", !is.na(block_label), !is.na(question_idx), !is.na(response)) %>%
-  group_by(participant_id, block, block_label, automation_reliability_group, question_idx, question) %>%
+  filter(
+    block == "AUTOMATION",
+    !is.na(block_label),
+    is.na(postblock_scope) | postblock_scope == "" | postblock_scope == "full_automation_block",
+    !is.na(question_idx),
+    !is.na(response)
+  ) %>%
+  group_by(participant_id, block, block_label, question_idx, question) %>%
   summarise(
     trust_rating = mean(response, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   mutate(
-    automation_reliability_group = factor_reliability_group(automation_reliability_group),
     question_label = paste0("Q", question_idx, ". ", wrap_text(question))
   )
 
@@ -1528,7 +1542,6 @@ aid_accuracy_trust_dat <- aid_accuracy_diff %>%
     participant_id,
     block,
     block_label,
-    automation_reliability_group,
     empirical_aid_accuracy,
     self_rated_aid_accuracy,
     aid_accuracy_difference
@@ -1539,17 +1552,16 @@ aid_accuracy_trust_dat <- aid_accuracy_diff %>%
         participant_id,
         block,
         block_label,
-        automation_reliability_group,
         question_idx,
         question,
         question_label,
         trust_rating
       ),
-    by = c("participant_id", "block", "block_label", "automation_reliability_group")
+    by = c("participant_id", "block", "block_label")
   )
 
 aid_accuracy_trust_cor <- aid_accuracy_trust_dat %>%
-  group_by(block_label, automation_reliability_group, question_idx, question, question_label) %>%
+  group_by(block_label, question_idx, question, question_label) %>%
   group_modify(~ safe_cor_summary(
     x = .x$aid_accuracy_difference,
     y = .x$trust_rating
@@ -1557,12 +1569,9 @@ aid_accuracy_trust_cor <- aid_accuracy_trust_dat %>%
   ungroup() %>%
   mutate(
     question_label = factor(question_label, levels = rev(question_levels)),
-    panel_label = paste(
-      as.character(block_label),
-      as.character(automation_reliability_group)
-    )
+    panel_label = as.character(block_label)
   ) %>%
-  arrange(block_label, automation_reliability_group, question_idx)
+  arrange(block_label, question_idx)
 
 p_aid_accuracy_trust_cor <- ggplot(
   aid_accuracy_trust_cor,
@@ -1582,7 +1591,7 @@ p_aid_accuracy_trust_cor <- ggplot(
     x = NULL,
     y = "Pearson r",
     title = "Trust ratings vs aid-accuracy discrepancy",
-    subtitle = "Discrepancy = empirical aid accuracy - self-rated aid accuracy"
+    subtitle = "Whole-block discrepancy = empirical aid accuracy - self-rated aid accuracy"
   ) +
   theme_classic() +
   theme(
@@ -1609,11 +1618,11 @@ save_plot_pair(
 )
 
 # ------------------
-# Pooled aid accuracy discrepancy vs pooled trust
+# Whole-block aid accuracy discrepancy vs pooled trust
 # ------------------
 
 pooled_aid_accuracy_diff <- aid_accuracy_diff %>%
-  group_by(participant_id, automation_reliability_group) %>%
+  group_by(participant_id, block_label) %>%
   summarise(
     pooled_empirical_aid_accuracy = mean(empirical_aid_accuracy, na.rm = TRUE),
     pooled_self_rated_aid_accuracy = mean(self_rated_aid_accuracy, na.rm = TRUE),
@@ -1623,7 +1632,7 @@ pooled_aid_accuracy_diff <- aid_accuracy_diff %>%
   )
 
 pooled_trust_ratings <- trust_ratings %>%
-  group_by(participant_id, automation_reliability_group) %>%
+  group_by(participant_id, block_label) %>%
   summarise(
     pooled_trust_rating = mean(trust_rating, na.rm = TRUE),
     n_trust_ratings = dplyr::n(),
@@ -1631,29 +1640,29 @@ pooled_trust_ratings <- trust_ratings %>%
   )
 
 pooled_aid_accuracy_trust_dat <- pooled_aid_accuracy_diff %>%
-  inner_join(pooled_trust_ratings, by = c("participant_id", "automation_reliability_group"))
+  inner_join(pooled_trust_ratings, by = c("participant_id", "block_label"))
 
 pooled_aid_accuracy_trust_cor <- pooled_aid_accuracy_trust_dat %>%
-  group_by(automation_reliability_group) %>%
+  group_by(block_label) %>%
   group_modify(~ safe_cor_summary(
     x = .x$pooled_aid_accuracy_difference,
     y = .x$pooled_trust_rating
   )) %>%
   ungroup() %>%
   mutate(
-    analysis = "pooled_across_automation_blocks_and_trust_questions"
+    analysis = "whole_automation_block_discrepancy_pooled_across_trust_questions"
   )
 
 pooled_cor_label <- pooled_aid_accuracy_trust_cor %>%
   transmute(
-    automation_reliability_group,
+    block_label,
     label = paste0(
       "r = ", sprintf("%.2f", correlation),
       "\np = ", sprintf("%.3f", p_value),
       "\nn = ", n
     )
   ) %>%
-  mutate(label = setNames(label, automation_reliability_group)) %>%
+  mutate(label = setNames(label, block_label)) %>%
   pull(label)
 
 pooled_diff_xlim <- get_axis_limits(
@@ -1680,7 +1689,7 @@ p_aid_accuracy_trust_pooled <- ggplot(
   ) +
   geom_text(
     data = tibble(
-      automation_reliability_group = factor(names(pooled_cor_label), levels = RELIABILITY_LEVELS),
+      block_label = factor(names(pooled_cor_label), levels = c("Reliability drop", "Automation")),
       pooled_trust_rating = Inf,
       pooled_aid_accuracy_difference = Inf,
       label = unname(pooled_cor_label)
@@ -1690,15 +1699,12 @@ p_aid_accuracy_trust_pooled <- ggplot(
     vjust = 1.3,
     size = 3.5
   ) +
-  facet_wrap(~ automation_reliability_group) +
+  facet_wrap(~ block_label) +
   labs(
     x = "Pooled trust rating",
     y = "Pooled aid-accuracy discrepancy",
-    title = "Pooled trust vs pooled aid-accuracy discrepancy",
-    subtitle = paste(
-      "Discrepancy and trust are averaged across the three aid-onset blocks;",
-      "panels show the between-subjects reliability groups"
-    )
+    title = "Whole-block trust vs aid-accuracy discrepancy",
+    subtitle = "Discrepancy uses the full 1200-trial automation block; trust is averaged across items"
   ) +
   coord_cartesian(
     xlim = c(1, 5),

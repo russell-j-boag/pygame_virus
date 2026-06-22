@@ -9,4 +9,5 @@
 - Calibration assigns participants to `CAL65` or `CAL85`; the manual comparison trials are split into two 200-trial segments around the aided block.
 - Counterbalancing uses a four-participant cycle crossing calibration target with key mapping: `CAL65`/standard, `CAL85`/standard, `CAL65`/flipped, `CAL85`/flipped.
 - The aided reliability sequence is `95% -> 70% -> 95%`, with 400 trials per phase and output label `DROP95_70_95`.
+- Do not interrupt the 1200-trial aided block with self-rated accuracy or aid-trust questions; show automation post-block ratings only after the full aided block.
 - Preserve output metadata for `calibration_target_group`, `calibration_target_accuracy`, `main_block_order`, `manual_segment`, `reliability_phase_label`, and `automation_reliability_group` when changing task outputs or collation.

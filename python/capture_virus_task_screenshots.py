@@ -31,7 +31,7 @@ import virus_task as task
 
 
 DEFAULT_OUTPUT_DIR = Path("virus_task_screenshots")
-DEFAULT_RESOLUTION = "current"
+DEFAULT_RESOLUTION = "1512x982"
 DEFAULT_PARTICIPANT = 1
 FILENAME_SAFE_RE = re.compile(r"[^a-z0-9]+")
 
@@ -64,8 +64,8 @@ def parse_args() -> argparse.Namespace:
         "--resolution",
         default=DEFAULT_RESOLUTION,
         help=(
-            "Capture size. Defaults to 'current' for the current display size, or "
-            "an explicit WIDTHxHEIGHT value such as 1280x720."
+            f"Capture size. Default: {DEFAULT_RESOLUTION}. Use 'current' to detect "
+            "the current display size, or pass another explicit WIDTHxHEIGHT value."
         ),
     )
     parser.add_argument(
@@ -333,34 +333,6 @@ def render_block(writer, surface, fonts, keymap, block_cfg):
                 phase_prefix,
                 trial_number=trial_number,
             )
-
-            for item_idx, item in enumerate(task.SLIDER_ITEMS_AUTOMATION, start=1):
-                task.draw_slider_question_screen_state(
-                    surface,
-                    fonts["title"],
-                    fonts["body"],
-                    question=item["question"],
-                    initial_value=50,
-                    slider_moved=False,
-                    button_enabled=False,
-                )
-                writer.save(
-                    surface,
-                    f"{phase_prefix}_postblock_slider_{item_idx:02d}_{item['key']}",
-                )
-
-            task.draw_questionnaire_intro_screen_state(surface, fonts["title"], fonts["body"])
-            writer.save(surface, f"{phase_prefix}_questionnaire_intro")
-
-            for item_idx, item in enumerate(task.QUESTION_ITEMS, start=1):
-                task.draw_likert_question_screen_state(
-                    surface,
-                    fonts["body"],
-                    item,
-                    slider_moved=False,
-                    button_enabled=False,
-                )
-                writer.save(surface, f"{phase_prefix}_questionnaire_item_{item_idx:02d}")
     else:
         render_trial_sequence(writer, surface, fonts, keymap, block_cfg, prefix)
 
@@ -372,18 +344,31 @@ def render_block(writer, surface, fonts, keymap, block_cfg):
     )
     writer.save(surface, f"{prefix}_block_complete")
 
-    if block_cfg["name"] != "AUTOMATION":
-        for item_idx, item in enumerate(block_slider_items(block_cfg["name"]), start=1):
-            task.draw_slider_question_screen_state(
+    for item_idx, item in enumerate(block_slider_items(block_cfg["name"]), start=1):
+        task.draw_slider_question_screen_state(
+            surface,
+            fonts["title"],
+            fonts["body"],
+            question=item["question"],
+            initial_value=50,
+            slider_moved=False,
+            button_enabled=False,
+        )
+        writer.save(surface, f"{prefix}_postblock_slider_{item_idx:02d}_{item['key']}")
+
+    if block_cfg["name"] == "AUTOMATION":
+        task.draw_questionnaire_intro_screen_state(surface, fonts["title"], fonts["body"])
+        writer.save(surface, f"{prefix}_questionnaire_intro")
+
+        for item_idx, item in enumerate(task.QUESTION_ITEMS, start=1):
+            task.draw_likert_question_screen_state(
                 surface,
-                fonts["title"],
                 fonts["body"],
-                question=item["question"],
-                initial_value=50,
+                item,
                 slider_moved=False,
                 button_enabled=False,
             )
-            writer.save(surface, f"{prefix}_postblock_slider_{item_idx:02d}_{item['key']}")
+            writer.save(surface, f"{prefix}_questionnaire_item_{item_idx:02d}")
 
 
 def render_screens(output_dir: Path, width: int, height: int, participant_id: int) -> list[Path]:

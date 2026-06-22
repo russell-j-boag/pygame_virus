@@ -23,7 +23,7 @@ Use the `r-pygame` Python interpreter to render static screenshots and assemble 
 /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/build_screenshot_deck.py --overwrite
 ```
 
-By default, the screenshot scripts use the current display size so the PNGs match the participant-facing display aspect ratio. If the shell cannot access the display, pass the display size explicitly, for example `--resolution 1440x900`, to both screenshot commands.
+By default, the screenshot scripts render at `1512x982`, matching the current participant-facing display aspect ratio. Pass `--resolution current` to detect the active display size, or pass another explicit `WIDTHxHEIGHT` value to both screenshot commands.
 The deck builder sizes the PowerPoint slides to the screenshot aspect ratio rather than PowerPoint's default slide shape.
 The generated `instruction_screenshots/`, `virus_task_screenshots/`, and `screenshots_review.pptx` artifacts are local review outputs and are ignored by git.
 The deck builder requires `pandoc` and Pillow.
@@ -81,7 +81,7 @@ This gives a complete four-participant counterbalance over calibration target an
 
 The standard key mapping is `D = V-BLACK` and `J = V-WHITE`. The flipped key mapping is `J = V-BLACK` and `D = V-WHITE`.
 
-Participants report perceived self accuracy after calibration and after each manual segment. After each aided reliability phase, participants report perceived automation accuracy, perceived self accuracy, and trust in the aid.
+Participants report perceived self accuracy after calibration and after each manual segment. The 1200-trial aided block is not interrupted by questionnaires; after the full aided reliability-drop block, participants report perceived automation accuracy, perceived self accuracy, and trust in the aid for the whole aided sequence.
 
 ## Output fields
 
@@ -100,8 +100,11 @@ The main trial and post-block output files include fields that identify the desi
 | `reliability_phase_label` | Phase label such as `P1_95`, `P2_70`, or `P3_95` |
 | `aid_reliability_level` | Current aided-phase aid accuracy level |
 | `automation_reliability_group` | High/low grouping derived from aid reliability |
+| `postblock_scope` | Scope for post-block ratings; automation ratings use `full_automation_block` |
 | `trial_deadline_s` | Fixed response window in seconds |
 | `rt_s` | Response time in seconds; this is the canonical RT field |
+
+For automation post-block ratings, `reliability_phase_label` is `DROP95_70_95` and single-phase fields such as `reliability_phase_idx`, `trial_in_reliability_phase`, `aid_reliability_level`, and `automation_reliability_group` are left blank because the ratings refer to the complete aided block rather than one 400-trial phase.
 
 Single-block runs can be selected for the current task sequence:
 

@@ -31,7 +31,7 @@ import instructions
 
 
 DEFAULT_OUTPUT_DIR = Path("instruction_screenshots")
-DEFAULT_RESOLUTION = "current"
+DEFAULT_RESOLUTION = "1512x982"
 FILENAME_SAFE_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -51,8 +51,8 @@ def parse_args() -> argparse.Namespace:
         "--resolution",
         default=DEFAULT_RESOLUTION,
         help=(
-            "Capture size. Defaults to 'current' for the current display size, or "
-            "an explicit WIDTHxHEIGHT value such as 1280x720."
+            f"Capture size. Default: {DEFAULT_RESOLUTION}. Use 'current' to detect "
+            "the current display size, or pass another explicit WIDTHxHEIGHT value."
         ),
     )
     parser.add_argument(
