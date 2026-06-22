@@ -23,8 +23,8 @@ Use the `r-pygame` Python interpreter to render static screenshots and assemble 
 /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/build_screenshot_deck.py --overwrite
 ```
 
-By default, the screenshot scripts use the current display size so the PNGs match the participant-facing display aspect ratio. If the shell cannot access the display, pass the display size explicitly, for example `--resolution 1440x900`, to both screenshot commands.
-The deck builder sizes the PowerPoint slides to the screenshot aspect ratio rather than PowerPoint's default slide shape.
+By default, the screenshot scripts render PNGs at `1512x982`. Pass `--resolution current` to use the active display size instead, or pass another explicit `WIDTHxHEIGHT` value to both screenshot commands.
+The deck builder uses a `1512x982` slide canvas by default and requires the screenshot folders to match that aspect ratio. Pass `--slide-resolution screenshots` to size the PowerPoint slides to the existing screenshot aspect ratio instead.
 The generated `instruction_screenshots/`, `virus_task_screenshots/`, and `screenshots_review.pptx` artifacts are local review outputs and are ignored by git.
 The deck builder requires `pandoc` and Pillow.
 

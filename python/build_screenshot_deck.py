@@ -6,7 +6,7 @@ The deck is ordered as:
   2. virus_task_screenshots/*.png
 
 Pandoc writes the Office package, then this script patches the slide canvas to
-the screenshot aspect ratio and places each image full slide height.
+the default screenshot resolution and places each image full slide height.
 """
 
 from __future__ import annotations
@@ -27,6 +27,8 @@ from PIL import Image
 DEFAULT_INSTRUCTION_DIR = Path("instruction_screenshots")
 DEFAULT_VIRUS_DIR = Path("virus_task_screenshots")
 DEFAULT_OUTPUT = Path("screenshots_review.pptx")
+DEFAULT_SLIDE_RESOLUTION = "1512x982"
+EMU_PER_PIXEL = 9525
 
 P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
 A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -61,11 +63,44 @@ def parse_args() -> argparse.Namespace:
         help=f"Output .pptx path. Default: {DEFAULT_OUTPUT}",
     )
     parser.add_argument(
+        "--slide-resolution",
+        default=DEFAULT_SLIDE_RESOLUTION,
+        help=(
+            f"Slide canvas size. Default: {DEFAULT_SLIDE_RESOLUTION}. Use "
+            "'screenshots' to preserve the screenshot aspect ratio with "
+            "Pandoc's default slide height."
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Replace an existing output deck.",
     )
     return parser.parse_args()
+
+
+def parse_explicit_resolution(value: str) -> tuple[int, int] | None:
+    match = re.fullmatch(r"\s*(\d+)\s*x\s*(\d+)\s*", value.lower())
+    if match is None:
+        return None
+
+    width = int(match.group(1))
+    height = int(match.group(2))
+    if width <= 0 or height <= 0:
+        raise ValueError("resolution dimensions must be positive")
+    return width, height
+
+
+def parse_slide_resolution(value: str) -> tuple[int, int] | None:
+    if value.lower() == "screenshots":
+        return None
+
+    explicit = parse_explicit_resolution(value)
+    if explicit is None:
+        raise ValueError(
+            f"invalid --slide-resolution {value!r}; use 'screenshots' or WIDTHxHEIGHT"
+        )
+    return explicit
 
 
 def pngs_in(directory: Path) -> list[Path]:
@@ -156,9 +191,26 @@ def common_image_aspect(image_paths: list[Path]) -> tuple[int, int]:
     return ref_w, ref_h
 
 
-def target_slide_size(pptx_path: Path, image_paths: list[Path]) -> tuple[int, int]:
-    _, source_slide_h = slide_size(pptx_path)
+def target_slide_size(
+    pptx_path: Path,
+    image_paths: list[Path],
+    slide_resolution: tuple[int, int] | None,
+) -> tuple[int, int]:
     pixel_w, pixel_h = common_image_aspect(image_paths)
+
+    if slide_resolution is not None:
+        slide_pixel_w, slide_pixel_h = slide_resolution
+        if pixel_w * slide_pixel_h != slide_pixel_w * pixel_h:
+            raise RuntimeError(
+                "screenshots do not match the requested slide resolution; "
+                f"screenshots are {pixel_w}x{pixel_h}, requested slide "
+                f"resolution is {slide_pixel_w}x{slide_pixel_h}. Regenerate "
+                "both screenshot folders at that resolution or pass "
+                "--slide-resolution screenshots."
+            )
+        return slide_pixel_w * EMU_PER_PIXEL, slide_pixel_h * EMU_PER_PIXEL
+
+    _, source_slide_h = slide_size(pptx_path)
     slide_w = int(round(source_slide_h * (pixel_w / pixel_h)))
     if slide_w <= 0:
         raise RuntimeError(f"invalid target slide width computed from {pixel_w}x{pixel_h}")
@@ -215,8 +267,13 @@ def patch_presentation_xml(xml_bytes: bytes, slide_w: int, slide_h: int) -> byte
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
-def patch_full_height_images(input_pptx: Path, output_pptx: Path, image_paths: list[Path]) -> None:
-    slide_w, slide_h = target_slide_size(input_pptx, image_paths)
+def patch_full_height_images(
+    input_pptx: Path,
+    output_pptx: Path,
+    image_paths: list[Path],
+    slide_resolution: tuple[int, int] | None,
+) -> None:
+    slide_w, slide_h = target_slide_size(input_pptx, image_paths, slide_resolution)
     slide_name_re = re.compile(r"^ppt/slides/slide(\d+)\.xml$")
 
     with zipfile.ZipFile(input_pptx) as src, zipfile.ZipFile(
@@ -235,7 +292,11 @@ def patch_full_height_images(input_pptx: Path, output_pptx: Path, image_paths: l
             dst.writestr(info, data)
 
 
-def write_pptx(output: Path, image_paths: list[Path]) -> None:
+def write_pptx(
+    output: Path,
+    image_paths: list[Path],
+    slide_resolution: tuple[int, int] | None,
+) -> None:
     with tempfile.TemporaryDirectory(prefix="screenshot-deck-") as tmp_dir:
         tmp_dir_path = Path(tmp_dir)
         markdown_path = tmp_dir_path / "screenshots.md"
@@ -243,7 +304,7 @@ def write_pptx(output: Path, image_paths: list[Path]) -> None:
 
         write_markdown_deck(markdown_path, image_paths)
         run_pandoc(markdown_path, pandoc_pptx)
-        patch_full_height_images(pandoc_pptx, output, image_paths)
+        patch_full_height_images(pandoc_pptx, output, image_paths, slide_resolution)
 
 
 def main() -> int:
@@ -256,15 +317,17 @@ def main() -> int:
         instruction_paths = pngs_in(instruction_dir)
         virus_paths = pngs_in(virus_dir)
         image_paths = instruction_paths + virus_paths
+        slide_resolution = parse_slide_resolution(args.slide_resolution)
         validate_output_path(output, args.overwrite)
-        write_pptx(output, image_paths)
-    except (RuntimeError, OSError, zipfile.BadZipFile, ET.ParseError) as exc:
+        write_pptx(output, image_paths, slide_resolution)
+    except (RuntimeError, ValueError, OSError, zipfile.BadZipFile, ET.ParseError) as exc:
         print(f"build_screenshot_deck: error: {exc}", file=sys.stderr)
         return 1
 
     print(f"Instruction screenshots: {len(instruction_paths)}")
     print(f"Virus task screenshots: {len(virus_paths)}")
     print(f"Total slides: {len(image_paths)}")
+    print(f"Slide resolution: {args.slide_resolution}")
     print(f"Output: {output}")
     return 0
 

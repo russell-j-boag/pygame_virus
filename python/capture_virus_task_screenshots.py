@@ -31,7 +31,7 @@ import virus_task as task
 
 
 DEFAULT_OUTPUT_DIR = Path("virus_task_screenshots")
-DEFAULT_RESOLUTION = "current"
+DEFAULT_RESOLUTION = "1512x982"
 DEFAULT_PARTICIPANT = 1
 FILENAME_SAFE_RE = re.compile(r"[^a-z0-9]+")
 
@@ -66,8 +66,8 @@ def parse_args() -> argparse.Namespace:
         "--resolution",
         default=DEFAULT_RESOLUTION,
         help=(
-            "Capture size. Defaults to 'current' for the current display size, or "
-            "an explicit WIDTHxHEIGHT value such as 1280x720."
+            f"Capture size. Default: {DEFAULT_RESOLUTION}. Use 'current' for "
+            "the current display size, or an explicit WIDTHxHEIGHT value."
         ),
     )
     parser.add_argument(
@@ -388,7 +388,7 @@ def main() -> int:
         if args.resolution.lower() == "current":
             print(
                 "Tip: if this session cannot access the display, retry with an "
-                "explicit display size such as --resolution 1440x900.",
+                f"explicit display size such as --resolution {DEFAULT_RESOLUTION}.",
                 file=sys.stderr,
             )
         return 1
