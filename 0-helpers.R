@@ -43,10 +43,9 @@ run_task <- function(
 ) {
   
   valid_blocks <- c(
-    "CALIBRATION",
     "AUTOMATION"
   )
-  valid_aid_conditions <- c("simultaneous", "aid_first", "stimulus_first_change")
+  valid_aid_conditions <- c("manual", "aid_first", "stimulus_first_change")
   if (!is.null(aid_condition)) {
     aid_condition <- tolower(aid_condition)
   }
@@ -91,7 +90,7 @@ run_task <- function(
     args <- c(args, "--block", block)
   }
   
-  # Add aid-condition selector for automation-block variants
+  # Add aid-condition selector for scheduled automation-block variants
   if (!is.null(aid_condition)) {
     args <- c(args, "--aid-condition", aid_condition)
   }

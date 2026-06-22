@@ -15,51 +15,35 @@ Based on Bartlett & McCarley RDC task.
 
 ## Current task design
 
-The task uses a mixed design. Calibration is unchanged and always occurs first. After calibration, participants complete three automation blocks that manipulate when the automated aid and stimulus information become available. There is no post-calibration manual block. Automation decision phases remain on screen until the required response is made.
+The task uses a three-block within-participant design. There is no calibration block. Each participant completes one `MANUAL`, one `AIDFIRST`, and one `STIMFIRST` block. Each trial has two mouse-click decision phases; the second decision is the final answer.
 
 | Code | Mode | Trial structure | Trials |
 | --- | --- | --- | ---: |
-| `SIM` | Automation | fixation -> masked aid preview 1000 ms -> fixation -> aid + stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 400 |
-| `AIDFIRST` | Automation | fixation -> aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 400 |
-| `STIMFIRST` | Automation | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> aid until decision 2 -> feedback | 400 |
+| `MANUAL` | Manual control | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 260 |
+| `AIDFIRST` | Automation | fixation -> aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 260 |
+| `STIMFIRST` | Automation | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> aid until decision 2 -> feedback | 260 |
 
-The calibration block contains 300 manual staircase trials with a 10 s response window and targets 85% unaided accuracy. Automation blocks use the calibration-derived fixed difficulty for the participant. The automated aid uses a single global reliability of 85% in all automation blocks.
+All blocks use the same fixed stimulus difficulty (`delta = 0.10`). The automated aid uses a single global reliability of 85% in the `AIDFIRST` and `STIMFIRST` blocks. The `MANUAL` block shows the masked aid string `#####` instead of a real recommendation during masked preview and final-decision screens.
 
-Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid is reasonably reliable but not perfect, and that automation advice errors remain possible.
+Responses are made with fixed mouse-click buttons. The left button is `VIRUS A` and maps to the internally stored `BLACK` response. The right button is `VIRUS B` and maps to the internally stored `WHITE` response. On the second decision screen, the same two buttons are shown with parenthetical text indicating whether each option would confirm or switch the participant's initial decision.
+
+Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid is reasonably reliable but not perfect in automation blocks, and that automation advice errors remain possible.
 
 ## Counterbalancing
 
-The post-calibration block order uses balanced rotations of the three aid-condition blocks:
+The block order uses balanced rotations of the three scheduled condition blocks:
 
 | Order | Sequence |
 | --- | --- |
-| `O1` | `SIM -> AIDFIRST -> STIMFIRST` |
-| `O2` | `AIDFIRST -> STIMFIRST -> SIM` |
-| `O3` | `STIMFIRST -> SIM -> AIDFIRST` |
+| `O1` | `MANUAL -> AIDFIRST -> STIMFIRST` |
+| `O2` | `AIDFIRST -> STIMFIRST -> MANUAL` |
+| `O3` | `STIMFIRST -> MANUAL -> AIDFIRST` |
 
-Block order and key mapping are assigned deterministically from participant ID:
-
-- Block order: `(participant_id - 1) %% 3`, so the order advances every participant.
-- Key mapping: standard for participant IDs 1-3 within each 6-ID counterbalancing cycle, flipped for participant IDs 4-6.
-
-The full joint cycle for order and key mapping is 6 participants:
-
-| Participant IDs in cycle | Key mapping | Order |
-| --- | --- | --- |
-| 1 | standard | `O1` |
-| 2 | standard | `O2` |
-| 3 | standard | `O3` |
-| 4 | flipped | `O1` |
-| 5 | flipped | `O2` |
-| 6 | flipped | `O3` |
+Block order is assigned deterministically from participant ID as `(participant_id - 1) %% 3`, so the order advances every participant.
 
 For the planned sample of `N = 60`, this gives:
 
 - 20 participants per block order overall.
-- 30 standard-key and 30 flipped-key participants.
-- 10 participants in each order x key mapping cell.
-
-The standard key mapping is `D = V-BLACK` and `J = V-WHITE`. The flipped key mapping is `J = V-BLACK` and `D = V-WHITE`.
 
 ## Output fields
 
@@ -67,15 +51,16 @@ The main trial and post-block output files include fields that identify the desi
 
 | Field | Meaning |
 | --- | --- |
-| `block` | `CALIBRATION` or `AUTOMATION` |
-| `condition_code` | `CAL`, `SIM`, `AIDFIRST`, or `STIMFIRST` |
+| `block` | `AUTOMATION` for all scheduled blocks |
+| `condition_code` | `MANUAL`, `AIDFIRST`, or `STIMFIRST` |
 | `condition_deadline_code` | Compatibility alias for `condition_code` |
 | `automation_reliability_group` | Compatibility field; `none` in the current design |
-| `aid_accuracy_setting` | `0.85`, or blank for calibration |
-| `aid_condition` | `simultaneous`, `aid_first`, `stimulus_first_change`, or blank for calibration |
-| `trial_deadline_ms` | Fixed response window in milliseconds |
-| `trial_deadline_s` | Fixed response window in seconds |
-| `decision1_display`, `decision2_display` | Display type for each automation decision phase |
+| `aid_accuracy_setting` | `0.85` for aided automation blocks, or blank for `MANUAL` |
+| `aid_condition` | `manual`, `aid_first`, or `stimulus_first_change` |
+| `trial_deadline_ms` | Blank in the current self-paced design |
+| `trial_deadline_s` | Blank in the current self-paced design |
+| `key_black`, `key_white`, `keymap_flip` | Legacy compatibility fields; blank or false because responses are fixed mouse buttons |
+| `decision1_display`, `decision2_display` | Display type for each decision phase |
 | `decision1_response`, `decision1_correct`, `decision1_rt_s`, `decision1_rt_ms`, `decision1_matches_aid` | First automation classification fields |
 | `decision2_response`, `decision2_correct`, `decision2_rt_s`, `decision2_rt_ms`, `decision2_matches_aid` | Second automation classification fields |
 | `initial_response`, `initial_correct`, `initial_rt_s`, `initial_rt_ms` | Compatibility aliases for decision 1 |
@@ -83,12 +68,24 @@ The main trial and post-block output files include fields that identify the desi
 | `changed_response` | Whether decision 2 differs from decision 1 |
 | `response`, `correct`, `rt_s`, `rt_ms` | Primary-analysis aliases for decision 2 |
 
-Single-block automation runs require an explicit aid condition, for example:
+Single-block runs require an explicit aid condition, for example:
 
 ```r
-run_task(block = "AUTOMATION", aid_condition = "simultaneous")
+run_task(block = "AUTOMATION", aid_condition = "manual")
 run_task(block = "AUTOMATION", aid_condition = "stimulus_first_change")
 ```
+
+## Screenshot review deck
+
+Use the `r-pygame` interpreter to regenerate the local screenshot review deck:
+
+```bash
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/capture_instruction_screenshots.py --overwrite
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/capture_virus_task_screenshots.py --overwrite
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/build_screenshot_deck.py --overwrite
+```
+
+This writes `instruction_screenshots/`, `virus_task_screenshots/`, and `screenshots_review.pptx`. These generated review artifacts are ignored by git.
 
 ## Author
 Russell J. Boag

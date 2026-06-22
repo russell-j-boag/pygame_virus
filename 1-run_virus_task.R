@@ -10,8 +10,7 @@ run_instructions()
 # Run task
 run_task()
 
-# # You can also run one block at a time by selecting a specific block:
-# run_task(block = "CALIBRATION")
-# run_task(block = "AUTOMATION", aid_condition = "simultaneous")
+# # You can also run one scheduled block at a time:
+# run_task(block = "AUTOMATION", aid_condition = "manual")
 # run_task(block = "AUTOMATION", aid_condition = "aid_first")
 # run_task(block = "AUTOMATION", aid_condition = "stimulus_first_change")

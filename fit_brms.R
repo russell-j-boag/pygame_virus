@@ -35,14 +35,14 @@ ensure_design_columns <- function(data) {
 
 factor_aid_condition <- function(aid_condition) {
   condition <- case_when(
-    !is.na(aid_condition) & aid_condition == "simultaneous" ~ "Aid + stimulus",
+    !is.na(aid_condition) & aid_condition == "manual" ~ "Manual",
     !is.na(aid_condition) & aid_condition == "aid_first" ~ "Aid first",
     !is.na(aid_condition) & aid_condition == "stimulus_first_change" ~ "Stimulus first, change allowed",
     TRUE ~ NA_character_
   )
   factor(
     condition,
-    levels = c("Aid + stimulus", "Aid first", "Stimulus first, change allowed")
+    levels = c("Manual", "Aid first", "Stimulus first, change allowed")
   )
 }
 
@@ -50,7 +50,7 @@ factor_aid_condition <- function(aid_condition) {
 dat <- read_csv("data/data_virus.csv", show_col_types = FALSE)
 str(dat)
 
-# Recode to the new automation-only aid-condition design.
+# Recode to the current three-condition design.
 dat <- dat %>%
   ensure_design_columns() %>%
   mutate(

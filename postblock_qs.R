@@ -10,8 +10,7 @@ library("ggplot2")
 library("forcats")
 
 ONSET_LEVELS <- c(
-  "Calibration",
-  "Aid + stimulus",
+  "Manual",
   "Aid first",
   "Stimulus first, change allowed"
 )
@@ -28,8 +27,7 @@ ensure_onset_columns <- function(data) {
 
 make_block_onset <- function(block, aid_condition) {
   condition <- case_when(
-    as.character(block) == "CALIBRATION" ~ "Calibration",
-    !is.na(aid_condition) & aid_condition == "simultaneous" ~ "Aid + stimulus",
+    !is.na(aid_condition) & aid_condition == "manual" ~ "Manual",
     !is.na(aid_condition) & aid_condition == "aid_first" ~ "Aid first",
     !is.na(aid_condition) & aid_condition == "stimulus_first_change" ~ "Stimulus first, change allowed",
     TRUE ~ NA_character_
@@ -112,9 +110,9 @@ p_q <- ggplot(q_plot_dat, aes(x = block_onset, y = mean, group = 1)) +
   facet_wrap(~ question) +
   scale_y_continuous(limits = c(1, 5), breaks = 1:5) +
   labs(
-    x = "Aid condition",
+    x = "Condition",
     y = "Mean response",
-    title = "Questionnaire responses by aid condition",
+    title = "Questionnaire responses by condition",
     subtitle = "Error bars are Morey-Cousineau within-subject SEs"
   ) +
   theme_classic() +
@@ -158,7 +156,7 @@ dat_slider <- dat_slider_raw %>%
     question_key = factor(
       question_key,
       levels = c("perc_self_correct", "perc_auto_correct"),
-      labels = c("Self rated accuracy", "Aid rated accuracy")
+      labels = c("Self-rated accuracy", "Aid-rated accuracy")
     )
   ) %>%
   filter(
@@ -204,9 +202,9 @@ p_slider <- ggplot(
     breaks = seq(0, 100, by = 20)
   ) +
   labs(
-    x = "Aid condition",
+    x = "Condition",
     y = "Mean slider response (%)",
-    title = "Slider responses by aid condition",
+    title = "Slider responses by condition",
     subtitle = "Error bars are Morey-Cousineau within-subject SEs"
   ) +
   theme_classic() +

@@ -13,13 +13,12 @@ library("ggplot2")
 # ------------------
 CALIB_SUMMARY_LAST_N <- 150
 PLOT_DIR <- "plots"
-BLOCK_RAW_LEVELS <- c("CALIBRATION", "AUTOMATION")
-BLOCK_DISPLAY_LEVELS <- c("Calibration", "Automation")
-BLOCK_LEVELS <- c("Calibration", "Aid + stimulus", "Aid first", "Stimulus first, change allowed")
-AUTOMATION_BLOCK_LEVELS <- c("Aid + stimulus", "Aid first", "Stimulus first, change allowed")
+BLOCK_RAW_LEVELS <- c("AUTOMATION")
+BLOCK_DISPLAY_LEVELS <- c("Automation")
+BLOCK_LEVELS <- c("Manual", "Aid first", "Stimulus first, change allowed")
+AUTOMATION_BLOCK_LEVELS <- c("Manual", "Aid first", "Stimulus first, change allowed")
 AUTOMATION_FACET_LEVELS <- c("Automation")
-FACET_GROUP_LEVELS <- c("Unaided", AUTOMATION_FACET_LEVELS)
-TARGET_ACC <- 0.85
+FACET_GROUP_LEVELS <- AUTOMATION_FACET_LEVELS
 GLOBAL_AID_ACCURACY <- 0.85
 MOREY_SE_SUBTITLE <- "Error bars are Morey-Cousineau within-subject SEs"
 rt_mode  <- "mean"              # "mean" or "quantile"
@@ -43,8 +42,7 @@ factor_block_simple <- function(x) {
 
 factor_condition_block <- function(block, aid_condition) {
   condition <- case_when(
-    as.character(block) == "CALIBRATION" ~ "Calibration",
-    !is.na(aid_condition) & aid_condition == "simultaneous" ~ "Aid + stimulus",
+    !is.na(aid_condition) & aid_condition == "manual" ~ "Manual",
     !is.na(aid_condition) & aid_condition == "aid_first" ~ "Aid first",
     !is.na(aid_condition) & aid_condition == "stimulus_first_change" ~ "Stimulus first, change allowed",
     TRUE ~ NA_character_
@@ -270,12 +268,10 @@ dat <- trial_dat_raw %>%
       TRUE ~ NA_character_
     ),
     facet_group = case_when(
-      block == "Calibration" ~ "Unaided",
       block_raw == "AUTOMATION" ~ "Automation",
       TRUE ~ NA_character_
     ),
     x_group = case_when(
-      block == "Calibration" ~ as.character(block),
       block_raw == "AUTOMATION" ~ as.character(block),
       TRUE ~ NA_character_
     ),
@@ -285,10 +281,7 @@ dat <- trial_dat_raw %>%
     ),
     x_group = factor(
       x_group,
-      levels = c(
-        "Calibration",
-        AUTOMATION_BLOCK_LEVELS
-      )
+      levels = AUTOMATION_BLOCK_LEVELS
     )
   )
 
@@ -443,10 +436,10 @@ rt_ylim <- get_axis_limits(rt_all_vals, rt_all_ses)
 # ------------------
 acc_hlines <- tibble(
   facet_group = factor(
-    c("Unaided", "Automation"),
+    "Automation",
     levels = levels(acc_summary$facet_group)
   ),
-  yint = c(TARGET_ACC, GLOBAL_AID_ACCURACY)
+  yint = GLOBAL_AID_ACCURACY
 )
 
 p_acc <- ggplot(acc_summary, aes(x = x_group, y = mean_acc, group = 1)) +
@@ -618,13 +611,11 @@ acc_block_ylim <- get_axis_limits(
   c(
     acc_block_summary$mean_acc,
     slider_block_summary$mean_rated_acc,
-    TARGET_ACC,
     GLOBAL_AID_ACCURACY
   ),
   c(
     acc_block_summary$se_acc,
     slider_block_summary$se_rated_acc,
-    0,
     0
   )
 )
@@ -696,7 +687,14 @@ p_acc_block <- ggplot() +
     width = 0.12,
     na.rm = TRUE
   ) +
-  annotate("segment", x = 0.5, xend = 4.5, y = TARGET_ACC, yend = TARGET_ACC, linetype = "dashed") +
+  annotate(
+    "segment",
+    x = 0.5,
+    xend = length(BLOCK_LEVELS) + 0.5,
+    y = GLOBAL_AID_ACCURACY,
+    yend = GLOBAL_AID_ACCURACY,
+    linetype = "dashed"
+  ) +
   scale_colour_manual(
     values = c(
       "Observed accuracy" = "black",
@@ -966,9 +964,9 @@ id_rt_summary <- dat_id %>%
     .groups = "drop"
   )
 
-# use Calibration accuracy only to define participant order
+# Use Manual accuracy to define participant order in the no-calibration design.
 participant_order <- id_acc_summary %>%
-  filter(block_simple == "Calibration") %>%
+  filter(block_simple == "Manual") %>%
   arrange(acc) %>%
   pull(participant_id)
 
@@ -982,10 +980,10 @@ id_rt_summary <- id_rt_summary %>%
     participant_id = factor(participant_id, levels = participant_order)
   )
 
-# orange target line in all panels
+# Global aid-reliability reference line in all panels
 acc_base_lines <- tibble(
   block_simple = factor_block_simple(BLOCK_LEVELS),
-  xint = TARGET_ACC
+  xint = GLOBAL_AID_ACCURACY
 )
 
 acc_auto_lines <- tibble(
@@ -1073,10 +1071,11 @@ save_plot_pair(
 )
 
 # ------------------
-# Calibration vs Manual participant accuracy difference
+# Legacy calibration vs manual participant accuracy difference.
+# The current experiment has no calibration block, so this archived analysis is skipped.
 # ------------------
 
-if ("Manual" %in% as.character(dat$block)) {
+if (FALSE && "Manual" %in% as.character(dat$block)) {
 
 calib_manual_acc <- dat %>%
   mutate(
@@ -1641,7 +1640,7 @@ p_aid_accuracy_trust_pooled <- ggplot(
     x = "Pooled trust rating",
     y = "Pooled aid-accuracy discrepancy",
     title = "Pooled trust vs pooled aid-accuracy discrepancy",
-    subtitle = "Discrepancy and trust are averaged across the three aid-condition blocks"
+    subtitle = "Discrepancy and trust are averaged across aided automation blocks"
   ) +
   coord_cartesian(
     xlim = c(1, 5),

@@ -81,8 +81,8 @@ SLIDES = [
             "We have identified two dangerous viruses. "
             "Unfortunately, the two strains are difficult to tell apart. Both are speckled BLACK and WHITE. "
             "The only difference visually is that one strain tends to have a little more BLACK, and the other tends to have a little more WHITE. "
-            "For simplicity, we will call them V-BLACK and V-WHITE. "
-            "You'll be shown a similar number of V-BLACK and V-WHITE samples. \n"
+            "For simplicity, we will call them VIRUS A and VIRUS B. "
+            "You'll be shown a similar number of VIRUS A and VIRUS B samples. \n"
             "Your job is to evaluate the following samples to determine which virus is present.\n\n"
             "The following screens will help you get familiar with the task"
         ),
@@ -98,7 +98,7 @@ SLIDES = [
     },
     {
         "kind": "example_task_display",
-        "callout": "keys",
+        "callout": "responses",
     },
     {
         "kind": "example_task_display",
@@ -141,12 +141,12 @@ SLIDES = [
         "kind": "text",
         "title": "AID TIMING",
         "body": (
-            "Across automation blocks, the order of information will vary. "
+            "Across the main blocks, the order of information will vary. "
             "Some screens will show information without requiring a response. "
-            "On some trials the aid recommendation and virus sample will appear together. "
+            "Some screens will show the aid display masked as #####. "
             "On some trials the aid recommendation will appear first as a preview, followed by the virus sample. "
             "On other trials the virus sample will appear before the aid recommendation. "
-            "In the main automation blocks, you will make two classifications for each sample; "
+            "In every main block, you will make two classifications for each sample; "
             "the second classification is your final answer. "
             "Your job is always to classify the sample as accurately as possible."
         ),
@@ -157,7 +157,7 @@ SLIDES = [
         "body": (
             "We will keep an ongoing tally of your performance. "
             "At the end of the experiment you will receive a point-based bonus, up to $25, based on your performance score.\n\n"
-            "In the main automation blocks, each decision phase will remain on screen until you respond. "
+            "In the main blocks, each decision phase will remain on screen until you respond. "
             "Incorrect final responses will reduce your performance score, so try to respond accurately.\n\n"
             "You may take short breaks at any time between trials\n\n"
         ),
@@ -604,9 +604,7 @@ def draw_example_task_display(
     prompt_rect = draw_trial_prompt_stacked(
         screen,
         font_small,
-        HEIGHT - S(80),
-        key_black_name="D",
-        key_white_name="J",
+        HEIGHT - S(104),
     )
 
     aid_layout = draw_aid_recommendation_top_center(
@@ -759,23 +757,22 @@ def draw_example_task_slide(
             width=max(1, S(2)),
         )
 
-    elif callout == "keys":
-        keys_title = "Response keys"
-        keys_body = "The response keys to use will be shown here"
-        kw, kh = measure_callout_box(keys_title, keys_body, callout_title_font, callout_body_font)
+    elif callout == "responses":
+        responses_title = "Response buttons"
+        responses_body = "Click one of these boxes to classify the sample"
+        kw, kh = measure_callout_box(responses_title, responses_body, callout_title_font, callout_body_font)
 
-        # moved slightly lower
         rect_keys = pygame.Rect(
-            WIDTH // 2 - kw // 2 - S(120),
-            HEIGHT - S(260),
+            S(120),
+            HEIGHT - S(430),
             kw,
             kh,
         )
 
         draw_callout_box(
             screen,
-            keys_title,
-            keys_body,
+            responses_title,
+            responses_body,
             rect_keys,
             callout_title_font,
             callout_body_font,
@@ -850,7 +847,7 @@ def draw_automation_example_slide(
         title = "Automated decision aid"
         body = (
             "The automation will recommend a classification "
-            "(either BLACK or WHITE) for each sample"
+            "(either VIRUS A or VIRUS B) for each sample"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
         rect = pygame.Rect(WIDTH - S(80) - bw, S(95), bw, bh)
@@ -878,7 +875,7 @@ def draw_automation_example_slide(
         title = "Recommendation"
         body = (
             "In this example, the automated decision aid is "
-            "recommending that you classify the sample as V-BLACK"
+            "recommending that you classify the sample as VIRUS A"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
         
@@ -908,7 +905,7 @@ def draw_automation_example_slide(
         title = "Recommendation"
         body = (
             "In this example, the automated decision aid is "
-            "recommending that you classify the sample as V-WHITE"
+            "recommending that you classify the sample as VIRUS B"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
 
@@ -1007,82 +1004,34 @@ def draw_progress_bar(surface, trials_left, total_trials):
         pygame.draw.rect(surface, WHITE, (x, y, fill_w, PB_H), border_radius=max(1, S(6)))
         
 
-def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name: str, key_white_name: str):
-    """
-    Bottom prompt, always laid out as:
+def display_label_for_response(response):
+    if response == "BLACK":
+        return "VIRUS A"
+    if response == "WHITE":
+        return "VIRUS B"
+    return str(response)
 
-        (LEFT COLUMN)                 (RIGHT COLUMN)
-        key D meaning label           key J meaning label
-        Press D                       Press J
 
-    But the meaning (V-BLACK vs V-WHITE) + text colour (black vs white)
-    follows the participant-specific key mapping:
-      - whichever key maps to BLACK is rendered in BLACK
-      - whichever key maps to WHITE is rendered in WHITE
-    """
+def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name=None, key_white_name=None):
+    """Bottom prompt matching the main task's mouse-click response buttons."""
+    btn_w = min(S(380), max(S(240), (WIDTH - S(440)) // 2))
+    btn_h = S(72)
+    gap = S(44)
+    total_w = btn_w * 2 + gap
+    left_x = WIDTH // 2 - total_w // 2
+    rects = [
+        pygame.Rect(left_x, y_pos, btn_w, btn_h),
+        pygame.Rect(left_x + btn_w + gap, y_pos, btn_w, btn_h),
+    ]
+    labels = ["VIRUS A", "VIRUS B"]
 
-    # Mapping from key-name -> category
-    # (key_black_name is either "D" or "J"; key_white_name is the other)
-    meaning_by_key = {
-        key_black_name: "BLACK",
-        key_white_name: "WHITE",
-    }
+    for label, rect in zip(labels, rects):
+        pygame.draw.rect(screen, (50, 50, 50), rect, 0, border_radius=max(1, S(10)))
+        pygame.draw.rect(screen, WHITE, rect, max(1, S(3)), border_radius=max(1, S(10)))
+        img = font_small.render(label, True, WHITE)
+        screen.blit(img, img.get_rect(center=rect.center))
 
-    def label_and_color_for_key(key_name: str):
-        cat = meaning_by_key.get(key_name, "WHITE")
-        if cat == "BLACK":
-            return "V-BLACK", BLACK
-        else:
-            return "V-WHITE", WHITE
-
-    # Fixed spatial layout: D always left, J always right
-    left_key = "D"
-    right_key = "J"
-
-    left_top, left_col = label_and_color_for_key(left_key)
-    right_top, right_col = label_and_color_for_key(right_key)
-
-    left_bottom = "Press D"
-    right_bottom = "Press J"
-
-    lt_img = font_small.render(left_top, True, left_col)
-    lb_img = font_small.render(left_bottom, True, left_col)
-    rt_img = font_small.render(right_top, True, right_col)
-    rb_img = font_small.render(right_bottom, True, right_col)
-
-    col_gap = 80
-    line_gap = 4
-
-    left_w = max(lt_img.get_width(), lb_img.get_width())
-    right_w = max(rt_img.get_width(), rb_img.get_width())
-
-    total_w = left_w + col_gap + right_w
-    start_x = WIDTH // 2 - total_w // 2
-
-    y_top = y_pos
-    y_bottom = y_pos + font_small.get_height() + line_gap
-
-    # Left column (C)
-    screen.blit(lt_img, (start_x + (left_w - lt_img.get_width()) // 2, y_top))
-    screen.blit(lb_img, (start_x + (left_w - lb_img.get_width()) // 2, y_bottom))
-
-    # Right column (N)
-    right_x = start_x + left_w + col_gap
-    screen.blit(rt_img, (right_x + (right_w - rt_img.get_width()) // 2, y_top))
-    screen.blit(rb_img, (right_x + (right_w - rb_img.get_width()) // 2, y_bottom))
-    
-    # compute bounding rect for the two-column prompt
-    top_y = y_top
-    bottom_y = y_bottom + font_small.get_height()
-
-    rect = pygame.Rect(
-        start_x,
-        top_y,
-        total_w,
-        bottom_y - top_y
-    )
-
-    return rect
+    return rects[0].union(rects[1])
 
 
 def draw_aid_recommendation_top_center(
@@ -1101,7 +1050,7 @@ def draw_aid_recommendation_top_center(
     img_main = None
 
     if show_value:
-        phrase = f"{rec_label}"
+        phrase = display_label_for_response(rec_label)
         col = COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
 

@@ -15,6 +15,10 @@ __pycache__/
 output/*
 plots/*
 data/*
+instruction_screenshots/
+virus_task_screenshots/
+screenshots_review.pptx
+~$*.pptx
 
 !output/.gitkeep
 !plots/.gitkeep

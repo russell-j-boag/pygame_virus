@@ -1,8 +1,8 @@
 """
 Random Dot Classification (Bartlett & McCarley–style)
 
-Keys:
-- D/J = classify as V-BLACK or V-WHITE, counterbalanced by participant
+Responses:
+- Mouse-click VIRUS A / VIRUS B response buttons
 - Option/Alt + Q = hard quit
 - ESC = quit from final completion screen
 """
@@ -27,94 +27,91 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 # -----------------------------
 # Block definitions
 # -----------------------------
-POST_CALIBRATION_N_TRIALS = 400
-CALIBRATION_TRIAL_DEADLINE_MS = 10000
+MAIN_BLOCK_N_TRIALS = 260
+GLOBAL_FIXED_DELTA = 0.10
 AUTOMATION_PRE_PHASE_MS = 1000
-CALIBRATION_TARGET_ACC = 0.85
 GLOBAL_AID_ACCURACY = 0.85
-AUTOMATION_AID_CONDITIONS = {
-    "simultaneous": "Aid + stimulus",
+SCHEDULED_AUTOMATION_AID_CONDITIONS = {
+    "manual": "Manual",
     "aid_first": "Aid first",
     "stimulus_first_change": "Stimulus first, change allowed",
 }
+HIDDEN_AUTOMATION_AID_CONDITIONS = {
+    "simultaneous": "Aid + stimulus",
+}
+AUTOMATION_AID_CONDITIONS = {
+    **SCHEDULED_AUTOMATION_AID_CONDITIONS,
+    **HIDDEN_AUTOMATION_AID_CONDITIONS,
+}
+REAL_AID_CONDITIONS = {"simultaneous", "aid_first", "stimulus_first_change"}
 
 BLOCKS = [
-    # dict(
-    #     name="TRAINING",
-    #     N_TRIALS=1,
-    #     AUTOMATION_ON=False,      # automation off
-    #     AID_ACCURACY=0.90,        # not used (automation off), but harmless
-    #     STAIRCASE_ON=True,        # staircase on
-    #     TARGET_ACC=CALIBRATION_TARGET_ACC,  # target accuracy for adaptive staircase
-    #     FIXED_DELTA_ON=False,     # fixed delta off because using staircase
-    #     FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
-    #     TRIAL_FEEDBACK_ON=True,
-    # ),
-    dict(
-        name="CALIBRATION",
-        N_TRIALS=300,
-        AUTOMATION_ON=False,      # automation off
-        AID_ACCURACY=None,        # not used when automation is off
-        STAIRCASE_ON=True,        # staircase on
-        TARGET_ACC=CALIBRATION_TARGET_ACC,  # target accuracy for adaptive staircase
-        FIXED_DELTA_ON=False,     # fixed delta off because using staircase
-        FIXED_DELTA_VALUE=0.10,   # not used here, but harmless
-        TRIAL_FEEDBACK_ON=True,
-        TRIAL_DEADLINE_MS=CALIBRATION_TRIAL_DEADLINE_MS,
-        CONDITION_CODE="CAL",
-        AID_CONDITION=None,
-    ),
     dict(
         name="AUTOMATION",
-        N_TRIALS=POST_CALIBRATION_N_TRIALS,
-        AUTOMATION_ON=True,       # automation on
-        AID_ACCURACY=GLOBAL_AID_ACCURACY,
+        N_TRIALS=MAIN_BLOCK_N_TRIALS,
+        AUTOMATION_ON=True,       # two-decision main-block flow
+        AID_ACCURACY=None,        # no real aid in the manual condition
         AID_TRANSPARENCY="none",
-        AID_CONDITION="simultaneous",
+        AID_CONDITION="manual",
         STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=CALIBRATION_TARGET_ACC,  # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
-        FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
+        FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=None,
-        CONDITION_CODE="SIM",
+        CONDITION_CODE="MANUAL",
     ),
     dict(
         name="AUTOMATION",
-        N_TRIALS=POST_CALIBRATION_N_TRIALS,
+        N_TRIALS=MAIN_BLOCK_N_TRIALS,
         AUTOMATION_ON=True,       # automation on
         AID_ACCURACY=GLOBAL_AID_ACCURACY,
         AID_TRANSPARENCY="none",
         AID_CONDITION="aid_first",
         STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=CALIBRATION_TARGET_ACC,  # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
-        FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
+        FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=None,
         CONDITION_CODE="AIDFIRST",
     ),
     dict(
         name="AUTOMATION",
-        N_TRIALS=POST_CALIBRATION_N_TRIALS,
+        N_TRIALS=MAIN_BLOCK_N_TRIALS,
         AUTOMATION_ON=True,       # automation on
         AID_ACCURACY=GLOBAL_AID_ACCURACY,
         AID_TRANSPARENCY="none",
         AID_CONDITION="stimulus_first_change",
         STAIRCASE_ON=False,       # staircase off
-        TARGET_ACC=CALIBRATION_TARGET_ACC,  # not used (staircase off), but harmless
         FIXED_DELTA_ON=True,
-        FIXED_DELTA_VALUE=0.10,   # fallback if no delta file found
+        FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=None,
         CONDITION_CODE="STIMFIRST",
     ),
 ]
 
+# Hidden developer-only condition. It is intentionally excluded from BLOCKS,
+# R helpers, and public examples; append a copy of this config when a SIM block
+# is needed for testing or a custom run.
+HIDDEN_SIM_BLOCK = dict(
+    name="AUTOMATION",
+    N_TRIALS=MAIN_BLOCK_N_TRIALS,
+    AUTOMATION_ON=True,
+    AID_ACCURACY=GLOBAL_AID_ACCURACY,
+    AID_TRANSPARENCY="none",
+    AID_CONDITION="simultaneous",
+    STAIRCASE_ON=False,
+    FIXED_DELTA_ON=True,
+    FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
+    TRIAL_FEEDBACK_ON=True,
+    TRIAL_DEADLINE_MS=None,
+    CONDITION_CODE="SIM",
+)
+
 BLOCK_DEFAULTS = {
     "SHOW_AID_MASKED": False,
     "AID_TRANSPARENCY": "none",
-    "TRIAL_DEADLINE_MS": CALIBRATION_TRIAL_DEADLINE_MS,
+    "TRIAL_DEADLINE_MS": None,
     "CONDITION_CODE": None,
     "CONDITION_DEADLINE_CODE": None,
     "AID_CONDITION": None,
@@ -122,14 +119,6 @@ BLOCK_DEFAULTS = {
 }
 
 BLOCK_INSTRUCTIONS = {
-
-    "CALIBRATION": {
-        "title": "MANUAL BLOCK",
-        "slides": [
-            "You will now begin your first block of trials."
-        ],
-    },
-
     "AUTOMATION": {
         "title": "AUTOMATION BLOCK",
         "slides": [
@@ -137,18 +126,17 @@ BLOCK_INSTRUCTIONS = {
             # Slide 1
             (
             "You will be provided with an automated decision aid to assist you with this task. "
-            "The automation will recommend a classification (either BLACK or WHITE) for each sample. "
+            "The automation will recommend a classification (either VIRUS A or VIRUS B) for each sample. "
             "The recommended classification will be presented at the top of the display. "
-            "If the aid shows 'BLACK', this means that the automation recommends you classify "
-            "that sample as V-BLACK. If it shows 'WHITE', this means that the automation "
-            "recommends you classify the sample as V-WHITE."
+            "If the aid shows 'VIRUS A', this means that the automation recommends VIRUS A. "
+            "If it shows 'VIRUS B', this means that the automation recommends VIRUS B."
             ),
 
             # Slide 2
             (
             "In the event that the automation makes an incorrect recommendation, "
             "it is essential that you perform the correct action. "
-            "Remember that deciding whether a sample is V-BLACK or V-WHITE "
+            "Remember that deciding whether a sample is VIRUS A or VIRUS B "
             "is your responsibility."
             ),
         ],
@@ -174,7 +162,7 @@ def block_condition_deadline_code(block_cfg) -> str:
 
 
 def trial_deadline_ms_for_block(block_cfg):
-    return block_cfg.get("TRIAL_DEADLINE_MS", CALIBRATION_TRIAL_DEADLINE_MS)
+    return block_cfg.get("TRIAL_DEADLINE_MS", None)
 
 
 def trial_deadline_s_for_block(block_cfg):
@@ -202,6 +190,14 @@ def format_aid_condition(aid_condition) -> str:
     return AUTOMATION_AID_CONDITIONS.get(aid_condition, str(aid_condition))
 
 
+def block_has_real_aid(block_cfg) -> bool:
+    return bool(
+        block_cfg
+        and block_cfg.get("AUTOMATION_ON")
+        and aid_condition_for_block(block_cfg) in REAL_AID_CONDITIONS
+    )
+
+
 def response_window_instruction_slide(block_cfg) -> str:
     deadline_s = trial_deadline_s_for_block(block_cfg)
     if deadline_s is None:
@@ -222,6 +218,14 @@ def aid_condition_instruction_slide(block_cfg) -> str:
     aid_condition = aid_condition_for_block(block_cfg)
     if aid_condition is None:
         return ""
+
+    if aid_condition == "manual":
+        return (
+            "In this block, each trial begins with a fixation cross, then a masked aid preview, "
+            "then another fixation cross. The virus sample will then appear by itself and you "
+            "will make your first classification. After another fixation cross, a masked "
+            "placeholder screen will appear and you will make your final classification."
+        )
 
     if aid_condition == "simultaneous":
         return (
@@ -260,6 +264,14 @@ def automation_accuracy_instruction_slide() -> str:
     return (
         "In the next block, although the automation is reasonably reliable, it is not perfect, "
         "and automation advice errors are still possible."
+    )
+
+
+def manual_condition_instruction_slide() -> str:
+    return (
+        "In this block, no automated recommendation will be shown. The aid display will be masked "
+        "as ##### during masked preview and final-decision screens. Your job is to classify each "
+        "sample as accurately as possible."
     )
 
 
@@ -363,7 +375,7 @@ DISH_EDGE = BLACK     # thin edge
 # V-BLACK cell proportions
 VBLACK_PROPORTION_LEVELS = [0.40, 0.42, 0.44, 0.46, 0.48, 0.52, 0.54, 0.56, 0.58, 0.60]
 
-# Automated aid timing is configured as a behavior condition per automation block.
+# Aid timing is configured as a behavior condition per main block.
 AID_TRANSPARENCY_LEVELS = {"none", "low", "high"}
 
 # -----------------------------
@@ -398,7 +410,7 @@ FEEDBACK_SLOW_COLOR    = (200, 200, 0)
 
 # Trial timing
 FIXATION_DURATION_MS = 750
-TRIAL_DEADLINE_MS = CALIBRATION_TRIAL_DEADLINE_MS
+TRIAL_DEADLINE_MS = None
 
 # Brownian motion for dots (per-frame random walk)
 BROWNIAN_STEP_MEAN = 0.001   # pixels per frame (typical step)
@@ -424,7 +436,7 @@ FONT_DIR_CANDIDATES = [
 # -----------------------------
 # Text coloring toggles
 # -----------------------------
-TEXT_COLORING_UI_ON = False      # instructions + bottom prompt ("D = BLACK", "J = WHITE")
+TEXT_COLORING_UI_ON = False      # participant-facing response buttons
 TEXT_COLORING_AID_ON = True      # automated recommendation stays coloured
 
 RAW_COLOR_TOKENS = {"BLACK": VBLACK, "WHITE": VWHITE}
@@ -1097,65 +1109,35 @@ def is_hard_quit_event(event) -> bool:
   
 def build_blocks_for_participant(participant_id: int, blocks_template):
     """
-    CALIBRATION stays fixed.
-
-    The three post-calibration aid-condition cells are assigned with balanced
-    rotations. Key mapping uses the participant-ID cycle.
+    The three main condition cells are assigned with balanced rotations.
     """
-    calibration_blocks = [
+    main_blocks = [
         copy_block_config(b)
         for b in blocks_template
-        if b["name"] == "CALIBRATION"
+        if b["name"] == "AUTOMATION"
     ]
-    if len(calibration_blocks) != 1:
-        raise ValueError("Exactly one CALIBRATION block must be defined.")
-
-    tail_blocks = [
-        copy_block_config(b)
-        for b in blocks_template
-        if b["name"] != "CALIBRATION"
-    ]
-    if len(tail_blocks) != 3:
-        raise ValueError("The aid-condition design expects exactly three post-calibration blocks.")
+    if len(main_blocks) != 3:
+        raise ValueError("The scheduled design expects exactly three main blocks.")
 
     all_orders = [
-        [tail_blocks[(idx + offset) % len(tail_blocks)] for idx in range(len(tail_blocks))]
-        for offset in range(len(tail_blocks))
+        [main_blocks[(idx + offset) % len(main_blocks)] for idx in range(len(main_blocks))]
+        for offset in range(len(main_blocks))
     ]
 
     order_idx = block_order_index_for_participant(participant_id)
-    ordered_tail = [copy_block_config(b) for b in all_orders[order_idx]]
-    return [copy_block_config(calibration_blocks[0])] + ordered_tail
+    return [copy_block_config(b) for b in all_orders[order_idx]]
 
-def key_mapping_for_participant(participant_id: int):
-    """
-    Flip key mapping within the 6-participant counterbalancing cycle:
-      - p 1-3:   standard  (D->BLACK, J->WHITE)
-      - p 4-6:   flipped   (J->BLACK, D->WHITE)
-      - p 7-9:   standard
-      - p 10-12: flipped
-      ... etc
-    """
-    cycle_idx = (participant_id - 1) % 6
-    flip = cycle_idx >= 3
 
-    if not flip:
-        key_black = pygame.K_d
-        key_white = pygame.K_j
-        key_black_name = "D"
-        key_white_name = "J"
-    else:
-        key_black = pygame.K_j
-        key_white = pygame.K_d
-        key_black_name = "J"
-        key_white_name = "D"
-
+def response_mapping_for_participant(participant_id: int):
+    """Mouse responses use fixed participant-facing VIRUS A/B button positions."""
     return {
-        "flip": flip,
-        "key_black": key_black,
-        "key_white": key_white,
-        "key_black_name": key_black_name,
-        "key_white_name": key_white_name,
+        "keymap_flip": False,
+        "key_black_name": None,
+        "key_white_name": None,
+        "left_response": "BLACK",
+        "right_response": "WHITE",
+        "left_label": "VIRUS A",
+        "right_label": "VIRUS B",
     }
 
 def draw_countdown_timer(surface, font, ms_left, x, y, color=WHITE):
@@ -1423,10 +1405,8 @@ def run_postblock_slider_questions(
     if not ENABLE_POSTBLOCK_SLIDERS:
         return []
 
-    if block_name == "CALIBRATION":
-        items = SLIDER_ITEMS_MANUAL
-    elif block_name == "AUTOMATION":
-        items = SLIDER_ITEMS_AUTOMATION
+    if block_name == "AUTOMATION":
+        items = SLIDER_ITEMS_AUTOMATION if block_has_real_aid(block_cfg) else SLIDER_ITEMS_MANUAL
     else:
         return []  # no sliders for other blocks
 
@@ -1812,9 +1792,7 @@ def run_participant_number_screen(screen, clock, font) -> Dict[str, Any]:
         pygame.display.flip()
 
 
-def run_instructions(screen, font_title, font_body, font_body_bold, clock,
-                     key_black_name: str, key_white_name: str,
-                     min_show_ms=250):
+def run_instructions(screen, font_title, font_body, font_body_bold, clock, min_show_ms=250):
 
     title = "VIRUS DETECTION TASK"
 
@@ -1822,13 +1800,13 @@ def run_instructions(screen, font_title, font_body, font_body_bold, clock,
         "As a reminder, we have identified two dangerous viruses. Unfortunately, the two strains are "
         "difficult to tell apart. Both are speckled BLACK and WHITE. The only difference "
         "visually is that one strain tends to have a little more BLACK, and the other "
-        "tends to have a little more WHITE. For simplicity, we will call them V-BLACK and V-WHITE. "
-        "You'll be shown a similar number of V-BLACK and V-WHITE samples. \n"
+        "tends to have a little more WHITE. For simplicity, we will call them VIRUS A and VIRUS B. "
+        "You'll be shown a similar number of VIRUS A and VIRUS B samples. \n"
         "Your job is to evaluate the following samples to determine which virus is present.\n"
     )
 
-    press1 = f"Press {key_black_name} if the sample looks more BLACK overall (V-BLACK)"
-    press2 = f"Press {key_white_name} if the sample looks more WHITE overall (V-WHITE)"
+    press1 = "Click VIRUS A if the sample looks more BLACK overall"
+    press2 = "Click VIRUS B if the sample looks more WHITE overall"
     speed  = "Try to respond as quickly and accurately as possible\n"
 
     # ---- Layout constants ----
@@ -1923,19 +1901,26 @@ def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
         slides = list(payload.get("slides", [payload.get("body", "")]))
 
         if block_cfg is not None and block_name == "AUTOMATION":
-            slides = (
-                slides[:1]
-                + [
-                    automation_accuracy_instruction_slide(),
+            if block_has_real_aid(block_cfg):
+                slides = (
+                    slides[:1]
+                    + [
+                        automation_accuracy_instruction_slide(),
+                        aid_condition_instruction_slide(block_cfg),
+                    ]
+                    + slides[1:]
+                )
+                payload["title"] = (
+                    f"{payload['title']} ({format_aid_condition(aid_condition_for_block(block_cfg)).upper()})"
+                )
+            else:
+                slides = [
+                    manual_condition_instruction_slide(),
                     aid_condition_instruction_slide(block_cfg),
                 ]
-                + slides[1:]
-            )
-            payload["title"] = (
-                f"{payload['title']} ({format_aid_condition(aid_condition_for_block(block_cfg)).upper()})"
-            )
+                payload["title"] = "MANUAL BLOCK"
 
-        if block_cfg is not None and block_name != "CALIBRATION":
+        if block_cfg is not None:
             slides = [response_window_instruction_slide(block_cfg)] + slides
 
         payload["slides"] = slides
@@ -2147,69 +2132,64 @@ def fixation_cross_screen(screen, clock, ms):
         pygame.display.flip()
 
 
-def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name: str, key_white_name: str):
-    """
-    Bottom prompt, always laid out as:
+def display_label_for_response(response):
+    if response == "BLACK":
+        return "VIRUS A"
+    if response == "WHITE":
+        return "VIRUS B"
+    return str(response)
 
-        (LEFT COLUMN)                 (RIGHT COLUMN)
-        key D meaning label           key J meaning label
-        Press D                       Press J
 
-    But the meaning (V-BLACK vs V-WHITE) + text colour (black vs white)
-    follows the participant-specific key mapping:
-      - whichever key maps to BLACK is rendered in BLACK
-      - whichever key maps to WHITE is rendered in WHITE
-    """
+def response_button_specs(initial_response=None):
+    specs = [
+        {"response": "BLACK", "label": "VIRUS A", "sub_label": None},
+        {"response": "WHITE", "label": "VIRUS B", "sub_label": None},
+    ]
+    if initial_response in ("BLACK", "WHITE"):
+        for spec in specs:
+            spec["sub_label"] = (
+                "Confirm initial decision"
+                if spec["response"] == initial_response
+                else "Switch initial decision"
+            )
+    return specs
 
-    # Mapping from key-name -> category
-    # (key_black_name is either "D" or "J"; key_white_name is the other)
-    meaning_by_key = {
-        key_black_name: "BLACK",
-        key_white_name: "WHITE",
-    }
 
-    def label_and_color_for_key(key_name: str):
-        cat = meaning_by_key.get(key_name, "WHITE")
-        if cat == "BLACK":
-            return "V-BLACK", BLACK
+def response_button_rects(y_pos):
+    btn_w = min(S(430), max(S(260), (WIDTH - S(240)) // 2))
+    btn_h = S(72)
+    gap = S(44)
+    total_w = btn_w * 2 + gap
+    left_x = WIDTH // 2 - total_w // 2
+    return [
+        pygame.Rect(left_x, y_pos, btn_w, btn_h),
+        pygame.Rect(left_x + btn_w + gap, y_pos, btn_w, btn_h),
+    ]
+
+
+def draw_response_buttons(screen, font, initial_response=None, y_pos=None):
+    if y_pos is None:
+        y_pos = HEIGHT - S(104)
+    specs = response_button_specs(initial_response)
+    rects = response_button_rects(y_pos)
+    for spec, rect in zip(specs, rects):
+        pygame.draw.rect(screen, (50, 50, 50), rect, 0, border_radius=max(1, S(10)))
+        pygame.draw.rect(screen, WHITE, rect, max(1, S(3)), border_radius=max(1, S(10)))
+        main_img = font.render(spec["label"], True, WHITE)
+        if spec["sub_label"] is None:
+            screen.blit(main_img, main_img.get_rect(center=rect.center))
         else:
-            return "V-WHITE", WHITE
-
-    # Fixed spatial layout: D always left, J always right
-    left_key = "D"
-    right_key = "J"
-
-    left_top, left_col = label_and_color_for_key(left_key)
-    right_top, right_col = label_and_color_for_key(right_key)
-
-    left_bottom = "Press D"
-    right_bottom = "Press J"
-
-    lt_img = font_small.render(left_top, True, left_col)
-    lb_img = font_small.render(left_bottom, True, left_col)
-    rt_img = font_small.render(right_top, True, right_col)
-    rb_img = font_small.render(right_bottom, True, right_col)
-
-    col_gap = 80
-    line_gap = 4
-
-    left_w = max(lt_img.get_width(), lb_img.get_width())
-    right_w = max(rt_img.get_width(), rb_img.get_width())
-
-    total_w = left_w + col_gap + right_w
-    start_x = WIDTH // 2 - total_w // 2
-
-    y_top = y_pos
-    y_bottom = y_pos + font_small.get_height() + line_gap
-
-    # Left column (D)
-    screen.blit(lt_img, (start_x + (left_w - lt_img.get_width()) // 2, y_top))
-    screen.blit(lb_img, (start_x + (left_w - lb_img.get_width()) // 2, y_bottom))
-
-    # Right column (J)
-    right_x = start_x + left_w + col_gap
-    screen.blit(rt_img, (right_x + (right_w - rt_img.get_width()) // 2, y_top))
-    screen.blit(rb_img, (right_x + (right_w - rb_img.get_width()) // 2, y_bottom))
+            sub_img = font.render(spec["sub_label"], True, LIGHT_GREY)
+            gap = S(4)
+            total_h = main_img.get_height() + gap + sub_img.get_height()
+            main_rect = main_img.get_rect(center=(rect.centerx, rect.centery - total_h // 2 + main_img.get_height() // 2))
+            sub_rect = sub_img.get_rect(center=(rect.centerx, main_rect.bottom + gap + sub_img.get_height() // 2))
+            screen.blit(main_img, main_rect)
+            screen.blit(sub_img, sub_rect)
+    return [
+        {"response": spec["response"], "rect": rect}
+        for spec, rect in zip(specs, rects)
+    ]
 
 
 def make_aid_recommendation(stimulus, accuracy):
@@ -2240,13 +2220,13 @@ def draw_aid_recommendation_top_center(
     detail_imgs = []
 
     if show_value:
-        phrase = f"{rec_label}"
+        phrase = "#####" if rec_label == "#####" else display_label_for_response(rec_label)
         col = WHITE if rec_label == "#####" else COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
 
         detail_lines = []
         if transparency_level in ("low", "high"):
-            detail_lines.append(f"Reason: The available evidence favors {rec_label}")
+            detail_lines.append(f"Reason: The available evidence favors {phrase}")
 
         if transparency_level == "high":
             detail_lines.append(
@@ -2300,12 +2280,11 @@ def parse_cli_args():
         "--block",
         type=str,
         default=None,
-        help="Run only a selected block. Valid values: CALIBRATION, AUTOMATION",
+        help="Run only a selected block. Valid value: AUTOMATION",
     )
     parser.add_argument(
         "--aid-condition",
         type=str,
-        choices=sorted(AUTOMATION_AID_CONDITIONS),
         default=None,
         help="Select an AUTOMATION block by aid condition.",
     )
@@ -2313,11 +2292,20 @@ def parse_cli_args():
 
     if args.block is not None:
         args.block = args.block.upper()
+        if args.block != "AUTOMATION":
+            parser.error("--block must be AUTOMATION for the current no-calibration design")
 
     if args.aid_condition is not None and args.block is None:
         parser.error("--aid-condition requires --block")
     if args.aid_condition is not None and args.block != "AUTOMATION":
         parser.error("--aid-condition can only be used with --block AUTOMATION")
+    if args.aid_condition is not None:
+        args.aid_condition = args.aid_condition.lower()
+        if args.aid_condition not in AUTOMATION_AID_CONDITIONS:
+            parser.error(
+                "--aid-condition must be one of: "
+                + ", ".join(sorted(AUTOMATION_AID_CONDITIONS))
+            )
 
     return args
 
@@ -2439,33 +2427,12 @@ def resolve_difficulty_mode(block_cfg):
     return "fixed_props"
 
 
-def resolve_fixed_delta_source(block_name, participant_id, fixed_delta_value, current_calibration, previous_calibration):
-    calib_delta_mean, calib_delta_sd = current_calibration
-    prev_calib_delta_mean, prev_calib_delta_sd, prev_calib_delta_path = previous_calibration
-
-    if calib_delta_mean is not None and calib_delta_sd is not None:
-        print(
-            f"[{block_name}] Using CALIBRATION delta from current run "
-            f"(mean={calib_delta_mean}, sd={calib_delta_sd})"
-        )
-        return calib_delta_mean, calib_delta_sd
-
-    if prev_calib_delta_mean is not None and prev_calib_delta_sd is not None:
-        print(
-            f"[{block_name}] Using most recent prior CALIBRATION delta for participant "
-            f"{participant_id} from {prev_calib_delta_path} "
-            f"(mean={prev_calib_delta_mean}, sd={prev_calib_delta_sd})"
-        )
-        return prev_calib_delta_mean, prev_calib_delta_sd
-
-    print(
-        f"[{block_name}] No CALIBRATION delta found for participant {participant_id}; "
-        f"falling back to FIXED_DELTA_VALUE={fixed_delta_value}, sd=0.0"
-    )
+def resolve_fixed_delta_source(block_name, participant_id, fixed_delta_value):
+    print(f"[{block_name}] Using fixed delta value {fixed_delta_value}, sd=0.0")
     return fixed_delta_value, 0.0
 
 
-def prepare_block_state(block_cfg, participant_id, current_calibration, previous_calibration):
+def prepare_block_state(block_cfg, participant_id):
     difficulty_mode = resolve_difficulty_mode(block_cfg)
     transparency = block_cfg.get("AID_TRANSPARENCY", "none")
     if transparency not in AID_TRANSPARENCY_LEVELS:
@@ -2481,8 +2448,6 @@ def prepare_block_state(block_cfg, participant_id, current_calibration, previous
             block_name=block_cfg["name"],
             participant_id=participant_id,
             fixed_delta_value=block_cfg["FIXED_DELTA_VALUE"],
-            current_calibration=current_calibration,
-            previous_calibration=previous_calibration,
         )
 
     if difficulty_mode == "fixed_props":
@@ -2491,7 +2456,7 @@ def prepare_block_state(block_cfg, participant_id, current_calibration, previous
     else:
         vblack_props = None
 
-    delta_step_up = DELTA_STEP_DOWN * (block_cfg["TARGET_ACC"] / (1.0 - block_cfg["TARGET_ACC"]))
+    delta_step_up = None
 
     return {
         "difficulty_mode": difficulty_mode,
@@ -2505,15 +2470,13 @@ def prepare_block_state(block_cfg, participant_id, current_calibration, previous
     }
 
 
-def show_block_intro(screen, clock, fonts, block_cfg, key_black_name, key_white_name):
+def show_block_intro(screen, clock, fonts, block_cfg):
     run_instructions(
         screen,
         fonts["title"],
         fonts["body"],
         fonts["body_bold"],
         clock,
-        key_black_name,
-        key_white_name,
         min_show_ms=250,
     )
 
@@ -2560,9 +2523,8 @@ def pick_trial_vblack_prop(block_state, trial_index):
     return pick_vblack_prop_from_delta(delta_realised), delta_realised
 
 
-def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, ms_left=None):
+def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, ms_left=None, initial_response=None):
     fonts = ui_payload["fonts"]
-    key_names = ui_payload["key_names"]
 
     screen.fill(BG)
     if ms_left is not None:
@@ -2587,13 +2549,7 @@ def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, m
         pygame.draw.circle(dot_layer, (r, g, b, DOT_ALPHA), (x, y), DOT_RADIUS)
     screen.blit(dot_layer, (0, 0))
 
-    draw_trial_prompt_stacked(
-        screen,
-        fonts["small"],
-        HEIGHT - S(80),
-        key_names["black"],
-        key_names["white"],
-    )
+    draw_response_buttons(screen, fonts["small"], initial_response=initial_response)
 
     if aid_payload["mode"] == "automation":
         draw_aid_recommendation_top_center(
@@ -2634,9 +2590,8 @@ def run_blank_phase(screen, clock, duration_ms):
         pygame.display.flip()
 
 
-def draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=False):
+def draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=False, initial_response=None):
     fonts = ui_payload["fonts"]
-    key_names = ui_payload["key_names"]
 
     screen.fill(BG)
     draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
@@ -2653,18 +2608,12 @@ def draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=False):
     )
 
     if show_prompt:
-        draw_trial_prompt_stacked(
-            screen,
-            fonts["small"],
-            HEIGHT - S(80),
-            key_names["black"],
-            key_names["white"],
-        )
+        draw_response_buttons(screen, fonts["small"], initial_response=initial_response)
 
 
-def draw_masked_placeholder_frame(screen, ui_payload, center=None, show_stimulus_placeholder=False, show_prompt=False):
+def draw_masked_placeholder_frame(screen, ui_payload, center=None, show_stimulus_placeholder=False,
+                                  show_prompt=False, initial_response=None):
     fonts = ui_payload["fonts"]
-    key_names = ui_payload["key_names"]
 
     screen.fill(BG)
     draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
@@ -2691,13 +2640,7 @@ def draw_masked_placeholder_frame(screen, ui_payload, center=None, show_stimulus
         screen.blit(placeholder_img, placeholder_rect)
 
     if show_prompt:
-        draw_trial_prompt_stacked(
-            screen,
-            fonts["small"],
-            HEIGHT - S(80),
-            key_names["black"],
-            key_names["white"],
-        )
+        draw_response_buttons(screen, fonts["small"], initial_response=initial_response)
 
 
 def run_aid_preview_phase(screen, clock, aid_payload, ui_payload, duration_ms):
@@ -2730,7 +2673,7 @@ def run_masked_preview_phase(screen, clock, ui_payload, duration_ms):
         pygame.display.flip()
 
 
-def collect_key_response(screen, clock, keymap, draw_frame_fn, deadline_ms=None, update_fn=None):
+def collect_mouse_response(screen, clock, draw_frame_fn, initial_response=None, deadline_ms=None, update_fn=None):
     phase_start_ticks = pygame.time.get_ticks()
     phase_start_perf = time.perf_counter()
 
@@ -2744,16 +2687,15 @@ def collect_key_response(screen, clock, keymap, draw_frame_fn, deadline_ms=None,
             if ev.type == pygame.KEYDOWN:
                 if is_hard_quit_event(ev):
                     quit_clean()
-                if ev.key == keymap["key_black"]:
-                    return {
-                        "response": "BLACK",
-                        "rt_ms": (time.perf_counter() - phase_start_perf) * 1000.0,
-                    }
-                if ev.key == keymap["key_white"]:
-                    return {
-                        "response": "WHITE",
-                        "rt_ms": (time.perf_counter() - phase_start_perf) * 1000.0,
-                    }
+            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                specs = response_button_specs(initial_response)
+                rects = response_button_rects(HEIGHT - S(104))
+                for spec, rect in zip(specs, rects):
+                    if rect.collidepoint(ev.pos):
+                        return {
+                            "response": spec["response"],
+                            "rt_ms": (time.perf_counter() - phase_start_perf) * 1000.0,
+                        }
 
         if deadline_ms is not None and (now - phase_start_ticks) >= deadline_ms:
             return {"response": "TIMEOUT", "rt_ms": None}
@@ -2770,7 +2712,8 @@ def collect_key_response(screen, clock, keymap, draw_frame_fn, deadline_ms=None,
 
 
 def collect_stimulus_response(screen, clock, dot_layer, dots, center, keymap, aid_payload,
-                              ui_payload, show_aid=False, deadline_ms=None):
+                              ui_payload, show_aid=False, show_masked_aid=False,
+                              deadline_ms=None, initial_response=None):
     def update_fn():
         update_dots(dots, center, DISH_RADIUS)
 
@@ -2781,7 +2724,7 @@ def collect_stimulus_response(screen, clock, dot_layer, dots, center, keymap, ai
             dots,
             center,
             {
-                "mode": "automation" if show_aid else "none",
+                "mode": "masked" if show_masked_aid else ("automation" if show_aid else "none"),
                 "label": aid_payload["label"],
                 "visible": bool(show_aid),
                 "transparency_level": aid_payload["transparency_level"],
@@ -2790,33 +2733,34 @@ def collect_stimulus_response(screen, clock, dot_layer, dots, center, keymap, ai
             },
             ui_payload,
             ms_left=ms_left,
+            initial_response=initial_response,
         )
 
-    return collect_key_response(
+    return collect_mouse_response(
         screen,
         clock,
-        keymap,
         draw_frame_fn=draw_frame,
+        initial_response=initial_response,
         deadline_ms=deadline_ms,
         update_fn=update_fn,
     )
 
 
-def collect_aid_only_response(screen, clock, keymap, aid_payload, ui_payload):
+def collect_aid_only_response(screen, clock, keymap, aid_payload, ui_payload, initial_response=None):
     def draw_frame(ms_left):
-        draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=True)
+        draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=True, initial_response=initial_response)
 
-    return collect_key_response(
+    return collect_mouse_response(
         screen,
         clock,
-        keymap,
         draw_frame_fn=draw_frame,
+        initial_response=initial_response,
         deadline_ms=None,
         update_fn=None,
     )
 
 
-def collect_masked_response(screen, clock, center, keymap, ui_payload):
+def collect_masked_response(screen, clock, center, keymap, ui_payload, initial_response=None):
     def draw_frame(ms_left):
         draw_masked_placeholder_frame(
             screen,
@@ -2824,13 +2768,14 @@ def collect_masked_response(screen, clock, center, keymap, ui_payload):
             center=center,
             show_stimulus_placeholder=True,
             show_prompt=True,
+            initial_response=initial_response,
         )
 
-    return collect_key_response(
+    return collect_mouse_response(
         screen,
         clock,
-        keymap,
         draw_frame_fn=draw_frame,
+        initial_response=initial_response,
         deadline_ms=None,
         update_fn=None,
     )
@@ -2885,13 +2830,14 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
     difficulty_mode = block_state["difficulty_mode"]
     rt_ms = trial_data["rt_ms"]
     response = trial_data["response"]
+    has_real_aid = block_has_real_aid(block_cfg)
 
     return {
         "participant_id": participant_id,
         "run_timestamp": run_timestamp,
-        "key_black": keymap["key_black_name"],
-        "key_white": keymap["key_white_name"],
-        "keymap_flip": keymap["flip"],
+        "key_black": keymap.get("key_black_name"),
+        "key_white": keymap.get("key_white_name"),
+        "keymap_flip": keymap.get("keymap_flip", False),
         "block": block_name,
         "block_idx": block_idx,
         "condition_code": block_condition_code(block_cfg),
@@ -2912,9 +2858,9 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "vblack_prop": trial_data["vblack_prop"],
         "n_vblack": trial_data["n_vblack"],
         "n_vwhite": trial_data["n_vwhite"],
-        "auto_on": 1 if block_cfg["AUTOMATION_ON"] else 0,
-        "aid_accuracy_setting": block_cfg["AID_ACCURACY"] if block_cfg["AUTOMATION_ON"] else None,
-        "aid_transparency_level": block_state["aid_transparency"] if block_cfg["AUTOMATION_ON"] else None,
+        "auto_on": 1 if has_real_aid else 0,
+        "aid_accuracy_setting": block_cfg["AID_ACCURACY"] if has_real_aid else None,
+        "aid_transparency_level": block_state["aid_transparency"] if has_real_aid else None,
         "stimulus": trial_data["stimulus"],
         "aid_label": trial_data["aid_label"],
         "aid_correct": trial_data["aid_correct"],
@@ -2982,7 +2928,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
     dots, n_vblack, n_vwhite = make_trial_dots(N_DOTS, vblack_prop, center, DISH_RADIUS)
     stimulus = "BLACK" if n_vblack > n_vwhite else "WHITE"
 
-    if block_cfg["AUTOMATION_ON"]:
+    if block_has_real_aid(block_cfg):
         aid_label, aid_correct = make_aid_recommendation(stimulus, accuracy=block_cfg["AID_ACCURACY"])
     else:
         aid_label, aid_correct = None, None
@@ -2992,7 +2938,6 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
 
     ui_payload = {
         "fonts": fonts,
-        "key_names": {"black": keymap["key_black_name"], "white": keymap["key_white_name"]},
         "trials_left": trials_left,
         "n_trials": block_cfg["N_TRIALS"],
     }
@@ -3016,7 +2961,25 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
         fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
         aid_condition = aid_condition_for_block(block_cfg)
 
-        if aid_condition == "simultaneous":
+        if aid_condition == "manual":
+            run_masked_preview_phase(screen, clock, ui_payload, AUTOMATION_PRE_PHASE_MS)
+            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision1_result = collect_stimulus_response(
+                screen, clock, dot_layer, dots, center, keymap,
+                aid_render_payload, ui_payload, deadline_ms=None,
+            )
+            decision1 = make_decision_record(
+                decision1_result, stimulus, aid_label, display_type="stimulus_only"
+            )
+            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision2_result = collect_masked_response(
+                screen, clock, center, keymap, ui_payload, initial_response=decision1["response"],
+            )
+            decision2 = make_decision_record(
+                decision2_result, stimulus, aid_label, display_type="masked_placeholder"
+            )
+
+        elif aid_condition == "simultaneous":
             run_masked_preview_phase(screen, clock, ui_payload, AUTOMATION_PRE_PHASE_MS)
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision1_result = collect_stimulus_response(
@@ -3028,7 +2991,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             )
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision2_result = collect_masked_response(
-                screen, clock, center, keymap, ui_payload,
+                screen, clock, center, keymap, ui_payload, initial_response=decision1["response"],
             )
             decision2 = make_decision_record(
                 decision2_result, stimulus, aid_label, display_type="masked_placeholder"
@@ -3049,7 +3012,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             )
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision2_result = collect_masked_response(
-                screen, clock, center, keymap, ui_payload,
+                screen, clock, center, keymap, ui_payload, initial_response=decision1["response"],
             )
             decision2 = make_decision_record(
                 decision2_result, stimulus, aid_label, display_type="masked_placeholder"
@@ -3068,7 +3031,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
 
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision2_result = collect_aid_only_response(
-                screen, clock, keymap, aid_render_payload, ui_payload,
+                screen, clock, keymap, aid_render_payload, ui_payload, initial_response=decision1["response"],
             )
             decision2 = make_decision_record(
                 decision2_result, stimulus, aid_label, display_type="aid_only"
@@ -3125,7 +3088,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
         block_state,
         correct_for_feedback,
         trial_number,
-        block_cfg["TARGET_ACC"],
+        block_cfg.get("TARGET_ACC", GLOBAL_AID_ACCURACY),
     )
 
     row = build_trial_row(
@@ -3262,7 +3225,7 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
     block_name = block_cfg["name"]
     block_idx = block_cfg["block_idx"]
 
-    if ENABLE_POSTBLOCK_SLIDERS and block_name in ("CALIBRATION", "AUTOMATION"):
+    if ENABLE_POSTBLOCK_SLIDERS and block_name == "AUTOMATION":
         slider_rows = run_postblock_slider_questions(
             screen=screen,
             clock=clock,
@@ -3280,7 +3243,7 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
         if slider_rows:
             all_postblock_slider_rows.extend(slider_rows)
 
-    if block_name == "AUTOMATION" and ENABLE_POSTBLOCK_QUESTIONS:
+    if block_name == "AUTOMATION" and block_has_real_aid(block_cfg) and ENABLE_POSTBLOCK_QUESTIONS:
         run_questionnaire_intro_screen(
             screen=screen,
             clock=clock,
@@ -3368,34 +3331,10 @@ def main():
         quit_clean()
 
     participant_id = res["participant"]
-
-    # Preload most recent CALIBRATION delta summary for this participant
-    # so single-block AUTOMATION runs can inherit it from a prior run.
-    prev_calib_delta_mean, prev_calib_delta_sd, prev_calib_delta_path = (
-        get_latest_calibration_delta_for_participant(participant_id, output_dir="output")
-    )
-
-    if prev_calib_delta_path is not None:
-        print(
-            f"[PREV CALIB] Loaded participant {participant_id} calibration delta "
-            f"from: {prev_calib_delta_path} "
-            f"(mean={prev_calib_delta_mean}, sd={prev_calib_delta_sd})"
-        )
-    else:
-        print(f"[PREV CALIB] No prior CALIBRATION delta file found for participant {participant_id}")
-        
-    # ---- key counterbalancing (every 6 participants) ----
-    km = key_mapping_for_participant(participant_id)
-    KEY_BLACK_NAME = km["key_black_name"]
-    KEY_WHITE_NAME = km["key_white_name"]
-
-    print("[KEYMAP]", participant_id, "->",
-          f"{KEY_BLACK_NAME}=BLACK, {KEY_WHITE_NAME}=WHITE",
-          "(reversed)" if km["flip"] else "(standard)")
+    response_map = response_mapping_for_participant(participant_id)
+    print("[RESPONSE MAP]", participant_id, "-> VIRUS A=BLACK, VIRUS B=WHITE")
 
     center = (WIDTH // 2, HEIGHT // 2 + S(20))
-    calib_delta_mean = None
-    calib_delta_sd = None
     all_results = []
     all_postblock_slider_rows = []
     all_questionnaire_rows = []
@@ -3408,12 +3347,10 @@ def main():
         block_cfg = copy_block_config(blk)
         block_cfg["block_idx"] = b_idx
         block_cfg["participant_id"] = participant_id
-        show_block_intro(screen, clock, fonts, block_cfg, KEY_BLACK_NAME, KEY_WHITE_NAME)
+        show_block_intro(screen, clock, fonts, block_cfg)
         block_state = prepare_block_state(
             block_cfg,
             participant_id,
-            current_calibration=(calib_delta_mean, calib_delta_sd),
-            previous_calibration=(prev_calib_delta_mean, prev_calib_delta_sd, prev_calib_delta_path),
         )
         block_results = []
         for t in range(block_cfg["N_TRIALS"]):
@@ -3426,7 +3363,7 @@ def main():
                 dot_layer,
                 center,
                 fonts,
-                km,
+                response_map,
                 block_cfg,
                 block_state,
                 trials_left,
@@ -3469,9 +3406,6 @@ def main():
                 delta_mean=block_state["delta_mean"],
                 delta_step_up=block_state["delta_step_up_setting"],
             )
-            if block_cfg["name"] == "CALIBRATION":
-                calib_delta_mean = mean_delta
-                calib_delta_sd = sd_delta
 
         show_block_complete_screen(screen, clock, fonts["body"], block_cfg["name"], block_cfg=block_cfg)
         run_post_block_measures(
