@@ -25,7 +25,7 @@ The task uses a three-block within-participant design. There is no calibration b
 
 All blocks use the same fixed stimulus difficulty (`delta = 0.10`). The automated aid uses a single global reliability of 85% in the `AIDFIRST` and `STIMFIRST` blocks. The `MANUAL` block shows the masked aid string `#####` instead of a real recommendation during masked preview and final-decision screens.
 
-Responses are made with fixed mouse-click buttons. The left button is `VIRUS A` and maps to the internally stored `BLACK` response. The right button is `VIRUS B` and maps to the internally stored `WHITE` response. On the second decision screen, the same two buttons are shown with parenthetical text indicating whether each option would confirm or switch the participant's initial decision.
+Responses are made with fixed mouse-click buttons. The left button is `V-BLACK` and maps to the internally stored `BLACK` response. The right button is `V-WHITE` and maps to the internally stored `WHITE` response. On the second decision screen, the same two buttons are shown with parenthetical text indicating whether each option would confirm or switch the participant's initial decision.
 
 Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid is reasonably reliable but not perfect in automation blocks, and that automation advice errors remain possible.
 

@@ -81,8 +81,8 @@ SLIDES = [
             "We have identified two dangerous viruses. "
             "Unfortunately, the two strains are difficult to tell apart. Both are speckled BLACK and WHITE. "
             "The only difference visually is that one strain tends to have a little more BLACK, and the other tends to have a little more WHITE. "
-            "For simplicity, we will call them VIRUS A and VIRUS B. "
-            "You'll be shown a similar number of VIRUS A and VIRUS B samples. \n"
+            "For simplicity, we will call them V-BLACK and V-WHITE. "
+            "You'll be shown a similar number of V-BLACK and V-WHITE samples. \n"
             "Your job is to evaluate the following samples to determine which virus is present.\n\n"
             "The following screens will help you get familiar with the task"
         ),
@@ -847,7 +847,7 @@ def draw_automation_example_slide(
         title = "Automated decision aid"
         body = (
             "The automation will recommend a classification "
-            "(either VIRUS A or VIRUS B) for each sample"
+            "(either V-BLACK or V-WHITE) for each sample"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
         rect = pygame.Rect(WIDTH - S(80) - bw, S(95), bw, bh)
@@ -875,7 +875,7 @@ def draw_automation_example_slide(
         title = "Recommendation"
         body = (
             "In this example, the automated decision aid is "
-            "recommending that you classify the sample as VIRUS A"
+            "recommending that you classify the sample as V-BLACK"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
         
@@ -905,7 +905,7 @@ def draw_automation_example_slide(
         title = "Recommendation"
         body = (
             "In this example, the automated decision aid is "
-            "recommending that you classify the sample as VIRUS B"
+            "recommending that you classify the sample as V-WHITE"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
 
@@ -1006,24 +1006,31 @@ def draw_progress_bar(surface, trials_left, total_trials):
 
 def display_label_for_response(response):
     if response == "BLACK":
-        return "VIRUS A"
+        return "V-BLACK"
     if response == "WHITE":
-        return "VIRUS B"
+        return "V-WHITE"
     return str(response)
 
 
 def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name=None, key_white_name=None):
     """Bottom prompt matching the main task's mouse-click response buttons."""
-    btn_w = min(S(380), max(S(240), (WIDTH - S(440)) // 2))
+    anchor_btn_w = min(S(380), max(S(240), (WIDTH - S(440)) // 2))
+    btn_w = max(1, anchor_btn_w // 2)
     btn_h = S(72)
     gap = S(44)
-    total_w = btn_w * 2 + gap
+    total_w = anchor_btn_w * 2 + gap
     left_x = WIDTH // 2 - total_w // 2
-    rects = [
-        pygame.Rect(left_x, y_pos, btn_w, btn_h),
-        pygame.Rect(left_x + btn_w + gap, y_pos, btn_w, btn_h),
+    anchor_rects = [
+        pygame.Rect(left_x, y_pos, anchor_btn_w, btn_h),
+        pygame.Rect(left_x + anchor_btn_w + gap, y_pos, anchor_btn_w, btn_h),
     ]
-    labels = ["VIRUS A", "VIRUS B"]
+    rects = []
+    for anchor_rect in anchor_rects:
+        rect = pygame.Rect(0, y_pos, btn_w, btn_h)
+        rect.center = anchor_rect.center
+        rects.append(rect)
+
+    labels = ["V-BLACK", "V-WHITE"]
 
     for label, rect in zip(labels, rects):
         pygame.draw.rect(screen, (50, 50, 50), rect, 0, border_radius=max(1, S(10)))

@@ -253,12 +253,12 @@ def draw_main_instruction_screen_state(
         "As a reminder, we have identified two dangerous viruses. Unfortunately, the two strains are "
         "difficult to tell apart. Both are speckled BLACK and WHITE. The only difference "
         "visually is that one strain tends to have a little more BLACK, and the other "
-        "tends to have a little more WHITE. For simplicity, we will call them VIRUS A and VIRUS B. "
-        "You'll be shown a similar number of VIRUS A and VIRUS B samples. \n"
+        "tends to have a little more WHITE. For simplicity, we will call them V-BLACK and V-WHITE. "
+        "You'll be shown a similar number of V-BLACK and V-WHITE samples. \n"
         "Your job is to evaluate the following samples to determine which virus is present.\n"
     )
-    press1 = "Click VIRUS A if the sample looks more BLACK overall"
-    press2 = "Click VIRUS B if the sample looks more WHITE overall"
+    press1 = "Click V-BLACK if the sample looks more BLACK overall"
+    press2 = "Click V-WHITE if the sample looks more WHITE overall"
     speed = "Try to respond as quickly and accurately as possible\n"
 
     font_title = fonts["title"]

@@ -2,7 +2,7 @@
 Random Dot Classification (Bartlett & McCarley–style)
 
 Responses:
-- Mouse-click VIRUS A / VIRUS B response buttons
+- Mouse-click V-BLACK / V-WHITE response buttons
 - Option/Alt + Q = hard quit
 - ESC = quit from final completion screen
 """
@@ -126,17 +126,17 @@ BLOCK_INSTRUCTIONS = {
             # Slide 1
             (
             "You will be provided with an automated decision aid to assist you with this task. "
-            "The automation will recommend a classification (either VIRUS A or VIRUS B) for each sample. "
+            "The automation will recommend a classification (either V-BLACK or V-WHITE) for each sample. "
             "The recommended classification will be presented at the top of the display. "
-            "If the aid shows 'VIRUS A', this means that the automation recommends VIRUS A. "
-            "If it shows 'VIRUS B', this means that the automation recommends VIRUS B."
+            "If the aid shows 'V-BLACK', this means that the automation recommends V-BLACK. "
+            "If the aid shows 'V-WHITE', this means that the automation recommends V-WHITE."
             ),
 
             # Slide 2
             (
             "In the event that the automation makes an incorrect recommendation, "
             "it is essential that you perform the correct action. "
-            "Remember that deciding whether a sample is VIRUS A or VIRUS B "
+            "Remember that deciding whether a sample is V-BLACK or V-WHITE "
             "is your responsibility."
             ),
         ],
@@ -1129,15 +1129,15 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
 
 
 def response_mapping_for_participant(participant_id: int):
-    """Mouse responses use fixed participant-facing VIRUS A/B button positions."""
+    """Mouse responses use fixed participant-facing V-BLACK/V-WHITE button positions."""
     return {
         "keymap_flip": False,
         "key_black_name": None,
         "key_white_name": None,
         "left_response": "BLACK",
         "right_response": "WHITE",
-        "left_label": "VIRUS A",
-        "right_label": "VIRUS B",
+        "left_label": "V-BLACK",
+        "right_label": "V-WHITE",
     }
 
 def draw_countdown_timer(surface, font, ms_left, x, y, color=WHITE):
@@ -1800,13 +1800,13 @@ def run_instructions(screen, font_title, font_body, font_body_bold, clock, min_s
         "As a reminder, we have identified two dangerous viruses. Unfortunately, the two strains are "
         "difficult to tell apart. Both are speckled BLACK and WHITE. The only difference "
         "visually is that one strain tends to have a little more BLACK, and the other "
-        "tends to have a little more WHITE. For simplicity, we will call them VIRUS A and VIRUS B. "
-        "You'll be shown a similar number of VIRUS A and VIRUS B samples. \n"
+        "tends to have a little more WHITE. For simplicity, we will call them V-BLACK and V-WHITE. "
+        "You'll be shown a similar number of V-BLACK and V-WHITE samples. \n"
         "Your job is to evaluate the following samples to determine which virus is present.\n"
     )
 
-    press1 = "Click VIRUS A if the sample looks more BLACK overall"
-    press2 = "Click VIRUS B if the sample looks more WHITE overall"
+    press1 = "Click V-BLACK if the sample looks more BLACK overall"
+    press2 = "Click V-WHITE if the sample looks more WHITE overall"
     speed  = "Try to respond as quickly and accurately as possible\n"
 
     # ---- Layout constants ----
@@ -2134,16 +2134,16 @@ def fixation_cross_screen(screen, clock, ms):
 
 def display_label_for_response(response):
     if response == "BLACK":
-        return "VIRUS A"
+        return "V-BLACK"
     if response == "WHITE":
-        return "VIRUS B"
+        return "V-WHITE"
     return str(response)
 
 
 def response_button_specs(initial_response=None):
     specs = [
-        {"response": "BLACK", "label": "VIRUS A", "sub_label": None},
-        {"response": "WHITE", "label": "VIRUS B", "sub_label": None},
+        {"response": "BLACK", "label": "V-BLACK", "sub_label": None},
+        {"response": "WHITE", "label": "V-WHITE", "sub_label": None},
     ]
     if initial_response in ("BLACK", "WHITE"):
         for spec in specs:
@@ -2156,15 +2156,32 @@ def response_button_specs(initial_response=None):
 
 
 def response_button_rects(y_pos):
-    btn_w = min(S(430), max(S(260), (WIDTH - S(240)) // 2))
+    anchor_btn_w = min(S(430), max(S(260), (WIDTH - S(240)) // 2))
+    btn_w = max(1, anchor_btn_w // 2)
     btn_h = S(72)
     gap = S(44)
-    total_w = btn_w * 2 + gap
+    total_w = anchor_btn_w * 2 + gap
     left_x = WIDTH // 2 - total_w // 2
-    return [
-        pygame.Rect(left_x, y_pos, btn_w, btn_h),
-        pygame.Rect(left_x + btn_w + gap, y_pos, btn_w, btn_h),
+    anchor_rects = [
+        pygame.Rect(left_x, y_pos, anchor_btn_w, btn_h),
+        pygame.Rect(left_x + anchor_btn_w + gap, y_pos, anchor_btn_w, btn_h),
     ]
+
+    rects = []
+    for anchor_rect in anchor_rects:
+        rect = pygame.Rect(0, y_pos, btn_w, btn_h)
+        rect.center = anchor_rect.center
+        rects.append(rect)
+    return rects
+
+
+def render_text_fit_width(font, text, color, max_width):
+    img = font.render(text, True, color)
+    if img.get_width() <= max_width:
+        return img
+    scale = max_width / float(img.get_width())
+    new_size = (max(1, int(round(img.get_width() * scale))), max(1, int(round(img.get_height() * scale))))
+    return pygame.transform.smoothscale(img, new_size)
 
 
 def draw_response_buttons(screen, font, initial_response=None, y_pos=None):
@@ -2175,11 +2192,12 @@ def draw_response_buttons(screen, font, initial_response=None, y_pos=None):
     for spec, rect in zip(specs, rects):
         pygame.draw.rect(screen, (50, 50, 50), rect, 0, border_radius=max(1, S(10)))
         pygame.draw.rect(screen, WHITE, rect, max(1, S(3)), border_radius=max(1, S(10)))
-        main_img = font.render(spec["label"], True, WHITE)
+        max_text_w = max(1, rect.w - S(24))
+        main_img = render_text_fit_width(font, spec["label"], WHITE, max_text_w)
         if spec["sub_label"] is None:
             screen.blit(main_img, main_img.get_rect(center=rect.center))
         else:
-            sub_img = font.render(spec["sub_label"], True, LIGHT_GREY)
+            sub_img = render_text_fit_width(font, spec["sub_label"], LIGHT_GREY, max_text_w)
             gap = S(4)
             total_h = main_img.get_height() + gap + sub_img.get_height()
             main_rect = main_img.get_rect(center=(rect.centerx, rect.centery - total_h // 2 + main_img.get_height() // 2))
@@ -3332,7 +3350,7 @@ def main():
 
     participant_id = res["participant"]
     response_map = response_mapping_for_participant(participant_id)
-    print("[RESPONSE MAP]", participant_id, "-> VIRUS A=BLACK, VIRUS B=WHITE")
+    print("[RESPONSE MAP]", participant_id, "-> V-BLACK=BLACK, V-WHITE=WHITE")
 
     center = (WIDTH // 2, HEIGHT // 2 + S(20))
     all_results = []
