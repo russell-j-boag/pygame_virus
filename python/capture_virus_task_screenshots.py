@@ -36,6 +36,7 @@ DEFAULT_PARTICIPANT = 1
 FILENAME_SAFE_RE = re.compile(r"[^a-z0-9]+")
 
 FEEDBACK_EXAMPLES = {
+    "PRACTICE": ("CORRECT", task.FEEDBACK_CORRECT_COLOR),
     "MANUAL": ("CORRECT", task.FEEDBACK_CORRECT_COLOR),
     "AIDFIRST": ("INCORRECT", task.FEEDBACK_ERROR_COLOR),
     "STIMFIRST": ("CORRECT", task.FEEDBACK_CORRECT_COLOR),
@@ -192,6 +193,11 @@ def block_slider_items(block_cfg: dict) -> list[dict]:
 
 def build_participant_blocks(participant_id: int) -> list[dict]:
     blocks = []
+    practice_cfg = task.copy_block_config(task.PRACTICE_BLOCK)
+    practice_cfg["block_idx"] = 0
+    practice_cfg["participant_id"] = participant_id
+    blocks.append(practice_cfg)
+
     for block_idx, block in enumerate(
         task.build_blocks_for_participant(participant_id, task.BLOCKS),
         start=1,

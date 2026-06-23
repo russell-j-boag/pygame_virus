@@ -28,6 +28,7 @@ BG_INSTRUCTIONS = (40, 40, 40)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 LIGHT_GREY = (170, 170, 170)
+MASKED_AID_COLOR = BG_INSTRUCTIONS
 VBLACK = BLACK
 VWHITE = WHITE
 DISH_FILL = (128, 128, 128)   # neutral mid-grey (halfway between black/white)
@@ -139,7 +140,7 @@ SLIDES = [
         "body": (
             "On every trial, you will classify the same sample twice.\n\n"
             "Decision 1 records your initial judgement. Later in the trial, Decision 2 asks "
-            "for your final answer. At Decision 2, you can keep your first response or switch "
+            "for your final answer. At Decision 2, you can confirm your first response or switch "
             "to the other response.\n\n"
             "Only Decision 2 counts as your final classification for that sample."
         ),
@@ -153,12 +154,11 @@ SLIDES = [
         "title": "AID TIMING",
         "body": (
             "Across the experimental blocks, the order of information will vary. "
-            "Some screens will show information without requiring a response. "
-            "Some screens will show the aid display masked as #####. "
             "On some trials the aid recommendation will appear first as a preview, followed by the virus sample. "
             "On other trials the virus sample will appear before the aid recommendation. "
-            "In every block of trials, you will make two classifications for each sample; "
-            "the second classification is your final answer. "
+            "Some screens will show the aid display masked as #####.\n\n"
+            "In every block of trials, you will make two classifications for each sample. "
+            "The second classification is your final answer. "
             "Your job is always to classify the sample as accurately as possible."
         ),
     },
@@ -773,7 +773,7 @@ def draw_aid_recommendation_centered(
     img_main = None
     if show_value:
         phrase = display_label_for_aid_recommendation(rec_label)
-        col = COLOR_TOKENS_AID.get(rec_label, WHITE)
+        col = MASKED_AID_COLOR if rec_label == "#####" else COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
 
     total_height = img_label.get_height()
@@ -1120,12 +1120,31 @@ def draw_sequence_phase_label(surface, rect, font, label):
 
 def draw_sequence_aid_display(surface, rect, font, value_text):
     label_img = font.render("AID JUDGES:", True, WHITE)
-    value_img = font.render(value_text, True, WHITE)
+    value_img = None
     gap = max(1, S(6))
-    total_h = label_img.get_height() + gap + value_img.get_height()
+    if value_text.startswith("#####"):
+        value_parts = [
+            font.render("#####", True, MASKED_AID_COLOR),
+            font.render(value_text[len("#####"):], True, WHITE),
+        ]
+        value_w = sum(part.get_width() for part in value_parts)
+        value_h = max(part.get_height() for part in value_parts)
+    else:
+        value_img = font.render(value_text, True, WHITE)
+        value_parts = None
+        value_w = value_img.get_width()
+        value_h = value_img.get_height()
+    total_h = label_img.get_height() + gap + value_h
     y = rect.centery - total_h // 2
     surface.blit(label_img, label_img.get_rect(midtop=(rect.centerx, y)))
-    surface.blit(value_img, value_img.get_rect(midtop=(rect.centerx, y + label_img.get_height() + gap)))
+    value_y = y + label_img.get_height() + gap
+    if value_parts is not None:
+        x = rect.centerx - value_w // 2
+        for part in value_parts:
+            surface.blit(part, part.get_rect(topleft=(x, value_y)))
+            x += part.get_width()
+    else:
+        surface.blit(value_img, value_img.get_rect(midtop=(rect.centerx, value_y)))
 
 
 def draw_sequence_response_buttons(surface, rect, font, decision_label):
@@ -1289,7 +1308,7 @@ def draw_aid_recommendation_top_center(
 
     if show_value:
         phrase = display_label_for_aid_recommendation(rec_label)
-        col = COLOR_TOKENS_AID.get(rec_label, WHITE)
+        col = MASKED_AID_COLOR if rec_label == "#####" else COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
 
     total_height = img_label.get_height()

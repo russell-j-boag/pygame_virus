@@ -28,6 +28,7 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 # Block definitions
 # -----------------------------
 MAIN_BLOCK_N_TRIALS = 260
+PRACTICE_N_TRIALS = 20
 # Fixed difficulty is derived from a prior 80%-calibrated virus task dataset.
 # See derive_prior_calibration_delta.R for the reproducible summary.
 GLOBAL_FIXED_DELTA = 0.040324718919
@@ -96,6 +97,22 @@ BLOCKS = [
     ),
 ]
 
+PRACTICE_BLOCK = dict(
+    name="PRACTICE",
+    N_TRIALS=PRACTICE_N_TRIALS,
+    AUTOMATION_ON=True,
+    AID_ACCURACY=None,
+    AID_TRANSPARENCY="none",
+    AID_CONDITION="manual",
+    STAIRCASE_ON=False,
+    FIXED_DELTA_ON=True,
+    FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
+    FIXED_DELTA_SD=GLOBAL_FIXED_DELTA_SD,
+    TRIAL_FEEDBACK_ON=True,
+    TRIAL_DEADLINE_MS=None,
+    CONDITION_CODE="PRACTICE",
+)
+
 # Hidden developer-only condition. It is intentionally excluded from BLOCKS,
 # R helpers, and public examples; append a copy of this config when a SIM block
 # is needed for testing or a custom run.
@@ -126,6 +143,17 @@ BLOCK_DEFAULTS = {
 }
 
 BLOCK_INSTRUCTIONS = {
+    "PRACTICE": {
+        "title": "PRACTICE BLOCK",
+        "slides": [
+            (
+                "You will now complete 20 practice trials.\n\n"
+                "These trials are to familiarise you with the 2-decision trial sequence.\n\n"
+                "No automated recommendation will be shown in the centre of the display.\n"
+                "There is simply a string '#####', which you should ignore."
+            ),
+        ],
+    },
     "AUTOMATION": {
         "title": "AUTOMATION BLOCK",
         "slides": [
@@ -316,6 +344,7 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 LIGHT_GREY = (170, 170, 170)
 DARK_GREY = (60, 60, 60)
+MASKED_AID_COLOR = BG_INSTRUCTIONS
 FIX_COLOR = LIGHT_GREY      # fixation cross colour
 
 # V-BLACK cell colour
@@ -2209,7 +2238,7 @@ def _build_aid_recommendation_layout(
 
     if show_value:
         phrase = display_label_for_aid_recommendation(rec_label)
-        col = WHITE if rec_label == "#####" else COLOR_TOKENS_AID.get(rec_label, WHITE)
+        col = MASKED_AID_COLOR if rec_label == "#####" else COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
 
         detail_lines = []
@@ -3361,6 +3390,71 @@ def compute_performance_score(all_results):
 
     n_correct = sum(1 for row in scored_trials if row["correct"] is True)
     return (n_correct / len(scored_trials)) * 100.0
+
+
+def run_trial_block(screen, clock, dot_layer, center, fonts, response_map, block_cfg,
+                    run_timestamp, output_dir, global_trial_index):
+    block_state = prepare_block_state(
+        block_cfg,
+        block_cfg["participant_id"],
+    )
+    block_results = []
+
+    for t in range(block_cfg["N_TRIALS"]):
+        trial_number = t + 1
+        trials_left = block_cfg["N_TRIALS"] - t
+        global_trial_index += 1
+        row = run_single_trial(
+            screen,
+            clock,
+            dot_layer,
+            center,
+            fonts,
+            response_map,
+            block_cfg,
+            block_state,
+            trials_left,
+            trial_number,
+            global_trial_index,
+            run_timestamp,
+        )
+        block_results.append(row)
+
+        if t != block_cfg["N_TRIALS"] - 1:
+            if not block_cfg["TRIAL_FEEDBACK_ON"]:
+                press_any_key_screen(
+                    screen=screen,
+                    clock=clock,
+                    font=fonts["body"],
+                    msg="Press any key to continue",
+                    bg_color=BG_INSTRUCTIONS,
+                    text_color=WHITE,
+                )
+            if not block_cfg["AUTOMATION_ON"]:
+                fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+
+    os.makedirs(output_dir, exist_ok=True)
+    block_csv_path = os.path.join(
+        output_dir,
+        f"results_p{block_cfg['participant_id']:03d}_{run_timestamp}_"
+        f"b{block_cfg['block_idx']:02d}_{block_cfg['name']}.csv"
+    )
+    write_csv_rows(block_csv_path, block_results)
+    print(f"[{block_cfg['name']}] Results saved to: {block_csv_path}")
+
+    if block_state["difficulty_mode"] == "staircase":
+        write_delta_summary(
+            output_dir=output_dir,
+            participant_id=block_cfg["participant_id"],
+            run_timestamp=run_timestamp,
+            block_name=block_cfg["name"],
+            block_idx=block_cfg["block_idx"],
+            deltas_realised=block_state["deltas_realised"],
+            delta_mean=block_state["delta_mean"],
+            delta_step_up=block_state["delta_step_up_setting"],
+        )
+
+    return block_results, global_trial_index
   
   
 # -----------------------------
@@ -3401,69 +3495,49 @@ def main():
 
     blocks_to_run = choose_blocks_to_run(args, participant_id)
 
+    if args.block is None:
+        practice_cfg = copy_block_config(PRACTICE_BLOCK)
+        practice_cfg["block_idx"] = 0
+        practice_cfg["participant_id"] = participant_id
+        show_block_intro(screen, clock, fonts, practice_cfg)
+        run_trial_block(
+            screen=screen,
+            clock=clock,
+            dot_layer=dot_layer,
+            center=center,
+            fonts=fonts,
+            response_map=response_map,
+            block_cfg=practice_cfg,
+            run_timestamp=run_ts,
+            output_dir=output_dir,
+            global_trial_index=0,
+        )
+        show_block_complete_screen(
+            screen,
+            clock,
+            fonts["body"],
+            practice_cfg["name"],
+            block_cfg=practice_cfg,
+        )
+
     for b_idx, blk in enumerate(blocks_to_run, start=1):
         block_cfg = copy_block_config(blk)
         block_cfg["block_idx"] = b_idx
         block_cfg["participant_id"] = participant_id
         show_block_intro(screen, clock, fonts, block_cfg)
-        block_state = prepare_block_state(
-            block_cfg,
-            participant_id,
+        block_results, global_trial_index = run_trial_block(
+            screen=screen,
+            clock=clock,
+            dot_layer=dot_layer,
+            center=center,
+            fonts=fonts,
+            response_map=response_map,
+            block_cfg=block_cfg,
+            run_timestamp=run_ts,
+            output_dir=output_dir,
+            global_trial_index=global_trial_index,
         )
-        block_results = []
-        for t in range(block_cfg["N_TRIALS"]):
-            trial_number = t + 1
-            trials_left = block_cfg["N_TRIALS"] - t
-            global_trial_index += 1
-            row = run_single_trial(
-                screen,
-                clock,
-                dot_layer,
-                center,
-                fonts,
-                response_map,
-                block_cfg,
-                block_state,
-                trials_left,
-                trial_number,
-                global_trial_index,
-                run_ts,
-            )
-            block_results.append(row)
-            all_results.append(row)
-
-            if t != block_cfg["N_TRIALS"] - 1:
-                if not block_cfg["TRIAL_FEEDBACK_ON"]:
-                    press_any_key_screen(
-                        screen=screen,
-                        clock=clock,
-                        font=fonts["body"],
-                        msg="Press any key to continue",
-                        bg_color=BG_INSTRUCTIONS,
-                        text_color=WHITE,
-                    )
-                if not block_cfg["AUTOMATION_ON"]:
-                    fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
-
-        os.makedirs(output_dir, exist_ok=True)
-        block_csv_path = os.path.join(
-            output_dir,
-            f"results_p{participant_id:03d}_{run_ts}_b{b_idx:02d}_{block_cfg['name']}.csv"
-        )
-        write_csv_rows(block_csv_path, block_results)
-        print(f"[{block_cfg['name']}] Results saved to: {block_csv_path}")
-
-        if block_state["difficulty_mode"] == "staircase":
-            mean_delta, sd_delta, _ = write_delta_summary(
-                output_dir=output_dir,
-                participant_id=participant_id,
-                run_timestamp=run_ts,
-                block_name=block_cfg["name"],
-                block_idx=b_idx,
-                deltas_realised=block_state["deltas_realised"],
-                delta_mean=block_state["delta_mean"],
-                delta_step_up=block_state["delta_step_up_setting"],
-            )
+        all_results.extend(block_results)
 
         show_block_complete_screen(screen, clock, fonts["body"], block_cfg["name"], block_cfg=block_cfg)
         run_post_block_measures(
