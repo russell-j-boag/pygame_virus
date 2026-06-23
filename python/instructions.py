@@ -103,10 +103,6 @@ SLIDES = [
     },
     {
         "kind": "example_task_display",
-        "callout": "timer",
-    },
-    {
-        "kind": "example_task_display",
         "callout": "progress",
     },
     {
@@ -578,16 +574,6 @@ def draw_example_task_display(
     # background
     screen.fill(BG)
 
-    # countdown timer (top-left)
-    timer_rect = draw_countdown_timer(
-        surface=screen,
-        font=font_body,
-        ms_left=4200,
-        x=PB_PAD,
-        y=PB_PAD,
-        color=WHITE,
-    )
-
     # progress bar (top-right)
     draw_progress_bar(screen, trials_left=24, total_trials=40)
 
@@ -618,7 +604,6 @@ def draw_example_task_display(
     return {
         "dish_center": center,
         "dish_radius": DISH_RADIUS,
-        "timer_rect": timer_rect,
         "progress_anchor": (
             WIDTH - PB_PAD - PB_W // 2,
             PB_PAD + PB_H + font_small.get_height() + S(8),
@@ -650,32 +635,7 @@ def draw_example_task_slide(
     callout_body_font = font_small
     AID_ARROW_PAD = S(12)
     
-    if callout == "timer":
-        timer_title = "Timer"
-        timer_body = "The countdown timer shows how many seconds remain to submit a response"
-        tw, th = measure_callout_box(timer_title, timer_body, callout_title_font, callout_body_font)
-        rect_timer = pygame.Rect(S(80), S(95), tw, th)
-        draw_callout_box(
-            screen,
-            timer_title,
-            timer_body,
-            rect_timer,
-            callout_title_font,
-            callout_body_font,
-        )
-        target = (
-            meta["timer_rect"].midright[0] + AID_ARROW_PAD,
-            meta["timer_rect"].midright[1],
-        )
-        draw_arrow(
-            screen,
-            rect_timer.midtop,
-            target,
-            color=WHITE,
-            width=max(1, S(2)),
-        )
-
-    elif callout == "stimulus":
+    if callout == "stimulus":
         stim_title = "Virus sample"
         stim_body = "Your task is to judge whether the sample looks more BLACK or more WHITE overall"
         sw, sh = measure_callout_box(stim_title, stim_body, callout_title_font, callout_body_font)
@@ -989,21 +949,6 @@ def make_trial_dots(n_dots, vblack_prop, center, radius):
     return dots, n_vblack, n_vwhite
   
 
-def draw_countdown_timer(surface, font, ms_left, x, y, color=WHITE):
-    """
-    Draws a countdown timer (seconds remaining) at (x,y) top-left anchored.
-    Returns the text rect.
-    """
-    sec_left = max(0.0, ms_left / 1000.0)
-    txt = f"{sec_left:4.1f}s"
-    img = font.render(txt, True, color)
-
-    rect = img.get_rect(topleft=(x, y))
-    surface.blit(img, rect)
-
-    return rect
-    
-    
 def draw_petri_dish(surface, center, radius):
     # Fill: neutral mid-grey
     pygame.draw.circle(surface, DISH_FILL, center, radius, width=0)
