@@ -106,10 +106,6 @@ SLIDES = [
     },
     {
         "kind": "example_task_display",
-        "callout": "aid",
-    },
-    {
-        "kind": "example_task_display",
         "callout": "progress",
     },
     {
@@ -139,14 +135,29 @@ SLIDES = [
     },
     {
         "kind": "text",
+        "title": "TWO DECISIONS PER SAMPLE",
+        "body": (
+            "On every trial, you will classify the same sample twice.\n\n"
+            "Decision 1 records your initial judgement. Later in the trial, Decision 2 asks "
+            "for your final answer. At Decision 2, you can keep your first response or switch "
+            "to the other response.\n\n"
+            "Only Decision 2 counts as your final classification for that sample."
+        ),
+    },
+    {
+        "kind": "trial_sequence",
+        "title": "EXAMPLE TRIAL SEQUENCE",
+    },
+    {
+        "kind": "text",
         "title": "AID TIMING",
         "body": (
-            "Across the main blocks, the order of information will vary. "
+            "Across the experimental blocks, the order of information will vary. "
             "Some screens will show information without requiring a response. "
             "Some screens will show the aid display masked as #####. "
             "On some trials the aid recommendation will appear first as a preview, followed by the virus sample. "
             "On other trials the virus sample will appear before the aid recommendation. "
-            "In every main block, you will make two classifications for each sample; "
+            "In every block of trials, you will make two classifications for each sample; "
             "the second classification is your final answer. "
             "Your job is always to classify the sample as accurately as possible."
         ),
@@ -157,7 +168,7 @@ SLIDES = [
         "body": (
             "We will keep an ongoing tally of your performance. "
             "At the end of the experiment you will receive a point-based bonus, up to $25, based on your performance score.\n\n"
-            "In the main blocks, each decision phase will remain on screen until you respond. "
+            "In the experimental blocks, each decision phase will remain on screen until you respond. "
             "Incorrect final responses will reduce your performance score, so try to respond accurately.\n\n"
             "You may take short breaks at any time between trials\n\n"
         ),
@@ -556,7 +567,6 @@ def draw_example_task_display(
     font_small,
     font_aid_label,
     font_aid,
-    aid_label="#####",
 ):
     """
     Frozen example of a task trial for instruction slides.
@@ -601,19 +611,10 @@ def draw_example_task_display(
     screen.blit(dot_layer, (0, 0))
 
     # bottom prompt
-    prompt_rect = draw_trial_prompt_stacked(
+    prompt_rect, prompt_button_rects = draw_trial_prompt_stacked(
         screen,
         font_small,
         HEIGHT - S(104),
-    )
-
-    aid_layout = draw_aid_recommendation_top_center(
-        screen,
-        font_aid_label,
-        font_aid,
-        rec_label=aid_label,
-        show_value=True,
-        dish_top_limit=center[1] - DISH_RADIUS,
     )
 
     return {
@@ -624,9 +625,8 @@ def draw_example_task_display(
             WIDTH - PB_PAD - PB_W // 2,
             PB_PAD + PB_H + font_small.get_height() + S(8),
         ),
-        "aid_rect": aid_layout["value_rect"],
-        "aid_anchor": aid_layout["value_rect"].center if aid_layout["value_rect"] is not None else (WIDTH // 2, PB_PAD + PB_H + S(50)),
         "prompt_rect": prompt_rect,
+        "prompt_button_rects": prompt_button_rects,
     }
     
 
@@ -654,7 +654,7 @@ def draw_example_task_slide(
     
     if callout == "timer":
         timer_title = "Timer"
-        timer_body = "The countdown timer shows how many seconds remain in the trial"
+        timer_body = "The countdown timer shows how many seconds remain to submit a response"
         tw, th = measure_callout_box(timer_title, timer_body, callout_title_font, callout_body_font)
         rect_timer = pygame.Rect(S(80), S(95), tw, th)
         draw_callout_box(
@@ -672,35 +672,6 @@ def draw_example_task_slide(
         draw_arrow(
             screen,
             rect_timer.midtop,
-            target,
-            color=WHITE,
-            width=max(1, S(2)),
-        )
-
-    elif callout == "aid":
-        aid_title = "Automated decision aid"
-        aid_body = "In automation blocks, the aid's recommendation appears here"
-        aw, ah = measure_callout_box(aid_title, aid_body, callout_title_font, callout_body_font)
-
-        rect_aid = pygame.Rect(S(80), S(95), aw, ah)
-
-        draw_callout_box(
-            screen,
-            aid_title,
-            aid_body,
-            rect_aid,
-            callout_title_font,
-            callout_body_font,
-        )
-
-        target = (
-            meta["aid_rect"].midleft[0] - AID_ARROW_PAD,
-            meta["aid_rect"].midleft[1],
-        )
-
-        draw_arrow(
-            screen,
-            rect_aid.midright,
             target,
             color=WHITE,
             width=max(1, S(2)),
@@ -777,19 +748,77 @@ def draw_example_task_slide(
             callout_title_font,
             callout_body_font,
         )
-        target = (
-            meta["prompt_rect"].midtop[0],
-            meta["prompt_rect"].midtop[1] - S(12),
-        )
-
-        draw_arrow(
-            screen,
-            rect_keys.midbottom,
-            target,
-            color=WHITE,
-            width=max(1, S(2)),
-        )
+        arrow_start = rect_keys.midbottom
+        for button_rect in meta["prompt_button_rects"]:
+            draw_arrow(
+                screen,
+                arrow_start,
+                button_rect.midtop,
+                color=WHITE,
+                width=max(1, S(2)),
+            )
     
+
+def draw_aid_recommendation_centered(
+    screen,
+    font_label,
+    font_main,
+    rec_label,
+    show_value=True,
+):
+    cx = WIDTH // 2
+    line_gap = max(1, S(4))
+
+    img_label = font_label.render("AID JUDGES:", True, WHITE)
+    img_main = None
+    if show_value:
+        phrase = display_label_for_aid_recommendation(rec_label)
+        col = COLOR_TOKENS_AID.get(rec_label, WHITE)
+        img_main = font_main.render(phrase, True, col)
+
+    total_height = img_label.get_height()
+    if img_main is not None:
+        total_height += line_gap + img_main.get_height()
+
+    y0 = HEIGHT // 2 - total_height // 2
+    rect_label = img_label.get_rect(midtop=(cx, y0))
+    screen.blit(img_label, rect_label)
+
+    value_rect = None
+    display_rect = rect_label
+    if img_main is not None:
+        value_rect = img_main.get_rect(midtop=(cx, rect_label.bottom + line_gap))
+        screen.blit(img_main, value_rect)
+        display_rect = rect_label.union(value_rect)
+
+    return {
+        "label_rect": rect_label,
+        "value_rect": value_rect,
+        "display_rect": display_rect,
+    }
+
+
+def draw_aid_example_display(screen, font_small, font_aid_label, font_aid, aid_label):
+    screen.fill(BG)
+    draw_progress_bar(screen, trials_left=24, total_trials=40)
+
+    pb_text = "Samples left: 24"
+    pb_img = font_small.render(pb_text, True, WHITE)
+    screen.blit(pb_img, (WIDTH - PB_PAD - PB_W, PB_PAD + PB_H + 6))
+
+    aid_layout = draw_aid_recommendation_centered(
+        screen,
+        font_aid_label,
+        font_aid,
+        rec_label=aid_label,
+        show_value=True,
+    )
+
+    return {
+        "aid_rect": aid_layout["display_rect"],
+        "aid_value_rect": aid_layout["value_rect"],
+    }
+
 
 def draw_automation_example_slide(
     screen,
@@ -801,10 +830,8 @@ def draw_automation_example_slide(
     aid_label,
     callout=None,
 ):
-    meta = draw_example_task_display(
+    meta = draw_aid_example_display(
         screen,
-        font_title=font_title,
-        font_body=font_body,
         font_small=font_small,
         font_aid_label=font_aid_label,
         font_aid=font_aid,
@@ -818,11 +845,11 @@ def draw_automation_example_slide(
     if callout == "intro":
         title = "Automated decision aid"
         body = (
-            "In some parts of this study you will be assisted "
-            "by an Automated Decision Aid"
+            "##### or an aid recommendation can appear here. "
+            "It may appear before or after the virus sample, depending on the block."
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
-        rect = pygame.Rect(S(80), S(95), bw, bh)
+        rect = pygame.Rect(S(80), HEIGHT // 2 - bh // 2, bw, bh)
         draw_callout_box(
             screen,
             title,
@@ -846,11 +873,11 @@ def draw_automation_example_slide(
     elif callout == "classification":
         title = "Automated decision aid"
         body = (
-            "The automation will recommend a classification "
-            "(either V-BLACK or V-WHITE) for each sample"
+            "When a recommendation appears here, BLACK or WHITE "
+            "tells you which response the aid recommends"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
-        rect = pygame.Rect(WIDTH - S(80) - bw, S(95), bw, bh)
+        rect = pygame.Rect(WIDTH - S(80) - bw, HEIGHT // 2 - bh // 2, bw, bh)
         draw_callout_box(
             screen,
             title,
@@ -874,12 +901,12 @@ def draw_automation_example_slide(
     elif callout == "black_example":
         title = "Recommendation"
         body = (
-            "In this example, the automated decision aid is "
-            "recommending that you classify the sample as V-BLACK"
+            "When BLACK appears here, the automated "
+            "decision aid recommends the V-BLACK response"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
         
-        rect = pygame.Rect(S(80), S(95), bw, bh)
+        rect = pygame.Rect(S(80), HEIGHT // 2 - bh // 2, bw, bh)
 
         draw_callout_box(
             screen,
@@ -904,12 +931,12 @@ def draw_automation_example_slide(
     elif callout == "white_example":
         title = "Recommendation"
         body = (
-            "In this example, the automated decision aid is "
-            "recommending that you classify the sample as V-WHITE"
+            "When WHITE appears here, the automated "
+            "decision aid recommends the V-WHITE response"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
 
-        rect = pygame.Rect(WIDTH - S(80) - bw, S(95), bw, bh)
+        rect = pygame.Rect(WIDTH - S(80) - bw, HEIGHT // 2 - bh // 2, bw, bh)
 
         draw_callout_box(
             screen,
@@ -1012,6 +1039,12 @@ def display_label_for_response(response):
     return str(response)
 
 
+def display_label_for_aid_recommendation(response):
+    if response in ("BLACK", "WHITE", "#####"):
+        return response
+    return str(response)
+
+
 def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name=None, key_white_name=None):
     """Bottom prompt matching the main task's mouse-click response buttons."""
     anchor_btn_w = min(S(380), max(S(240), (WIDTH - S(440)) // 2))
@@ -1038,7 +1071,205 @@ def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name=None, ke
         img = font_small.render(label, True, WHITE)
         screen.blit(img, img.get_rect(center=rect.center))
 
-    return rects[0].union(rects[1])
+    phase_img = font_small.render("Decision 1", True, WHITE)
+    phase_center = ((rects[0].right + rects[1].left) // 2, rects[0].centery)
+    screen.blit(phase_img, phase_img.get_rect(center=phase_center))
+
+    return rects[0].union(rects[1]), rects
+
+
+def draw_sequence_fixation(surface, center, size, color=WHITE):
+    thickness = max(1, S(3))
+    pygame.draw.line(
+        surface,
+        color,
+        (center[0] - size, center[1]),
+        (center[0] + size, center[1]),
+        thickness,
+    )
+    pygame.draw.line(
+        surface,
+        color,
+        (center[0], center[1] - size),
+        (center[0], center[1] + size),
+        thickness,
+    )
+
+
+def draw_sequence_petri(surface, center, radius):
+    pygame.draw.circle(surface, DISH_FILL, center, radius, width=0)
+    pygame.draw.circle(surface, DISH_RING, center, radius + max(1, S(2)), width=max(1, S(2)))
+    pygame.draw.circle(surface, DISH_EDGE, center, radius, width=max(1, S(1)))
+
+    n_dots = 180
+    dot_r = max(1, S(1.6))
+    golden_angle = math.pi * (3.0 - math.sqrt(5.0))
+    for i in range(n_dots):
+        rr = (radius - dot_r - max(1, S(2))) * math.sqrt((i + 0.5) / n_dots)
+        ang = i * golden_angle
+        x = int(round(center[0] + rr * math.cos(ang)))
+        y = int(round(center[1] + rr * math.sin(ang)))
+        col = VBLACK if i % 10 < 6 else VWHITE
+        pygame.draw.circle(surface, col, (x, y), dot_r)
+
+
+def draw_sequence_phase_label(surface, rect, font, label):
+    label_img = font.render(label, True, WHITE)
+    surface.blit(label_img, label_img.get_rect(center=rect.center))
+
+
+def draw_sequence_aid_display(surface, rect, font, value_text):
+    label_img = font.render("AID JUDGES:", True, WHITE)
+    value_img = font.render(value_text, True, WHITE)
+    gap = max(1, S(6))
+    total_h = label_img.get_height() + gap + value_img.get_height()
+    y = rect.centery - total_h // 2
+    surface.blit(label_img, label_img.get_rect(midtop=(rect.centerx, y)))
+    surface.blit(value_img, value_img.get_rect(midtop=(rect.centerx, y + label_img.get_height() + gap)))
+
+
+def draw_sequence_response_buttons(surface, rect, font, decision_label):
+    label_img = font.render(decision_label, True, WHITE)
+    label_gap = max(S(76), label_img.get_width() + S(12))
+    btn_gap = S(6)
+    btn_w = max(1, (rect.width - label_gap - 2 * btn_gap) // 2)
+    btn_h = min(S(34), rect.height)
+    y = rect.centery - btn_h // 2
+    left_btn = pygame.Rect(rect.x, y, btn_w, btn_h)
+    right_btn = pygame.Rect(rect.right - btn_w, y, btn_w, btn_h)
+    buttons = [
+        left_btn,
+        right_btn,
+    ]
+    for label, btn in zip(("V-BLACK", "V-WHITE"), buttons):
+        pygame.draw.rect(surface, (50, 50, 50), btn, 0, border_radius=max(1, S(6)))
+        pygame.draw.rect(surface, WHITE, btn, max(1, S(2)), border_radius=max(1, S(6)))
+        img = font.render(label, True, WHITE)
+        surface.blit(img, img.get_rect(center=btn.center))
+    label_rect = pygame.Rect(left_btn.right, rect.y, right_btn.left - left_btn.right, rect.height)
+    draw_sequence_phase_label(surface, label_rect, font, decision_label)
+
+
+def draw_sequence_panel(surface, rect, step_num, title, panel_kind, font_body, font_small, font_aid):
+    pygame.draw.rect(surface, (58, 58, 58), rect, 0, border_radius=max(1, S(8)))
+    pygame.draw.rect(surface, LIGHT_GREY, rect, max(1, S(2)), border_radius=max(1, S(8)))
+
+    step_center = (rect.x + S(22), rect.y + S(22))
+    step_radius = S(14)
+    pygame.draw.circle(surface, (35, 35, 35), step_center, step_radius)
+    pygame.draw.circle(surface, WHITE, step_center, step_radius, max(1, S(2)))
+    step_img = font_small.render(str(step_num), True, WHITE)
+    surface.blit(step_img, step_img.get_rect(center=step_center))
+
+    title_img = font_small.render(title, True, WHITE)
+    title_rect = title_img.get_rect(midtop=(rect.centerx, rect.y + S(13)))
+    surface.blit(title_img, title_rect)
+
+    content = pygame.Rect(
+        rect.x + S(14),
+        rect.y + S(48),
+        rect.width - S(28),
+        rect.height - S(62),
+    )
+
+    if panel_kind == "fixation":
+        draw_sequence_fixation(surface, content.center, S(20))
+
+    elif panel_kind == "preview":
+        label_rect = pygame.Rect(content.x + S(8), content.bottom - S(34), content.width - S(16), S(32))
+        aid_rect = pygame.Rect(content.x, content.y, content.width, label_rect.y - content.y - S(4))
+        draw_sequence_aid_display(surface, aid_rect, font_small, "##### / BLACK / WHITE")
+        draw_sequence_phase_label(surface, label_rect, font_small, "Preview")
+
+    elif panel_kind == "decision1":
+        dish_radius = min(content.width // 7, content.height // 4)
+        dish_center = (content.centerx, content.y + S(32))
+        draw_sequence_petri(surface, dish_center, dish_radius)
+        btn_rect = pygame.Rect(content.x + S(8), content.bottom - S(34), content.width - S(16), S(32))
+        draw_sequence_response_buttons(surface, btn_rect, font_small, "Decision 1")
+
+    elif panel_kind == "decision2":
+        btn_rect = pygame.Rect(content.x + S(8), content.bottom - S(34), content.width - S(16), S(32))
+        aid_rect = pygame.Rect(content.x, content.y, content.width, btn_rect.y - content.y - S(4))
+        draw_sequence_aid_display(surface, aid_rect, font_small, "##### / BLACK / WHITE")
+        draw_sequence_response_buttons(surface, btn_rect, font_small, "Decision 2")
+
+
+def draw_trial_sequence_slide(screen, font_title, font_body, font_small, font_aid):
+    screen.fill(BG_INSTRUCTIONS)
+
+    title = "EXAMPLE TRIAL SEQUENCE"
+    body = (
+        "Each trial moves through the same three phases: Preview, Decision 1, Decision 2.\n"
+        "The Preview and Decision 2 screens can show ##### or an aid recommendation, depending on the block."
+    )
+
+    content_x = S(80)
+    content_w = WIDTH - S(160)
+    title_y = max(S(34), HEIGHT // 2 - S(305))
+
+    title_img = font_title.render(title, True, WHITE)
+    screen.blit(title_img, title_img.get_rect(midtop=(WIDTH // 2, title_y)))
+
+    body_y = title_y + title_img.get_height() + S(18)
+    body_h = _measure_wrapped_height(body, font_body, content_w, S(8), S(18))
+    draw_wrapped_block_centered(
+        screen,
+        body,
+        font_body,
+        WHITE,
+        (content_x, 0, content_w, HEIGHT),
+        y_start=body_y,
+        line_spacing=S(8),
+        blank_spacing=S(18),
+    )
+
+    gap = S(26)
+    panel_w = (content_w - 2 * gap) // 3
+    panel_h = S(160)
+    row_gap = S(40)
+    grid_top = body_y + body_h + S(28)
+    panels = []
+    for row in range(2):
+        for col in range(3):
+            x = content_x + col * (panel_w + gap)
+            y = grid_top + row * (panel_h + row_gap)
+            panels.append(pygame.Rect(x, y, panel_w, panel_h))
+
+    steps = [
+        ("Fixation", "fixation"),
+        ("Preview", "preview"),
+        ("Fixation", "fixation"),
+        ("Decision 1", "decision1"),
+        ("Fixation", "fixation"),
+        ("Decision 2 (final)", "decision2"),
+    ]
+    for idx, (rect, (step_title, panel_kind)) in enumerate(zip(panels, steps), start=1):
+        draw_sequence_panel(
+            screen,
+            rect,
+            idx,
+            step_title,
+            panel_kind,
+            font_body,
+            font_small,
+            font_aid,
+        )
+
+    for left, right in (
+        (panels[0], panels[1]),
+        (panels[1], panels[2]),
+        (panels[3], panels[4]),
+        (panels[4], panels[5]),
+    ):
+        draw_arrow(
+            screen,
+            (left.right + S(4), left.centery),
+            (right.left - S(4), right.centery),
+            color=WHITE,
+            width=max(1, S(2)),
+            head_len=S(10),
+        )
 
 
 def draw_aid_recommendation_top_center(
@@ -1057,7 +1288,7 @@ def draw_aid_recommendation_top_center(
     img_main = None
 
     if show_value:
-        phrase = display_label_for_response(rec_label)
+        phrase = display_label_for_aid_recommendation(rec_label)
         col = COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
 
@@ -1148,6 +1379,15 @@ def draw_slide(screen, font_title, font_body, font_button, font_small, font_aid_
             font_aid=font_aid,
             aid_label=slide.get("aid_label", "BLACK"),
             callout=slide.get("callout"),
+        )
+
+    elif kind == "trial_sequence":
+        draw_trial_sequence_slide(
+            screen,
+            font_title=font_title,
+            font_body=font_body,
+            font_small=font_small,
+            font_aid=font_aid,
         )
         
     # buttons always on top
