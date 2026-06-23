@@ -28,7 +28,10 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 # Block definitions
 # -----------------------------
 MAIN_BLOCK_N_TRIALS = 260
-GLOBAL_FIXED_DELTA = 0.10
+# Fixed difficulty is derived from a prior 80%-calibrated virus task dataset.
+# See derive_prior_calibration_delta.R for the reproducible summary.
+GLOBAL_FIXED_DELTA = 0.040324718919
+GLOBAL_FIXED_DELTA_SD = 0.014615991726
 AUTOMATION_PRE_PHASE_MS = 1000
 GLOBAL_AID_ACCURACY = 0.85
 SCHEDULED_AUTOMATION_AID_CONDITIONS = {
@@ -56,6 +59,7 @@ BLOCKS = [
         STAIRCASE_ON=False,       # staircase off
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
+        FIXED_DELTA_SD=GLOBAL_FIXED_DELTA_SD,
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=None,
         CONDITION_CODE="MANUAL",
@@ -70,6 +74,7 @@ BLOCKS = [
         STAIRCASE_ON=False,       # staircase off
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
+        FIXED_DELTA_SD=GLOBAL_FIXED_DELTA_SD,
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=None,
         CONDITION_CODE="AIDFIRST",
@@ -84,6 +89,7 @@ BLOCKS = [
         STAIRCASE_ON=False,       # staircase off
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
+        FIXED_DELTA_SD=GLOBAL_FIXED_DELTA_SD,
         TRIAL_FEEDBACK_ON=True,
         TRIAL_DEADLINE_MS=None,
         CONDITION_CODE="STIMFIRST",
@@ -103,6 +109,7 @@ HIDDEN_SIM_BLOCK = dict(
     STAIRCASE_ON=False,
     FIXED_DELTA_ON=True,
     FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
+    FIXED_DELTA_SD=GLOBAL_FIXED_DELTA_SD,
     TRIAL_FEEDBACK_ON=True,
     TRIAL_DEADLINE_MS=None,
     CONDITION_CODE="SIM",
@@ -348,7 +355,8 @@ CALIB_SUMMARY_LAST_N = 150
 # Fixed-delta mode (works for automation and manual blocks)
 # -----------------------------
 # FIXED_DELTA_ON = False        # True = ignore staircase + fixed props, use FIXED_DELTA_VALUE
-# FIXED_DELTA_VALUE = 0.10      # e.g., carry over from previous manual staircase block
+# FIXED_DELTA_VALUE = 0.040324718919
+# FIXED_DELTA_SD = 0.014615991726
 
 # -----------------------------
 # Feedback screen (post-trial)
@@ -2470,9 +2478,9 @@ def resolve_difficulty_mode(block_cfg):
     return "fixed_props"
 
 
-def resolve_fixed_delta_source(block_name, participant_id, fixed_delta_value):
-    print(f"[{block_name}] Using fixed delta value {fixed_delta_value}, sd=0.0")
-    return fixed_delta_value, 0.0
+def resolve_fixed_delta_source(block_name, participant_id, fixed_delta_value, fixed_delta_sd):
+    print(f"[{block_name}] Using fixed delta mean {fixed_delta_value}, sd={fixed_delta_sd}")
+    return fixed_delta_value, fixed_delta_sd
 
 
 def prepare_block_state(block_cfg, participant_id):
@@ -2491,6 +2499,7 @@ def prepare_block_state(block_cfg, participant_id):
             block_name=block_cfg["name"],
             participant_id=participant_id,
             fixed_delta_value=block_cfg["FIXED_DELTA_VALUE"],
+            fixed_delta_sd=block_cfg.get("FIXED_DELTA_SD", 0.0),
         )
 
     if difficulty_mode == "fixed_props":
