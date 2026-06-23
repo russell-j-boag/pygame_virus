@@ -157,8 +157,6 @@ SLIDES = [
             "On some trials the aid recommendation will appear first as a preview, followed by the virus sample. "
             "On other trials the virus sample will appear before the aid recommendation. "
             "Some screens will show the aid display masked as #####.\n\n"
-            "In every block of trials, you will make two classifications for each sample. "
-            "The second classification is your final answer. "
             "Your job is always to classify the sample as accurately as possible."
         ),
     },
