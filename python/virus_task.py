@@ -126,10 +126,11 @@ BLOCK_INSTRUCTIONS = {
             # Slide 1
             (
             "You will be provided with an automated decision aid to assist you with this task. "
-            "The automation will recommend a classification (either V-BLACK or V-WHITE) for each sample. "
-            "The recommended classification will be presented at the top of the display. "
-            "If the aid shows 'V-BLACK', this means that the automation recommends V-BLACK. "
-            "If the aid shows 'V-WHITE', this means that the automation recommends V-WHITE."
+            "The automation will recommend a classification (either BLACK or WHITE) for each sample. "
+            "The recommended classification will be presented in the centre of the display. "
+            "If the aid shows 'BLACK', this means that the automation recommends you classify "
+            "that sample as V-BLACK. If it shows 'WHITE', this means that the automation "
+            "recommends you classify the sample as V-WHITE."
             ),
 
             # Slide 2
@@ -172,22 +173,8 @@ def trial_deadline_s_for_block(block_cfg):
     return deadline_ms / 1000.0
 
 
-def format_deadline_s(deadline_s) -> str:
-    if deadline_s is None:
-        return "no deadline"
-    if float(deadline_s).is_integer():
-        return str(int(deadline_s))
-    return f"{deadline_s:g}"
-
-
 def aid_condition_for_block(block_cfg):
     return block_cfg.get("AID_CONDITION")
-
-
-def format_aid_condition(aid_condition) -> str:
-    if aid_condition is None:
-        return "none"
-    return AUTOMATION_AID_CONDITIONS.get(aid_condition, str(aid_condition))
 
 
 def block_has_real_aid(block_cfg) -> bool:
@@ -198,60 +185,24 @@ def block_has_real_aid(block_cfg) -> bool:
     )
 
 
-def response_window_instruction_slide(block_cfg) -> str:
-    deadline_s = trial_deadline_s_for_block(block_cfg)
-    if deadline_s is None:
-        return (
-            "In this block, each decision phase will stay on screen until you respond. "
-            "Please respond as accurately as possible."
-        )
-
-    deadline_text = format_deadline_s(deadline_s)
-    return (
-        f"In this block, each trial has a {deadline_text}-second response window. "
-        "If you do not respond within this window, the trial will be recorded as too slow. "
-        "Please respond as accurately as possible."
-    )
-
-
 def aid_condition_instruction_slide(block_cfg) -> str:
     aid_condition = aid_condition_for_block(block_cfg)
     if aid_condition is None:
         return ""
 
-    if aid_condition == "manual":
-        return (
-            "In this block, each trial begins with a fixation cross, then a masked aid preview, "
-            "then another fixation cross. The virus sample will then appear by itself and you "
-            "will make your first classification. After another fixation cross, a masked "
-            "placeholder screen will appear and you will make your final classification."
-        )
-
     if aid_condition == "simultaneous":
         return (
-            "In this block, each trial begins with a fixation cross, then a masked aid preview, "
-            "then another fixation cross. The automated aid recommendation and virus sample "
-            "will then appear together, and you will make your first classification. After another "
-            "fixation cross, a masked placeholder screen will appear and you will make your final "
-            "classification."
+            "In the next block, the aid's recommendation and the virus sample will appear together."
         )
 
     if aid_condition == "aid_first":
         return (
-            "In this block, each trial begins with a fixation cross. The automated aid "
-            "recommendation will then appear by itself, with no response required, followed by "
-            "another fixation cross. The virus sample will then appear by itself, and you will "
-            "make your first classification. After another fixation cross, a masked placeholder "
-            "screen will appear and you will make your final classification."
+            "In the next block, the aid's recommendation will appear before the virus sample."
         )
 
     if aid_condition == "stimulus_first_change":
         return (
-            "In this block, each trial begins with a fixation cross, then a masked aid preview, "
-            "then another fixation cross. The virus sample will then appear by itself and "
-            "you will make your first classification. After another fixation cross, the "
-            "automated aid recommendation will appear by itself and you will make your final "
-            "classification."
+            "In the next block, the virus sample will appear before the aid's recommendation."
         )
 
     raise ValueError(
@@ -269,9 +220,8 @@ def automation_accuracy_instruction_slide() -> str:
 
 def manual_condition_instruction_slide() -> str:
     return (
-        "In this block, no automated recommendation will be shown. The aid display will be masked "
-        "as ##### during masked preview and final-decision screens. Your job is to classify each "
-        "sample as accurately as possible."
+        "In the next block, no automated recommendation will be shown in the centre of the display.\n"
+        "There is simply a string '#####', which you should ignore."
     )
 
 
@@ -282,19 +232,19 @@ def block_order_index_for_participant(participant_id: int) -> int:
 def transparency_instruction_slide(transparency_level: str) -> str:
     if transparency_level == "none":
         return (
-            "In this block, the automated decision aid will display only its recommendation. "
+            "In the next block, the automated decision aid will display only its recommendation. "
             "No additional explanation will be shown."
         )
 
     if transparency_level == "low":
         return (
-            "In this block, the automated decision aid will display its recommendation and a brief reason. "
+            "In the next block, the automated decision aid will display its recommendation and a brief reason. "
             "The reason line will state which category the available evidence favors."
         )
 
     if transparency_level == "high":
         return (
-            "In this block, the automated decision aid will display its recommendation, a brief reason, "
+            "In the next block, the automated decision aid will display its recommendation, a brief reason, "
             "a summary of the estimated BLACK and WHITE evidence, and the decision rule used to make the recommendation."
         )
 
@@ -1905,23 +1855,16 @@ def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
                 slides = (
                     slides[:1]
                     + [
-                        automation_accuracy_instruction_slide(),
                         aid_condition_instruction_slide(block_cfg),
+                        automation_accuracy_instruction_slide(),
                     ]
                     + slides[1:]
-                )
-                payload["title"] = (
-                    f"{payload['title']} ({format_aid_condition(aid_condition_for_block(block_cfg)).upper()})"
                 )
             else:
                 slides = [
                     manual_condition_instruction_slide(),
-                    aid_condition_instruction_slide(block_cfg),
                 ]
                 payload["title"] = "MANUAL BLOCK"
-
-        if block_cfg is not None:
-            slides = [response_window_instruction_slide(block_cfg)] + slides
 
         payload["slides"] = slides
 
@@ -2140,6 +2083,12 @@ def display_label_for_response(response):
     return str(response)
 
 
+def display_label_for_aid_recommendation(response):
+    if response in ("BLACK", "WHITE", "#####"):
+        return response
+    return str(response)
+
+
 def response_button_specs(initial_response=None):
     specs = [
         {"response": "BLACK", "label": "V-BLACK", "sub_label": None},
@@ -2184,6 +2133,22 @@ def render_text_fit_width(font, text, color, max_width):
     return pygame.transform.smoothscale(img, new_size)
 
 
+def decision_phase_label(initial_response=None) -> str:
+    return "Decision 2" if initial_response in ("BLACK", "WHITE") else "Decision 1"
+
+
+def draw_bottom_phase_label(screen, font, label, y_pos=None):
+    if y_pos is None:
+        y_pos = HEIGHT - S(104)
+    rects = response_button_rects(y_pos)
+    label_img = font.render(label, True, WHITE)
+    label_rect = label_img.get_rect(
+        center=((rects[0].right + rects[1].left) // 2, rects[0].centery)
+    )
+    screen.blit(label_img, label_rect)
+    return label_rect
+
+
 def draw_response_buttons(screen, font, initial_response=None, y_pos=None):
     if y_pos is None:
         y_pos = HEIGHT - S(104)
@@ -2204,6 +2169,7 @@ def draw_response_buttons(screen, font, initial_response=None, y_pos=None):
             sub_rect = sub_img.get_rect(center=(rect.centerx, main_rect.bottom + gap + sub_img.get_height() // 2))
             screen.blit(main_img, main_rect)
             screen.blit(sub_img, sub_rect)
+    draw_bottom_phase_label(screen, font, decision_phase_label(initial_response), y_pos=y_pos)
     return [
         {"response": spec["response"], "rect": rect}
         for spec, rect in zip(specs, rects)
@@ -2217,19 +2183,15 @@ def make_aid_recommendation(stimulus, accuracy):
     return other, False
 
 
-def draw_aid_recommendation_top_center(
-    screen,
-    font_label,   # small font for "RECOMMENDATION:"
-    font_main,    # large font for recommendation
+def _build_aid_recommendation_layout(
+    font_label,
+    font_main,
     rec_label,
     show_value=True,
     transparency_level="none",
     evidence_black_pct=None,
     evidence_white_pct=None,
-    dish_top_limit=None,
 ):
-    cx = WIDTH // 2
-    top_padding = S(8)
     line_gap = max(1, S(4))
     detail_font = load_font(FONT_LIGHT, max(10, S(FONT_SMALL_BASE - 1)))
 
@@ -2238,7 +2200,7 @@ def draw_aid_recommendation_top_center(
     detail_imgs = []
 
     if show_value:
-        phrase = "#####" if rec_label == "#####" else display_label_for_response(rec_label)
+        phrase = display_label_for_aid_recommendation(rec_label)
         col = WHITE if rec_label == "#####" else COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
 
@@ -2260,36 +2222,99 @@ def draw_aid_recommendation_top_center(
     if detail_imgs:
         total_height += len(detail_imgs) * line_gap + sum(img.get_height() for img in detail_imgs)
 
-    y0 = top_padding
-    if dish_top_limit is not None:
-        max_bottom = dish_top_limit - S(18)
-        y0 = min(y0, max_bottom - total_height)
-        y0 = max(S(4), y0)
+    return {
+        "label_img": img_label,
+        "value_img": img_main,
+        "detail_imgs": detail_imgs,
+        "line_gap": line_gap,
+        "total_height": total_height,
+    }
 
-    screen.blit(img_label, (cx - img_label.get_width() // 2, y0))
+
+def _draw_aid_recommendation_layout(screen, layout, cx, y0):
+    img_label = layout["label_img"]
+    img_main = layout["value_img"]
+    detail_imgs = layout["detail_imgs"]
+    line_gap = layout["line_gap"]
+
+    rect_label = img_label.get_rect(midtop=(cx, y0))
+    screen.blit(img_label, rect_label)
 
     value_rect = None
     detail_rects = []
     if img_main is not None:
-        current_y = y0 + img_label.get_height() + line_gap
+        current_y = rect_label.bottom + line_gap
         value_rect = img_main.get_rect(midtop=(cx, current_y))
         screen.blit(img_main, value_rect)
         current_y = value_rect.bottom + line_gap
 
         for detail_img in detail_imgs:
-            if transparency_level == "low":
-                detail_rect = detail_img.get_rect(midtop=(cx, current_y))
-            else:
-                detail_rect = detail_img.get_rect(midtop=(cx, current_y))
+            detail_rect = detail_img.get_rect(midtop=(cx, current_y))
             screen.blit(detail_img, detail_rect)
             detail_rects.append(detail_rect)
             current_y = detail_rect.bottom + line_gap
 
     return {
-        "label_rect": img_label.get_rect(midtop=(cx, y0)),
+        "label_rect": rect_label,
         "value_rect": value_rect,
         "detail_rects": detail_rects,
     }
+
+
+def draw_aid_recommendation_top_center(
+    screen,
+    font_label,   # small font for "RECOMMENDATION:"
+    font_main,    # large font for recommendation
+    rec_label,
+    show_value=True,
+    transparency_level="none",
+    evidence_black_pct=None,
+    evidence_white_pct=None,
+    dish_top_limit=None,
+):
+    cx = WIDTH // 2
+    top_padding = S(8)
+    layout = _build_aid_recommendation_layout(
+        font_label,
+        font_main,
+        rec_label,
+        show_value=show_value,
+        transparency_level=transparency_level,
+        evidence_black_pct=evidence_black_pct,
+        evidence_white_pct=evidence_white_pct,
+    )
+
+    y0 = top_padding
+    if dish_top_limit is not None:
+        max_bottom = dish_top_limit - S(18)
+        y0 = min(y0, max_bottom - layout["total_height"])
+        y0 = max(S(4), y0)
+
+    return _draw_aid_recommendation_layout(screen, layout, cx, y0)
+
+
+def draw_aid_recommendation_centered(
+    screen,
+    font_label,
+    font_main,
+    rec_label,
+    show_value=True,
+    transparency_level="none",
+    evidence_black_pct=None,
+    evidence_white_pct=None,
+):
+    layout = _build_aid_recommendation_layout(
+        font_label,
+        font_main,
+        rec_label,
+        show_value=show_value,
+        transparency_level=transparency_level,
+        evidence_black_pct=evidence_black_pct,
+        evidence_white_pct=evidence_white_pct,
+    )
+    cx = WIDTH // 2
+    y0 = HEIGHT // 2 - layout["total_height"] // 2
+    return _draw_aid_recommendation_layout(screen, layout, cx, y0)
 
 
 def parse_cli_args():
@@ -2608,13 +2633,20 @@ def run_blank_phase(screen, clock, duration_ms):
         pygame.display.flip()
 
 
-def draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=False, initial_response=None):
+def draw_aid_only_frame(
+    screen,
+    aid_payload,
+    ui_payload,
+    show_prompt=False,
+    initial_response=None,
+    phase_label=None,
+):
     fonts = ui_payload["fonts"]
 
     screen.fill(BG)
     draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
     draw_samples_left_label(screen, fonts["small"], ui_payload["trials_left"])
-    draw_aid_recommendation_top_center(
+    draw_aid_recommendation_centered(
         screen,
         fonts["aid_label"],
         fonts["aid"],
@@ -2627,38 +2659,30 @@ def draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=False, init
 
     if show_prompt:
         draw_response_buttons(screen, fonts["small"], initial_response=initial_response)
+    elif phase_label:
+        draw_bottom_phase_label(screen, fonts["small"], phase_label)
 
 
-def draw_masked_placeholder_frame(screen, ui_payload, center=None, show_stimulus_placeholder=False,
-                                  show_prompt=False, initial_response=None):
+def draw_masked_placeholder_frame(screen, ui_payload, show_prompt=False, initial_response=None, phase_label=None):
     fonts = ui_payload["fonts"]
 
     screen.fill(BG)
     draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
     draw_samples_left_label(screen, fonts["small"], ui_payload["trials_left"])
 
-    dish_top_limit = None
-    if show_stimulus_placeholder and center is not None:
-        dish_top_limit = center[1] - DISH_RADIUS
-
-    draw_aid_recommendation_top_center(
+    draw_aid_recommendation_centered(
         screen,
         fonts["aid_label"],
         fonts["aid"],
         rec_label="#####",
         show_value=True,
         transparency_level="none",
-        dish_top_limit=dish_top_limit,
     )
-
-    if show_stimulus_placeholder and center is not None:
-        draw_petri_dish(screen, center, DISH_RADIUS)
-        placeholder_img = fonts["aid"].render("#####", True, LIGHT_GREY)
-        placeholder_rect = placeholder_img.get_rect(center=center)
-        screen.blit(placeholder_img, placeholder_rect)
 
     if show_prompt:
         draw_response_buttons(screen, fonts["small"], initial_response=initial_response)
+    elif phase_label:
+        draw_bottom_phase_label(screen, fonts["small"], phase_label)
 
 
 def run_aid_preview_phase(screen, clock, aid_payload, ui_payload, duration_ms):
@@ -2672,7 +2696,7 @@ def run_aid_preview_phase(screen, clock, aid_payload, ui_payload, duration_ms):
             if ev.type == pygame.KEYDOWN and is_hard_quit_event(ev):
                 quit_clean()
 
-        draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=False)
+        draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=False, phase_label="Preview")
         pygame.display.flip()
 
 
@@ -2687,7 +2711,7 @@ def run_masked_preview_phase(screen, clock, ui_payload, duration_ms):
             if ev.type == pygame.KEYDOWN and is_hard_quit_event(ev):
                 quit_clean()
 
-        draw_masked_placeholder_frame(screen, ui_payload, show_prompt=False)
+        draw_masked_placeholder_frame(screen, ui_payload, show_prompt=False, phase_label="Preview")
         pygame.display.flip()
 
 
@@ -2778,13 +2802,18 @@ def collect_aid_only_response(screen, clock, keymap, aid_payload, ui_payload, in
     )
 
 
-def collect_masked_response(screen, clock, center, keymap, ui_payload, initial_response=None):
+def collect_masked_response(
+    screen,
+    clock,
+    center,
+    keymap,
+    ui_payload,
+    initial_response=None,
+):
     def draw_frame(ms_left):
         draw_masked_placeholder_frame(
             screen,
             ui_payload,
-            center=center,
-            show_stimulus_placeholder=True,
             show_prompt=True,
             initial_response=initial_response,
         )
@@ -2991,7 +3020,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             )
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision2_result = collect_masked_response(
-                screen, clock, center, keymap, ui_payload, initial_response=decision1["response"],
+                screen, clock, center, keymap, ui_payload,
+                initial_response=decision1["response"],
             )
             decision2 = make_decision_record(
                 decision2_result, stimulus, aid_label, display_type="masked_placeholder"
@@ -3030,7 +3060,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             )
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision2_result = collect_masked_response(
-                screen, clock, center, keymap, ui_payload, initial_response=decision1["response"],
+                screen, clock, center, keymap, ui_payload,
+                initial_response=decision1["response"],
             )
             decision2 = make_decision_record(
                 decision2_result, stimulus, aid_label, display_type="masked_placeholder"

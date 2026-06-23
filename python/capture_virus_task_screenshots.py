@@ -814,7 +814,12 @@ def render_trial_sequence(
     writer.save(surface, f"{prefix}_trial_01_fixation")
 
     if aid_condition == "manual":
-        task.draw_masked_placeholder_frame(surface, context["ui_payload"], show_prompt=False)
+        task.draw_masked_placeholder_frame(
+            surface,
+            context["ui_payload"],
+            show_prompt=False,
+            phase_label="Preview",
+        )
         writer.save(surface, f"{prefix}_trial_02_masked_aid_preview")
 
         draw_fixation_screen_state(surface)
@@ -829,8 +834,6 @@ def render_trial_sequence(
         task.draw_masked_placeholder_frame(
             surface,
             context["ui_payload"],
-            center=context["center"],
-            show_stimulus_placeholder=True,
             show_prompt=True,
             initial_response=context["initial_response"],
         )
@@ -842,6 +845,7 @@ def render_trial_sequence(
             context["aid_payload"],
             context["ui_payload"],
             show_prompt=False,
+            phase_label="Preview",
         )
         writer.save(surface, f"{prefix}_trial_02_aid_preview")
 
@@ -857,15 +861,18 @@ def render_trial_sequence(
         task.draw_masked_placeholder_frame(
             surface,
             context["ui_payload"],
-            center=context["center"],
-            show_stimulus_placeholder=True,
             show_prompt=True,
             initial_response=context["initial_response"],
         )
         writer.save(surface, f"{prefix}_trial_06_decision2_masked_placeholder")
 
     elif aid_condition == "stimulus_first_change":
-        task.draw_masked_placeholder_frame(surface, context["ui_payload"], show_prompt=False)
+        task.draw_masked_placeholder_frame(
+            surface,
+            context["ui_payload"],
+            show_prompt=False,
+            phase_label="Preview",
+        )
         writer.save(surface, f"{prefix}_trial_02_masked_aid_preview")
 
         draw_fixation_screen_state(surface)
