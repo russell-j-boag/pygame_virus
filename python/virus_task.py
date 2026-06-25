@@ -2678,7 +2678,11 @@ def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
             slides = slides[:1] + [automation_reliability_instruction_slide(reliability_group)] + slides[1:]
 
         if block_cfg is not None:
-            slides = [time_pressure_instruction_slide(block_cfg)] + slides
+            time_pressure_slide = time_pressure_instruction_slide(block_cfg)
+            if block_name == "CALIBRATION" and slides:
+                slides = [f"{slides[0]}\n\n{time_pressure_slide}"] + slides[1:]
+            else:
+                slides = [time_pressure_slide] + slides
 
         payload["slides"] = slides
 
