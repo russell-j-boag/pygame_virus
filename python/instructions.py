@@ -154,9 +154,8 @@ SLIDES = [
             "We will keep an ongoing tally of your performance. "
             "At the end of the experiment you will receive a point-based bonus, up to $25, based on your performance score.\n\n"
             "In each block, you will have up to 5 seconds to respond on each trial. "
-            "Incorrect responses and responses not made within the response window will reduce your performance score, "
-            "so try to respond accurately within the available time.\n\n"
-            "After some sets of trials, you will be asked to estimate how accurate the aid was and how accurate your own responses were.\n\n"
+            "Incorrect responses and responses not made before the deadline will reduce your performance score, "
+            "so try to respond as quickly and accurately as possible.\n\n"
             "You may take short breaks at any time between trials\n\n"
         ),
     },
@@ -819,7 +818,7 @@ def draw_automation_example_slide(
     if callout == "intro":
         title = "Automated decision aid"
         body = (
-            "After the manual block, you will be assisted "
+            "In some parts of this study you will be assisted "
             "by an Automated Decision Aid"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
