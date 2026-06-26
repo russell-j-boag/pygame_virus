@@ -193,10 +193,6 @@ def block_condition_code(block_cfg) -> str:
     return block_cfg["name"]
 
 
-def block_condition_deadline_code(block_cfg) -> str:
-    return block_condition_code(block_cfg)
-
-
 def trial_deadline_ms_for_block(block_cfg):
     return block_cfg.get("TRIAL_DEADLINE_MS", None)
 
@@ -249,7 +245,7 @@ def aid_condition_instruction_slide(block_cfg) -> str:
 def automation_accuracy_instruction_slide() -> str:
     return (
         "In the next block, although the automation is reasonably reliable, it is not perfect, "
-        "and automation advice errors are still possible."
+        "and automation advice errors may be relatively common."
     )
 
 
@@ -825,10 +821,7 @@ def run_postblock_questionnaire(
             "block": block_name,
             "block_idx": block_idx,
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
-            "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
-            "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
             "aid_condition": aid_condition_for_block(block_cfg) if block_cfg else None,
-            "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": idx,
             "question": item["question"],
@@ -1432,10 +1425,7 @@ def run_postblock_slider_questions(
             "block": block_name,
             "block_idx": block_idx,
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
-            "condition_deadline_code": block_condition_deadline_code(block_cfg) if block_cfg else None,
-            "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none") if block_cfg else None,
             "aid_condition": aid_condition_for_block(block_cfg) if block_cfg else None,
-            "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg) if block_cfg else None,
             "trial_deadline_s": trial_deadline_s_for_block(block_cfg) if block_cfg else None,
             "question_idx": i,
             "question_key": it["key"],
@@ -2909,27 +2899,19 @@ def update_staircase_state(block_state, is_correct, trial_in_block, target_acc):
     return step_down_now, step_up_now
 
 
-def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx, trial_number,
+def build_trial_row(participant_id, run_timestamp, block_name, block_idx, trial_number,
                     global_trial_index, block_cfg, block_state, trial_data, feedback_msg,
                     delta_realised, step_down_now, step_up_now):
     difficulty_mode = block_state["difficulty_mode"]
-    rt_ms = trial_data["rt_ms"]
-    response = trial_data["response"]
     has_real_aid = block_has_real_aid(block_cfg)
 
     return {
         "participant_id": participant_id,
         "run_timestamp": run_timestamp,
-        "key_black": keymap.get("key_black_name"),
-        "key_white": keymap.get("key_white_name"),
-        "keymap_flip": keymap.get("keymap_flip", False),
         "block": block_name,
         "block_idx": block_idx,
         "condition_code": block_condition_code(block_cfg),
-        "condition_deadline_code": block_condition_deadline_code(block_cfg),
-        "automation_reliability_group": block_cfg.get("AUTOMATION_RELIABILITY_GROUP", "none"),
         "aid_condition": aid_condition_for_block(block_cfg),
-        "trial_deadline_ms": trial_deadline_ms_for_block(block_cfg),
         "trial_deadline_s": trial_deadline_s_for_block(block_cfg),
         "trial": trial_number,
         "global_trial": global_trial_index,
@@ -2945,36 +2927,24 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "n_vwhite": trial_data["n_vwhite"],
         "auto_on": 1 if has_real_aid else 0,
         "aid_accuracy_setting": block_cfg["AID_ACCURACY"] if has_real_aid else None,
-        "aid_transparency_level": block_state["aid_transparency"] if has_real_aid else None,
         "stimulus": trial_data["stimulus"],
         "aid_label": trial_data["aid_label"],
         "aid_correct": trial_data["aid_correct"],
+        "preview_display": trial_data["preview_display"],
+        "preview_label": trial_data["preview_label"],
         "decision1_display": trial_data["decision1_display"],
         "decision1_response": trial_data["decision1_response"],
         "decision1_correct": trial_data["decision1_correct"],
         "decision1_rt_s": (trial_data["decision1_rt_ms"] / 1000.0) if trial_data["decision1_rt_ms"] is not None else None,
-        "decision1_rt_ms": trial_data["decision1_rt_ms"],
         "decision1_matches_aid": trial_data["decision1_matches_aid"],
         "decision2_display": trial_data["decision2_display"],
+        "decision2_label": trial_data["decision2_label"],
         "decision2_response": trial_data["decision2_response"],
         "decision2_correct": trial_data["decision2_correct"],
         "decision2_rt_s": (trial_data["decision2_rt_ms"] / 1000.0) if trial_data["decision2_rt_ms"] is not None else None,
-        "decision2_rt_ms": trial_data["decision2_rt_ms"],
         "decision2_matches_aid": trial_data["decision2_matches_aid"],
-        "initial_response": trial_data["initial_response"],
-        "initial_correct": trial_data["initial_correct"],
-        "initial_rt_s": (trial_data["initial_rt_ms"] / 1000.0) if trial_data["initial_rt_ms"] is not None else None,
-        "initial_rt_ms": trial_data["initial_rt_ms"],
-        "final_response": trial_data["final_response"],
-        "final_correct": trial_data["final_correct"],
-        "final_rt_s": (trial_data["final_rt_ms"] / 1000.0) if trial_data["final_rt_ms"] is not None else None,
-        "final_rt_ms": trial_data["final_rt_ms"],
         "changed_response": trial_data["changed_response"],
-        "response": response,
-        "correct": trial_data["correct"] if response in ("BLACK", "WHITE") else None,
         "feedback": feedback_msg if block_cfg["TRIAL_FEEDBACK_ON"] else None,
-        "rt_s": (rt_ms / 1000.0) if rt_ms is not None else None,
-        "rt_ms": rt_ms,
     }
 
 
@@ -3041,12 +3011,17 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
         "matches_aid": None,
     }
     decision2 = dict(decision1)
+    preview_display = None
+    preview_label = None
+    decision2_label = None
 
     if block_cfg["AUTOMATION_ON"]:
         fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
         aid_condition = aid_condition_for_block(block_cfg)
 
         if aid_condition == "manual":
+            preview_display = "masked_placeholder"
+            preview_label = "#####"
             run_masked_preview_phase(screen, clock, ui_payload, AUTOMATION_PRE_PHASE_MS)
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision1_result = collect_stimulus_response(
@@ -3057,6 +3032,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
                 decision1_result, stimulus, aid_label, display_type="stimulus_only"
             )
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision2_label = "#####"
             decision2_result = collect_masked_response(
                 screen, clock, center, keymap, ui_payload,
                 initial_response=decision1["response"],
@@ -3066,6 +3042,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             )
 
         elif aid_condition == "simultaneous":
+            preview_display = "masked_placeholder"
+            preview_label = "#####"
             run_masked_preview_phase(screen, clock, ui_payload, AUTOMATION_PRE_PHASE_MS)
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision1_result = collect_stimulus_response(
@@ -3076,6 +3054,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
                 decision1_result, stimulus, aid_label, display_type="aid_stimulus"
             )
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision2_label = "#####"
             decision2_result = collect_masked_response(
                 screen, clock, center, keymap, ui_payload, initial_response=decision1["response"],
             )
@@ -3084,6 +3063,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             )
 
         elif aid_condition == "aid_first":
+            preview_display = "aid_only"
+            preview_label = aid_label
             run_aid_preview_phase(
                 screen, clock, aid_render_payload, ui_payload,
                 duration_ms=AUTOMATION_PRE_PHASE_MS,
@@ -3097,6 +3078,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
                 decision1_result, stimulus, aid_label, display_type="stimulus_only"
             )
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision2_label = "#####"
             decision2_result = collect_masked_response(
                 screen, clock, center, keymap, ui_payload,
                 initial_response=decision1["response"],
@@ -3106,6 +3088,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             )
 
         elif aid_condition == "stimulus_first_change":
+            preview_display = "masked_placeholder"
+            preview_label = "#####"
             run_masked_preview_phase(screen, clock, ui_payload, AUTOMATION_PRE_PHASE_MS)
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision1_result = collect_stimulus_response(
@@ -3117,6 +3101,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             )
 
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+            decision2_label = aid_label
             decision2_result = collect_aid_only_response(
                 screen, clock, keymap, aid_render_payload, ui_payload, initial_response=decision1["response"],
             )
@@ -3135,11 +3120,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
         correct = response_correct(response, stimulus)
         correct_for_feedback = bool(correct)
         final_response = response
-        final_rt_ms = rt_ms
-        final_correct = correct
         initial_response = decision1["response"]
-        initial_rt_ms = decision1["rt_ms"]
-        initial_correct = decision1["correct"]
 
     else:
         final = collect_stimulus_response(
@@ -3159,11 +3140,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
         correct = response_correct(response, stimulus)
         correct_for_feedback = bool(correct)
         final_response = response
-        final_rt_ms = rt_ms
-        final_correct = correct
         initial_response = None
-        initial_rt_ms = None
-        initial_correct = None
 
     if initial_response in ("BLACK", "WHITE") and final_response in ("BLACK", "WHITE"):
         changed_response = initial_response != final_response
@@ -3181,7 +3158,6 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
     row = build_trial_row(
         participant_id=block_cfg["participant_id"],
         run_timestamp=run_timestamp,
-        keymap=keymap,
         block_name=block_cfg["name"],
         block_idx=block_cfg["block_idx"],
         trial_number=trial_number,
@@ -3195,26 +3171,20 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             "stimulus": stimulus,
             "aid_label": aid_label,
             "aid_correct": aid_correct,
+            "preview_display": preview_display,
+            "preview_label": preview_label,
             "decision1_display": decision1["display"],
             "decision1_response": decision1["response"],
             "decision1_correct": decision1["correct"],
             "decision1_rt_ms": decision1["rt_ms"],
             "decision1_matches_aid": decision1["matches_aid"],
             "decision2_display": decision2["display"],
+            "decision2_label": decision2_label,
             "decision2_response": decision2["response"],
             "decision2_correct": decision2["correct"],
             "decision2_rt_ms": decision2["rt_ms"],
             "decision2_matches_aid": decision2["matches_aid"],
-            "initial_response": initial_response,
-            "initial_correct": initial_correct,
-            "initial_rt_ms": initial_rt_ms,
-            "final_response": final_response,
-            "final_correct": final_correct,
-            "final_rt_ms": final_rt_ms,
             "changed_response": changed_response,
-            "response": response,
-            "correct": correct,
-            "rt_ms": rt_ms,
         },
         feedback_msg=feedback_msg,
         delta_realised=delta_realised,
@@ -3388,7 +3358,7 @@ def compute_performance_score(all_results):
     if not scored_trials:
         return 0.0
 
-    n_correct = sum(1 for row in scored_trials if row["correct"] is True)
+    n_correct = sum(1 for row in scored_trials if row["decision2_correct"] is True)
     return (n_correct / len(scored_trials)) * 100.0
 
 

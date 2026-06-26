@@ -21,12 +21,17 @@ dat <- read_csv(latest_file)
 head(dat)
 str(dat)
 
+if (!"decision2_correct" %in% names(dat) && "correct" %in% names(dat)) {
+  dat <- dat %>%
+    mutate(decision2_correct = correct)
+}
+
 # Keep only calibration staircase trials
 cal <- dat %>%
   filter(block == "CALIBRATION") %>%
   arrange(global_trial) %>%
   mutate(
-    correct_num = as.integer(correct),
+    correct_num = as.integer(decision2_correct),
     stair_trial = row_number(),                  # trial index within staircase
     difficulty = delta_stair_realised                # or delta_stair_realised; see note below
   )

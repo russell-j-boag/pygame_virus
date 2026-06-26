@@ -692,8 +692,8 @@ def draw_example_task_slide(
         kw, kh = measure_callout_box(responses_title, responses_body, callout_title_font, callout_body_font)
 
         rect_keys = pygame.Rect(
-            S(120),
-            HEIGHT - S(430),
+            S(220),
+            HEIGHT - S(370),
             kw,
             kh,
         )
@@ -803,7 +803,7 @@ def draw_automation_example_slide(
     if callout == "intro":
         title = "Automated decision aid"
         body = (
-            "##### or an aid recommendation can appear here. "
+            "In some parts of this study you will be assisted by an Automated Decision Aid. "
             "It may appear before or after the virus sample, depending on the block."
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
@@ -831,8 +831,9 @@ def draw_automation_example_slide(
     elif callout == "classification":
         title = "Automated decision aid"
         body = (
-            "When a recommendation appears here, BLACK or WHITE "
-            "tells you which response the aid recommends"
+            "The automation will recommend a "
+            "classification (either BLACK or "
+            "WHITE) for each sample"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
         rect = pygame.Rect(WIDTH - S(80) - bw, HEIGHT // 2 - bh // 2, bw, bh)
@@ -859,8 +860,9 @@ def draw_automation_example_slide(
     elif callout == "black_example":
         title = "Recommendation"
         body = (
-            "When BLACK appears here, the automated "
-            "decision aid recommends the V-BLACK response"
+            "In this example, the automated "
+            "decision aid is recommending that "
+            "you classify the sample as V-BLACK"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
         
@@ -889,8 +891,9 @@ def draw_automation_example_slide(
     elif callout == "white_example":
         title = "Recommendation"
         body = (
-            "When WHITE appears here, the automated "
-            "decision aid recommends the V-WHITE response"
+            "In this example, the automated "
+            "decision aid is recommending that "
+            "you classify the sample as V-WHITE"
         )
         bw, bh = measure_callout_box(title, body, callout_title_font, callout_body_font)
 
@@ -1022,7 +1025,7 @@ def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name=None, ke
 
 
 def draw_sequence_fixation(surface, center, size, color=WHITE):
-    thickness = max(1, S(3))
+    thickness = max(1, S(2))
     pygame.draw.line(
         surface,
         color,
@@ -1067,7 +1070,7 @@ def draw_sequence_aid_display(surface, rect, font, value_text):
     gap = max(1, S(6))
     if value_text.startswith("#####"):
         value_parts = [
-            font.render("#####", True, MASKED_AID_COLOR),
+            font.render("#####", True, WHITE),
             font.render(value_text[len("#####"):], True, WHITE),
         ]
         value_w = sum(part.get_width() for part in value_parts)
@@ -1090,10 +1093,9 @@ def draw_sequence_aid_display(surface, rect, font, value_text):
         surface.blit(value_img, value_img.get_rect(midtop=(rect.centerx, value_y)))
 
 
-def draw_sequence_response_buttons(surface, rect, font, decision_label):
-    label_img = font.render(decision_label, True, WHITE)
-    label_gap = max(S(76), label_img.get_width() + S(12))
-    btn_gap = S(6)
+def draw_sequence_response_buttons(surface, rect, font):
+    btn_gap = S(14)
+    label_gap = btn_gap
     btn_w = max(1, (rect.width - label_gap - 2 * btn_gap) // 2)
     btn_h = min(S(34), rect.height)
     y = rect.centery - btn_h // 2
@@ -1108,8 +1110,6 @@ def draw_sequence_response_buttons(surface, rect, font, decision_label):
         pygame.draw.rect(surface, WHITE, btn, max(1, S(2)), border_radius=max(1, S(6)))
         img = font.render(label, True, WHITE)
         surface.blit(img, img.get_rect(center=btn.center))
-    label_rect = pygame.Rect(left_btn.right, rect.y, right_btn.left - left_btn.right, rect.height)
-    draw_sequence_phase_label(surface, label_rect, font, decision_label)
 
 
 def draw_sequence_panel(surface, rect, step_num, title, panel_kind, font_body, font_small, font_aid):
@@ -1135,26 +1135,23 @@ def draw_sequence_panel(surface, rect, step_num, title, panel_kind, font_body, f
     )
 
     if panel_kind == "fixation":
-        draw_sequence_fixation(surface, content.center, S(20))
+        draw_sequence_fixation(surface, content.center, S(14))
 
     elif panel_kind == "preview":
-        label_rect = pygame.Rect(content.x + S(8), content.bottom - S(34), content.width - S(16), S(32))
-        aid_rect = pygame.Rect(content.x, content.y, content.width, label_rect.y - content.y - S(4))
-        draw_sequence_aid_display(surface, aid_rect, font_small, "##### / BLACK / WHITE")
-        draw_sequence_phase_label(surface, label_rect, font_small, "Preview")
+        draw_sequence_aid_display(surface, content, font_small, "##### / BLACK / WHITE")
 
     elif panel_kind == "decision1":
         dish_radius = min(content.width // 7, content.height // 4)
         dish_center = (content.centerx, content.y + S(32))
         draw_sequence_petri(surface, dish_center, dish_radius)
         btn_rect = pygame.Rect(content.x + S(8), content.bottom - S(34), content.width - S(16), S(32))
-        draw_sequence_response_buttons(surface, btn_rect, font_small, "Decision 1")
+        draw_sequence_response_buttons(surface, btn_rect, font_small)
 
     elif panel_kind == "decision2":
         btn_rect = pygame.Rect(content.x + S(8), content.bottom - S(34), content.width - S(16), S(32))
         aid_rect = pygame.Rect(content.x, content.y, content.width, btn_rect.y - content.y - S(4))
         draw_sequence_aid_display(surface, aid_rect, font_small, "##### / BLACK / WHITE")
-        draw_sequence_response_buttons(surface, btn_rect, font_small, "Decision 2")
+        draw_sequence_response_buttons(surface, btn_rect, font_small)
 
 
 def draw_trial_sequence_slide(screen, font_title, font_body, font_small, font_aid):
@@ -1163,7 +1160,7 @@ def draw_trial_sequence_slide(screen, font_title, font_body, font_small, font_ai
     title = "EXAMPLE TRIAL SEQUENCE"
     body = (
         "Each trial moves through the same three phases: Preview, Decision 1, Decision 2.\n"
-        "The Preview and Decision 2 screens can show ##### or an aid recommendation, depending on the block."
+        "The Preview and Decision 2 screens may show ##### or an aid recommendation, depending on the block."
     )
 
     content_x = S(80)

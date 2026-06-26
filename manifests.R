@@ -56,20 +56,43 @@ factor_auto_block <- function(block, aid_condition) {
 }
 
 ensure_design_columns <- function(data) {
+  if (!"condition_code" %in% names(data) && "condition_deadline_code" %in% names(data)) {
+    data$condition_code <- data$condition_deadline_code
+  }
+  if (!"trial_deadline_s" %in% names(data) && "trial_deadline_ms" %in% names(data)) {
+    data$trial_deadline_s <- data$trial_deadline_ms / 1000
+  }
   if (!"condition_code" %in% names(data)) {
     data$condition_code <- NA_character_
   }
   if (!"aid_condition" %in% names(data)) {
     data$aid_condition <- NA_character_
   }
-  if (!"trial_deadline_ms" %in% names(data)) {
-    data$trial_deadline_ms <- NA_real_
-  }
-  if (!"trial_deadline_s" %in% names(data)) {
-    data$trial_deadline_s <- NA_real_
-  }
   if (!"aid_accuracy_setting" %in% names(data)) {
     data$aid_accuracy_setting <- NA_real_
+  }
+  data
+}
+
+ensure_trial_current_columns <- function(data) {
+  if (!"trial" %in% names(data) && "trial_idx" %in% names(data)) {
+    data$trial <- data$trial_idx
+  }
+  if (!"decision2_correct" %in% names(data) && "correct" %in% names(data)) {
+    data$decision2_correct <- data$correct
+  }
+  if (!"decision2_rt_s" %in% names(data) && "rt_s" %in% names(data)) {
+    data$decision2_rt_s <- data$rt_s
+  }
+  data
+}
+
+ensure_slider_current_columns <- function(data) {
+  if (!"question_key" %in% names(data) && "slider_key" %in% names(data)) {
+    data$question_key <- data$slider_key
+  }
+  if (!"response_percent" %in% names(data) && "response" %in% names(data)) {
+    data$response_percent <- data$response
   }
   data
 }
@@ -250,9 +273,11 @@ slider_dat_raw <- read_csv("data/data_virus_sliders_all.csv", show_col_types = F
 postblock_dat_raw <- read_csv("data/data_virus_postblock_all.csv", show_col_types = FALSE)
 
 trial_dat_raw <- trial_dat_raw %>%
-  ensure_design_columns()
+  ensure_design_columns() %>%
+  ensure_trial_current_columns()
 slider_dat_raw <- slider_dat_raw %>%
-  ensure_design_columns()
+  ensure_design_columns() %>%
+  ensure_slider_current_columns()
 postblock_dat_raw <- postblock_dat_raw %>%
   ensure_design_columns()
 
@@ -289,15 +314,15 @@ dat <- trial_dat_raw %>%
 # Accuracy summary
 # ------------------
 subj_acc <- dat %>%
-  filter(!is.na(facet_group), !is.na(x_group), !is.na(correct)) %>%
+  filter(!is.na(facet_group), !is.na(x_group), !is.na(decision2_correct)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, facet_group, x_group) %>%
   summarise(
-    acc = mean(correct, na.rm = TRUE),
+    acc = mean(decision2_correct, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -319,15 +344,15 @@ make_rt_summary <- function(data, correct_value, rt_mode = "mean", rt_probs = c(
   
   rt_dat <- data %>%
     filter(
-      correct %in% correct_value,
-      !is.na(rt_s),
+      decision2_correct %in% correct_value,
+      !is.na(decision2_rt_s),
       !is.na(facet_group),
       !is.na(x_group)
     ) %>%
     restrict_calibration_trials(
       participant_col = participant_id,
       block_col = block,
-      trial_col = trial_idx
+      trial_col = trial
     )
   
   if (rt_mode == "mean") {
@@ -335,7 +360,7 @@ make_rt_summary <- function(data, correct_value, rt_mode = "mean", rt_probs = c(
     subj_rt <- rt_dat %>%
       group_by(participant_id, facet_group, x_group) %>%
       summarise(
-        stat = mean(rt_s, na.rm = TRUE),
+        stat = mean(decision2_rt_s, na.rm = TRUE),
         .groups = "drop"
       ) %>%
       mutate(stat_label = "Mean")
@@ -348,7 +373,7 @@ make_rt_summary <- function(data, correct_value, rt_mode = "mean", rt_probs = c(
       group_by(participant_id, facet_group, x_group) %>%
       summarise(
         stat = list(as.numeric(
-          quantile(rt_s, probs = rt_probs, na.rm = TRUE, names = FALSE, type = 7)
+          quantile(decision2_rt_s, probs = rt_probs, na.rm = TRUE, names = FALSE, type = 7)
         )),
         .groups = "drop"
       ) %>%
@@ -526,30 +551,30 @@ dat_block <- dat %>%
   filter(!is.na(block_simple))
 
 dat_block_acc <- dat_block %>%
-  filter(!is.na(correct)) %>%
+  filter(!is.na(decision2_correct)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   )
 
 subj_block_acc_summary <- dat_block_acc %>%
   group_by(participant_id, block_simple) %>%
   summarise(
-    acc = mean(correct, na.rm = TRUE),
+    acc = mean(decision2_correct, na.rm = TRUE),
     .groups = "drop"
   )
 
 subj_block_rt_summary <- dat_block %>%
-  filter(!is.na(rt_s)) %>%
+  filter(!is.na(decision2_rt_s)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, block_simple) %>%
   summarise(
-    mean_rt = mean(rt_s, na.rm = TRUE),
+    mean_rt = mean(decision2_rt_s, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -578,20 +603,21 @@ subj_slider_block_summary <- slider_dat_raw %>%
   mutate(
     block_simple = factor_condition_block(block, aid_condition),
     rating_type = factor(
-      slider_key,
+      question_key,
       levels = c("perc_self_correct", "perc_auto_correct"),
       labels = c("Self-rated own accuracy", "Self-rated aid accuracy")
-    )
+    ),
+    response_percent = as.numeric(response_percent)
   ) %>%
   filter(
     !is.na(participant_id),
     !is.na(block_simple),
     !is.na(rating_type),
-    !is.na(response)
+    !is.na(response_percent)
   ) %>%
   group_by(participant_id, rating_type, block_simple) %>%
   summarise(
-    rated_acc = mean(response, na.rm = TRUE) / 100,
+    rated_acc = mean(response_percent, na.rm = TRUE) / 100,
     .groups = "drop"
   )
 
@@ -789,28 +815,28 @@ dat_stim <- dat %>%
   filter(!is.na(stimulus), !is.na(block_simple))
 
 subj_stim_acc_summary <- dat_stim %>%
-  filter(!is.na(correct)) %>%
+  filter(!is.na(decision2_correct)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, stimulus, block_simple) %>%
   summarise(
-    acc = mean(correct, na.rm = TRUE),
+    acc = mean(decision2_correct, na.rm = TRUE),
     .groups = "drop"
   )
 
 subj_stim_rt_summary <- dat_stim %>%
-  filter(!is.na(rt_s)) %>%
+  filter(!is.na(decision2_rt_s)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, stimulus, block_simple) %>%
   summarise(
-    mean_rt = mean(rt_s, na.rm = TRUE),
+    mean_rt = mean(decision2_rt_s, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -939,28 +965,28 @@ dat_id <- dat %>%
   filter(!is.na(participant_id), !is.na(block_simple))
 
 id_acc_summary <- dat_id %>%
-  filter(!is.na(correct)) %>%
+  filter(!is.na(decision2_correct)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, block_simple) %>%
   summarise(
-    acc = mean(correct, na.rm = TRUE),
+    acc = mean(decision2_correct, na.rm = TRUE),
     .groups = "drop"
   )
 
 id_rt_summary <- dat_id %>%
-  filter(!is.na(rt_s)) %>%
+  filter(!is.na(decision2_rt_s)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, block_simple) %>%
   summarise(
-    mean_rt = mean(rt_s, na.rm = TRUE),
+    mean_rt = mean(decision2_rt_s, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -1082,15 +1108,15 @@ calib_manual_acc <- dat %>%
     participant_id = as.character(participant_id),
     block_simple = factor(block, levels = c("Calibration", "Manual"))
   ) %>%
-  filter(!is.na(correct), !is.na(block_simple)) %>%
+  filter(!is.na(decision2_correct), !is.na(block_simple)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
-    trial_col = trial_idx
+    trial_col = trial
   ) %>%
   group_by(participant_id, block_simple) %>%
   summarise(
-    accuracy = mean(correct, na.rm = TRUE),
+    accuracy = mean(decision2_correct, na.rm = TRUE),
     n_trials = dplyr::n(),
     .groups = "drop"
   ) %>%
@@ -1433,17 +1459,17 @@ self_rated_aid_acc <- slider_dat_raw %>%
     participant_id = as.character(participant_id),
     block = as.character(block),
     block_label = factor_auto_block(block, aid_condition),
-    response = as.numeric(response)
+    response_percent = as.numeric(response_percent)
   ) %>%
   filter(
     block == "AUTOMATION",
     !is.na(block_label),
-    slider_key == "perc_auto_correct",
-    !is.na(response)
+    question_key == "perc_auto_correct",
+    !is.na(response_percent)
   ) %>%
   group_by(participant_id, block, block_label) %>%
   summarise(
-    self_rated_aid_accuracy = mean(response, na.rm = TRUE) / 100,
+    self_rated_aid_accuracy = mean(response_percent, na.rm = TRUE) / 100,
     .groups = "drop"
   )
 

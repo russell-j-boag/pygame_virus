@@ -54,20 +54,17 @@ The main trial and post-block output files include fields that identify the desi
 | --- | --- |
 | `block` | `AUTOMATION` for all scheduled blocks |
 | `condition_code` | `MANUAL`, `AIDFIRST`, or `STIMFIRST` |
-| `condition_deadline_code` | Compatibility alias for `condition_code` |
-| `automation_reliability_group` | Compatibility field; `none` in the current design |
-| `aid_accuracy_setting` | `0.85` for aided automation blocks, or blank for `MANUAL` |
 | `aid_condition` | `manual`, `aid_first`, or `stimulus_first_change` |
-| `trial_deadline_ms` | Blank in the current self-paced design |
+| `aid_accuracy_setting` | `0.85` for aided automation blocks, or blank for `MANUAL` |
 | `trial_deadline_s` | Blank in the current self-paced design |
-| `key_black`, `key_white`, `keymap_flip` | Legacy compatibility fields; blank or false because responses are fixed mouse buttons |
+| `preview_display`, `preview_label` | Display type and visible value shown on the initial preview screen |
 | `decision1_display`, `decision2_display` | Display type for each decision phase |
-| `decision1_response`, `decision1_correct`, `decision1_rt_s`, `decision1_rt_ms`, `decision1_matches_aid` | First automation classification fields |
-| `decision2_response`, `decision2_correct`, `decision2_rt_s`, `decision2_rt_ms`, `decision2_matches_aid` | Second automation classification fields |
-| `initial_response`, `initial_correct`, `initial_rt_s`, `initial_rt_ms` | Compatibility aliases for decision 1 |
-| `final_response`, `final_correct`, `final_rt_s`, `final_rt_ms` | Compatibility aliases for decision 2 |
+| `decision2_label` | Visible value shown during the second decision phase, such as `#####`, `BLACK`, or `WHITE` |
+| `decision1_response`, `decision1_correct`, `decision1_rt_s`, `decision1_matches_aid` | First automation classification fields |
+| `decision2_response`, `decision2_correct`, `decision2_rt_s`, `decision2_matches_aid` | Second automation classification fields |
 | `changed_response` | Whether decision 2 differs from decision 1 |
-| `response`, `correct`, `rt_s`, `rt_ms` | Primary-analysis aliases for decision 2 |
+
+The current schema intentionally omits older compatibility aliases such as `condition_deadline_code`, `initial_*`, `final_*`, and generic final-response fields (`response`, `correct`, `rt_s`). Timing fields are recorded in seconds only.
 
 Practice trials are saved separately as `results_p###_<timestamp>_b00_PRACTICE.csv` with `block = PRACTICE` and `condition_code = PRACTICE`. They are not included in `b00_ALL.csv`, final performance scoring, or post-block measures.
 

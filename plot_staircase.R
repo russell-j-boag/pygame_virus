@@ -23,6 +23,11 @@ print(latest_file)
 
 dat <- read_csv(latest_file, show_col_types = FALSE)
 
+if (!"decision2_correct" %in% names(dat) && "correct" %in% names(dat)) {
+  dat <- dat %>%
+    mutate(decision2_correct = correct)
+}
+
 WINDOW <- 25
 GLOBAL_AID_ACCURACY <- 0.85
 
@@ -45,7 +50,7 @@ add_running_accuracy <- function(data) {
   data %>%
     arrange(trial) %>%
     mutate(
-      correct_num = if_else(is.na(correct), 0, as.numeric(correct)),
+      correct_num = if_else(is.na(decision2_correct), 0, as.numeric(decision2_correct)),
       aid_correct_num = case_when(
         aid_correct %in% c(TRUE, 1, "1", "TRUE", "True", "true") ~ 1,
         aid_correct %in% c(FALSE, 0, "0", "FALSE", "False", "false") ~ 0,

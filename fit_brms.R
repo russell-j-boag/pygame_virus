@@ -33,6 +33,16 @@ ensure_design_columns <- function(data) {
   data
 }
 
+ensure_trial_current_columns <- function(data) {
+  if (!"decision2_correct" %in% names(data) && "correct" %in% names(data)) {
+    data$decision2_correct <- data$correct
+  }
+  if (!"decision2_rt_s" %in% names(data) && "rt_s" %in% names(data)) {
+    data$decision2_rt_s <- data$rt_s
+  }
+  data
+}
+
 factor_aid_condition <- function(aid_condition) {
   condition <- case_when(
     !is.na(aid_condition) & aid_condition == "manual" ~ "Manual",
@@ -53,8 +63,9 @@ str(dat)
 # Recode to the current three-condition design.
 dat <- dat %>%
   ensure_design_columns() %>%
+  ensure_trial_current_columns() %>%
   mutate(
-    C = as.integer(correct),
+    C = as.integer(decision2_correct),
     subjects = factor(participant_id),
     aid_condition = factor_aid_condition(aid_condition)
   ) %>%
@@ -64,7 +75,7 @@ dat <- dat %>%
   filter(
     block == "AUTOMATION",
     !is.na(C),
-    !is.na(rt_s),
+    !is.na(decision2_rt_s),
     !is.na(aid_condition)
   )
 
@@ -80,12 +91,12 @@ accs <- dat %>%
 accs
 
 rt_dat <- dat %>%
-  filter(C == 1, rt_s > 0) %>%
-  mutate(log_rt = log(rt_s))
+  filter(C == 1, decision2_rt_s > 0) %>%
+  mutate(log_rt = log(decision2_rt_s))
 
 RTs <- rt_dat %>%
   group_by(subjects, aid_condition) %>%
-  summarise(rt = mean(rt_s), .groups = "drop") %>%
+  summarise(rt = mean(decision2_rt_s), .groups = "drop") %>%
   arrange(subjects, aid_condition)
 RTs
 
