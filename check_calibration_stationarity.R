@@ -17,18 +17,20 @@ files <- list.files(
 latest_file <- files[which.max(file.info(files)$mtime)]
 print(latest_file)
 
-dat <- read_csv(latest_file)
-head(dat)
-str(dat)
+dat <- read_csv(latest_file, show_col_types = FALSE)
 
 if (!"decision2_correct" %in% names(dat) && "correct" %in% names(dat)) {
   dat <- dat %>%
     mutate(decision2_correct = correct)
 }
+if (!"condition_code" %in% names(dat) && "block" %in% names(dat)) {
+  dat <- dat %>%
+    mutate(condition_code = block)
+}
 
 # Keep only calibration staircase trials
 cal <- dat %>%
-  filter(block == "CALIBRATION") %>%
+  filter(condition_code == "CALIBRATION") %>%
   arrange(global_trial) %>%
   mutate(
     correct_num = as.integer(decision2_correct),
@@ -36,10 +38,20 @@ cal <- dat %>%
     difficulty = delta_stair_realised                # or delta_stair_realised; see note below
   )
 
+if (nrow(cal) == 0) {
+  message("No calibration trials found in latest results file; skipping stationarity checks.")
+  quit(save = "no", status = 0)
+}
+
 # Define burn-in period
 burn_in <- floor(2/3 * nrow(cal))
 cal_post <- cal %>%
   filter(stair_trial > burn_in)
+
+if (nrow(cal_post) == 0) {
+  message("No post-burn-in calibration trials available; skipping stationarity checks.")
+  quit(save = "no", status = 0)
+}
 
 # Visual check difficulty across trials
 ggplot(cal, aes(stair_trial, difficulty)) +

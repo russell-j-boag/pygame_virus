@@ -10,21 +10,38 @@ if (!file.exists(input_path)) {
 dat <- read.csv(input_path, stringsAsFactors = FALSE)
 required_cols <- c(
   "participant_id",
-  "block",
   "difficulty_mode",
   "trial",
-  "delta_stair_realised",
-  "correct"
+  "delta_stair_realised"
 )
 missing_cols <- setdiff(required_cols, names(dat))
 if (length(missing_cols) > 0) {
   stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
 }
 
-cal <- dat[dat$block == "CALIBRATION" & dat$difficulty_mode == "staircase", required_cols]
+condition_col <- if ("condition_code" %in% names(dat)) {
+  "condition_code"
+} else if ("block" %in% names(dat)) {
+  "block"
+} else {
+  stop("Missing required condition column: condition_code")
+}
+
+correct_col <- if ("decision2_correct" %in% names(dat)) {
+  "decision2_correct"
+} else if ("correct" %in% names(dat)) {
+  "correct"
+} else {
+  stop("Missing required correctness column: decision2_correct")
+}
+
+cal <- dat[
+  dat[[condition_col]] == "CALIBRATION" & dat$difficulty_mode == "staircase",
+  c(required_cols, correct_col)
+]
 cal$trial <- as.integer(cal$trial)
 cal$delta_stair_realised <- as.numeric(cal$delta_stair_realised)
-cal$correct <- cal$correct %in% TRUE
+cal$correct <- cal[[correct_col]] %in% TRUE
 cal <- cal[order(cal$participant_id, cal$trial), ]
 
 participants <- sort(unique(cal$participant_id))

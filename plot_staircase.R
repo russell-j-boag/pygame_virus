@@ -116,7 +116,7 @@ make_automation_plot <- function(dat_auto) {
 
 dat_auto <- dat %>%
   mutate(aid_condition_label = condition_label(aid_condition)) %>%
-  filter(block == "AUTOMATION", !is.na(aid_condition_label))
+  filter(!is.na(aid_condition_label))
 
 if (!nrow(dat_auto)) {
   stop("No scheduled main-condition blocks found in latest results file.")

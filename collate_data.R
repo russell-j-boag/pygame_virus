@@ -130,7 +130,6 @@ select_current_cols <- function(dat, cols) {
 current_trial_all_cols <- c(
   "participant_id",
   "run_timestamp",
-  "block",
   "block_idx",
   "condition_code",
   "aid_condition",
@@ -171,7 +170,6 @@ current_trial_all_cols <- c(
 
 current_trial_summary_cols <- c(
   "participant_id",
-  "block",
   "block_idx",
   "condition_code",
   "aid_condition",
@@ -202,7 +200,6 @@ current_trial_summary_cols <- c(
 
 current_postblock_cols <- c(
   "participant_id",
-  "block",
   "block_idx",
   "condition_code",
   "aid_condition",
@@ -219,7 +216,6 @@ current_postblock_cols <- c(
 current_slider_cols <- c(
   "participant_id",
   "run_timestamp",
-  "block",
   "block_idx",
   "condition_code",
   "aid_condition",

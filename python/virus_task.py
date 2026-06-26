@@ -818,7 +818,6 @@ def run_postblock_questionnaire(
 
         responses.append({
             "participant_id": participant_id,
-            "block": block_name,
             "block_idx": block_idx,
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
             "aid_condition": aid_condition_for_block(block_cfg) if block_cfg else None,
@@ -1422,7 +1421,6 @@ def run_postblock_slider_questions(
         rows.append({
             "participant_id": participant_id,
             "run_timestamp": run_ts,
-            "block": block_name,
             "block_idx": block_idx,
             "condition_code": block_condition_code(block_cfg) if block_cfg else None,
             "aid_condition": aid_condition_for_block(block_cfg) if block_cfg else None,
@@ -2908,7 +2906,6 @@ def build_trial_row(participant_id, run_timestamp, block_name, block_idx, trial_
     return {
         "participant_id": participant_id,
         "run_timestamp": run_timestamp,
-        "block": block_name,
         "block_idx": block_idx,
         "condition_code": block_condition_code(block_cfg),
         "aid_condition": aid_condition_for_block(block_cfg),
@@ -3226,7 +3223,6 @@ def write_delta_summary(output_dir, participant_id, run_timestamp, block_name, b
     row = {
         "participant_id": participant_id,
         "run_timestamp": run_timestamp,
-        "block": block_name,
         "block_idx": block_idx,
         "n_trials_total": len(deltas_realised),
         "burnin_trials_excluded": burn,
@@ -3353,8 +3349,7 @@ def save_combined_outputs(output_dir, participant_id, run_timestamp, all_results
 
 
 def compute_performance_score(all_results):
-    score_blocks = {"AUTOMATION"}
-    scored_trials = [row for row in all_results if row["block"] in score_blocks]
+    scored_trials = [row for row in all_results if row.get("decision2_correct") is not None]
     if not scored_trials:
         return 0.0
 

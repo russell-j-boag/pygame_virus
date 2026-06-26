@@ -73,7 +73,6 @@ dat <- dat %>%
   mutate(Trial = dplyr::row_number()) %>%
   ungroup() %>%
   filter(
-    block == "AUTOMATION",
     !is.na(C),
     !is.na(decision2_rt_s),
     !is.na(aid_condition)

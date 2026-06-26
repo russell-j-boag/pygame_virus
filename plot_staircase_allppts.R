@@ -112,7 +112,7 @@ for (pid in participant_ids) {
 
   dat_auto <- dat_pid %>%
     mutate(aid_condition_label = condition_label(aid_condition)) %>%
-    filter(block == "AUTOMATION", !is.na(aid_condition_label))
+    filter(!is.na(aid_condition_label))
 
   if (!nrow(dat_auto)) {
     warning("Skipping participant ", pid, ": no scheduled main-condition blocks found.")

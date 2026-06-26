@@ -25,7 +25,7 @@ ensure_onset_columns <- function(data) {
   data
 }
 
-make_block_onset <- function(block, aid_condition) {
+make_block_onset <- function(aid_condition) {
   condition <- case_when(
     !is.na(aid_condition) & aid_condition == "manual" ~ "Manual",
     !is.na(aid_condition) & aid_condition == "aid_first" ~ "Aid first",
@@ -50,7 +50,7 @@ str(dat)
 dat_q <- dat %>%
   mutate(
     participant_id = factor(participant_id),
-    block_onset = make_block_onset(block, aid_condition),
+    block_onset = make_block_onset(aid_condition),
     question = factor(question, levels = unique(question))
   ) %>%
   filter(!is.na(participant_id), !is.na(block_onset), !is.na(question), !is.na(response))
@@ -152,7 +152,7 @@ str(dat_slider_raw)
 dat_slider <- dat_slider_raw %>%
   mutate(
     participant_id = factor(participant_id),
-    block_onset = make_block_onset(block, aid_condition),
+    block_onset = make_block_onset(aid_condition),
     question_key = factor(
       question_key,
       levels = c("perc_self_correct", "perc_auto_correct"),
@@ -166,7 +166,7 @@ dat_slider <- dat_slider_raw %>%
     !is.na(response_percent)
   )
 
-# If there is ever more than one row per participant/block/question_key,
+# If there is ever more than one row per participant/condition/question_key,
 # average within participant first
 subj_slider_summary <- dat_slider %>%
   group_by(participant_id, block_onset, question_key) %>%

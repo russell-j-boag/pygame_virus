@@ -52,7 +52,6 @@ The main trial and post-block output files include fields that identify the desi
 
 | Field | Meaning |
 | --- | --- |
-| `block` | `AUTOMATION` for all scheduled blocks |
 | `condition_code` | `MANUAL`, `AIDFIRST`, or `STIMFIRST` |
 | `aid_condition` | `manual`, `aid_first`, or `stimulus_first_change` |
 | `aid_accuracy_setting` | `0.85` for aided automation blocks, or blank for `MANUAL` |
@@ -66,7 +65,7 @@ The main trial and post-block output files include fields that identify the desi
 
 The current schema intentionally omits older compatibility aliases such as `condition_deadline_code`, `initial_*`, `final_*`, and generic final-response fields (`response`, `correct`, `rt_s`). Timing fields are recorded in seconds only.
 
-Practice trials are saved separately as `results_p###_<timestamp>_b00_PRACTICE.csv` with `block = PRACTICE` and `condition_code = PRACTICE`. They are not included in `b00_ALL.csv`, final performance scoring, or post-block measures.
+Practice trials are saved separately as `results_p###_<timestamp>_b00_PRACTICE.csv` with `condition_code = PRACTICE`. They are not included in `b00_ALL.csv`, final performance scoring, or post-block measures.
 
 Single-block runs require an explicit aid condition, for example:
 

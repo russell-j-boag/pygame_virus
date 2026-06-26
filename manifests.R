@@ -40,7 +40,7 @@ factor_block_simple <- function(x) {
   factor(x, levels = BLOCK_LEVELS)
 }
 
-factor_condition_block <- function(block, aid_condition) {
+factor_condition_block <- function(aid_condition) {
   condition <- case_when(
     !is.na(aid_condition) & aid_condition == "manual" ~ "Manual",
     !is.na(aid_condition) & aid_condition == "aid_first" ~ "Aid first",
@@ -50,8 +50,8 @@ factor_condition_block <- function(block, aid_condition) {
   factor(condition, levels = BLOCK_LEVELS)
 }
 
-factor_auto_block <- function(block, aid_condition) {
-  condition <- factor_condition_block(block, aid_condition)
+factor_auto_block <- function(aid_condition) {
+  condition <- factor_condition_block(aid_condition)
   factor(as.character(condition), levels = AUTOMATION_BLOCK_LEVELS)
 }
 
@@ -285,19 +285,18 @@ if (!dir.exists(PLOT_DIR)) dir.create(PLOT_DIR, recursive = TRUE)
 
 dat <- trial_dat_raw %>%
   mutate(
-    block_raw = as.character(block),
-    block = factor_condition_block(block_raw, aid_condition),
+    block = factor_condition_block(aid_condition),
     aid_correct = case_when(
       aid_correct %in% c(TRUE, 1, "1", "TRUE", "True", "true") ~ "Aid correct",
       aid_correct %in% c(FALSE, 0, "0", "FALSE", "False", "false") ~ "Aid incorrect",
       TRUE ~ NA_character_
     ),
     facet_group = case_when(
-      block_raw == "AUTOMATION" ~ "Automation",
+      !is.na(block) ~ "Automation",
       TRUE ~ NA_character_
     ),
     x_group = case_when(
-      block_raw == "AUTOMATION" ~ as.character(block),
+      !is.na(block) ~ as.character(block),
       TRUE ~ NA_character_
     ),
     facet_group = factor(
@@ -601,7 +600,7 @@ rt_block_summary <- summarise_morey_mean(
 # Self-rated block accuracy summary
 subj_slider_block_summary <- slider_dat_raw %>%
   mutate(
-    block_simple = factor_condition_block(block, aid_condition),
+    block_simple = factor_condition_block(aid_condition),
     rating_type = factor(
       question_key,
       levels = c("perc_self_correct", "perc_auto_correct"),
@@ -1132,23 +1131,14 @@ calib_manual_acc <- dat %>%
 block_order_codes <- trial_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
-    block = as.character(block),
     condition_code = as.character(condition_code)
   ) %>%
-  filter(block %in% c("MANUAL", "AUTOMATION"), !is.na(block_idx)) %>%
-  distinct(participant_id, block, block_idx, condition_code) %>%
+  filter(condition_code %in% c("MANUAL", "AIDFIRST", "STIMFIRST"), !is.na(block_idx)) %>%
+  distinct(participant_id, block_idx, condition_code) %>%
   group_by(participant_id) %>%
   arrange(block_idx, .by_group = TRUE) %>%
   mutate(
-    legacy_block_code = recode(
-      block,
-      "MANUAL" = "M",
-      "AUTOMATION" = "A"
-    ),
-    block_code = coalesce(
-      na_if(condition_code, ""),
-      legacy_block_code
-    )
+    block_code = na_if(condition_code, "")
   ) %>%
   summarise(
     block_order_code = paste(block_code, collapse = "/"),
@@ -1438,16 +1428,15 @@ safe_cor_summary <- function(x, y) {
 empirical_aid_acc <- trial_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
-    block = as.character(block),
-    block_label = factor_auto_block(block, aid_condition),
+    block_label = factor_auto_block(aid_condition),
     aid_correct_num = case_when(
       aid_correct %in% c(TRUE, 1, "1", "TRUE", "True", "true") ~ 1,
       aid_correct %in% c(FALSE, 0, "0", "FALSE", "False", "false") ~ 0,
       TRUE ~ NA_real_
     )
   ) %>%
-  filter(block == "AUTOMATION", !is.na(block_label), !is.na(aid_correct_num)) %>%
-  group_by(participant_id, block, block_label) %>%
+  filter(!is.na(block_label), !is.na(aid_correct_num)) %>%
+  group_by(participant_id, block_label) %>%
   summarise(
     empirical_aid_accuracy = mean(aid_correct_num, na.rm = TRUE),
     n_trials = dplyr::n(),
@@ -1457,17 +1446,15 @@ empirical_aid_acc <- trial_dat_raw %>%
 self_rated_aid_acc <- slider_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
-    block = as.character(block),
-    block_label = factor_auto_block(block, aid_condition),
+    block_label = factor_auto_block(aid_condition),
     response_percent = as.numeric(response_percent)
   ) %>%
   filter(
-    block == "AUTOMATION",
     !is.na(block_label),
     question_key == "perc_auto_correct",
     !is.na(response_percent)
   ) %>%
-  group_by(participant_id, block, block_label) %>%
+  group_by(participant_id, block_label) %>%
   summarise(
     self_rated_aid_accuracy = mean(response_percent, na.rm = TRUE) / 100,
     .groups = "drop"
@@ -1476,7 +1463,7 @@ self_rated_aid_acc <- slider_dat_raw %>%
 aid_accuracy_diff <- empirical_aid_acc %>%
   inner_join(
     self_rated_aid_acc,
-    by = c("participant_id", "block", "block_label")
+    by = c("participant_id", "block_label")
   ) %>%
   mutate(
     aid_accuracy_difference = empirical_aid_accuracy - self_rated_aid_accuracy
@@ -1486,13 +1473,12 @@ aid_accuracy_diff <- empirical_aid_acc %>%
 trust_ratings <- postblock_dat_raw %>%
   mutate(
     participant_id = as.character(participant_id),
-    block = as.character(block),
-    block_label = factor_auto_block(block, aid_condition),
+    block_label = factor_auto_block(aid_condition),
     question_idx = as.integer(question_idx),
     response = as.numeric(response)
   ) %>%
-  filter(block == "AUTOMATION", !is.na(block_label), !is.na(question_idx), !is.na(response)) %>%
-  group_by(participant_id, block, block_label, question_idx, question) %>%
+  filter(!is.na(block_label), !is.na(question_idx), !is.na(response)) %>%
+  group_by(participant_id, block_label, question_idx, question) %>%
   summarise(
     trust_rating = mean(response, na.rm = TRUE),
     .groups = "drop"
@@ -1509,7 +1495,6 @@ question_levels <- trust_ratings %>%
 aid_accuracy_trust_dat <- aid_accuracy_diff %>%
   select(
     participant_id,
-    block,
     block_label,
     empirical_aid_accuracy,
     self_rated_aid_accuracy,
@@ -1519,14 +1504,13 @@ aid_accuracy_trust_dat <- aid_accuracy_diff %>%
     trust_ratings %>%
       select(
         participant_id,
-        block,
         block_label,
         question_idx,
         question,
         question_label,
         trust_rating
       ),
-    by = c("participant_id", "block", "block_label")
+    by = c("participant_id", "block_label")
   )
 
 aid_accuracy_trust_cor <- aid_accuracy_trust_dat %>%
