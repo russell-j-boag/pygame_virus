@@ -219,10 +219,6 @@ def aid_onset_ms_for_block(block_cfg):
     return block_cfg.get("AID_ONSET_MS")
 
 
-def response_instruction_slide() -> str:
-    return "Please respond as quickly and accurately as possible."
-
-
 def automation_reliability_instruction_slide() -> str:
     return (
         "In the next block, the automated decision aid will provide a recommendation "
@@ -2533,11 +2529,6 @@ def get_block_instruction_payload(block_name: str, block_cfg=None) -> dict:
                 + [automation_reliability_instruction_slide()]
                 + slides[1:]
             )
-
-        if block_cfg is not None and block_name in ("MANUAL", "AUTOMATION"):
-            slides = [response_instruction_slide()] + slides
-        elif block_cfg is not None and block_name != "CALIBRATION":
-            slides = [response_instruction_slide()] + slides
 
         payload["slides"] = slides
 
