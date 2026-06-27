@@ -32,19 +32,23 @@ Participant-facing automation instructions are qualitative rather than numeric. 
 
 ## Counterbalancing
 
-The block order uses balanced rotations of the three scheduled condition blocks:
+The block order uses the full set of six permutations of the three scheduled condition blocks:
 
 | Order | Sequence |
 | --- | --- |
 | `O1` | `MANUAL -> AIDFIRST -> STIMFIRST` |
-| `O2` | `AIDFIRST -> STIMFIRST -> MANUAL` |
-| `O3` | `STIMFIRST -> MANUAL -> AIDFIRST` |
+| `O2` | `STIMFIRST -> AIDFIRST -> MANUAL` |
+| `O3` | `MANUAL -> STIMFIRST -> AIDFIRST` |
+| `O4` | `AIDFIRST -> STIMFIRST -> MANUAL` |
+| `O5` | `AIDFIRST -> MANUAL -> STIMFIRST` |
+| `O6` | `STIMFIRST -> MANUAL -> AIDFIRST` |
 
-Block order is assigned deterministically from participant ID as `(participant_id - 1) %% 3`, so the order advances every participant.
+Block order is assigned deterministically from participant ID as `(participant_id - 1) %% 6`, so the order advances every participant.
 
 For the planned sample of `N = 60`, this gives:
 
-- 20 participants per block order overall.
+- 10 participants per block order overall.
+- 20 appearances of each condition in each serial position.
 
 ## Output fields
 

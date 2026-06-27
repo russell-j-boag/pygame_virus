@@ -48,6 +48,14 @@ AUTOMATION_AID_CONDITIONS = {
     **HIDDEN_AUTOMATION_AID_CONDITIONS,
 }
 REAL_AID_CONDITIONS = {"simultaneous", "aid_first", "stimulus_first_change"}
+SCHEDULED_MAIN_BLOCK_ORDERS = (
+    ("MANUAL", "AIDFIRST", "STIMFIRST"),
+    ("STIMFIRST", "AIDFIRST", "MANUAL"),
+    ("MANUAL", "STIMFIRST", "AIDFIRST"),
+    ("AIDFIRST", "STIMFIRST", "MANUAL"),
+    ("AIDFIRST", "MANUAL", "STIMFIRST"),
+    ("STIMFIRST", "MANUAL", "AIDFIRST"),
+)
 
 BLOCKS = [
     dict(
@@ -257,7 +265,7 @@ def manual_condition_instruction_slide() -> str:
 
 
 def block_order_index_for_participant(participant_id: int) -> int:
-    return (participant_id - 1) % 3
+    return (participant_id - 1) % len(SCHEDULED_MAIN_BLOCK_ORDERS)
 
 
 def transparency_instruction_slide(transparency_level: str) -> str:
@@ -1088,23 +1096,33 @@ def is_hard_quit_event(event) -> bool:
   
 def build_blocks_for_participant(participant_id: int, blocks_template):
     """
-    The three main condition cells are assigned with balanced rotations.
+    The three main condition cells are assigned with the full 3! order counterbalance.
     """
     main_blocks = [
         copy_block_config(b)
         for b in blocks_template
         if b["name"] == "AUTOMATION"
     ]
-    if len(main_blocks) != 3:
-        raise ValueError("The scheduled design expects exactly three main blocks.")
+    main_blocks_by_code = {}
+    for block in main_blocks:
+        code = block_condition_code(block)
+        if code in main_blocks_by_code:
+            raise ValueError(f"Duplicate scheduled block condition code: {code}")
+        main_blocks_by_code[code] = block
 
-    all_orders = [
-        [main_blocks[(idx + offset) % len(main_blocks)] for idx in range(len(main_blocks))]
-        for offset in range(len(main_blocks))
-    ]
+    expected_codes = set().union(*SCHEDULED_MAIN_BLOCK_ORDERS)
+    actual_codes = set(main_blocks_by_code)
+    if actual_codes != expected_codes:
+        raise ValueError(
+            "The scheduled design expects main block condition codes "
+            f"{sorted(expected_codes)}, got {sorted(actual_codes)}."
+        )
 
     order_idx = block_order_index_for_participant(participant_id)
-    return [copy_block_config(b) for b in all_orders[order_idx]]
+    return [
+        copy_block_config(main_blocks_by_code[code])
+        for code in SCHEDULED_MAIN_BLOCK_ORDERS[order_idx]
+    ]
 
 
 def response_mapping_for_participant(participant_id: int):
