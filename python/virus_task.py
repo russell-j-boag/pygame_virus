@@ -609,10 +609,6 @@ SLIDER_ITEMS_AUTOMATION = [
         "key": "perc_auto_correct",
         "question": "For the automation's recommendations, what percentage do you think were correct in the preceding block of trials?",
     },
-    {
-        "key": "perc_self_correct",
-        "question": "For your responses, what percentage do you think were correct in the preceding block of trials?",
-    },
 ]
 
 # ---------------- Questionnaire settings ---------------------------------
