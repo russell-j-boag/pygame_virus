@@ -400,7 +400,7 @@ FEEDBACK_ERROR_COLOR   = (220, 50, 50)
 FEEDBACK_SLOW_COLOR    = (200, 200, 0)
 
 # Trial timing
-FIXATION_DURATION_MS = 750
+FIXATION_DURATION_MS = 500
 TRIAL_DEADLINE_MS = None
 
 # Brownian motion for dots (per-frame random walk)
@@ -450,10 +450,6 @@ SLIDER_ITEMS_AUTOMATION = [
     {
         "key": "perc_auto_correct",
         "question": "For the automation's recommendations, what percentage do you think were correct in the preceding block of trials?",
-    },
-    {
-        "key": "perc_self_correct",
-        "question": "For your responses, what percentage do you think were correct in the preceding block of trials?",
     },
 ]
 
@@ -2177,7 +2173,7 @@ def render_text_fit_width(font, text, color, max_width):
 
 
 def decision_phase_label(initial_response=None) -> str:
-    return "Decision 2" if initial_response in ("BLACK", "WHITE") else "Decision 1"
+    return "Final decision?" if initial_response in ("BLACK", "WHITE") else "Initial decision"
 
 
 def draw_bottom_phase_label(screen, font, label, y_pos=None):
