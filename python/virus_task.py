@@ -27,8 +27,8 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 # -----------------------------
 # Block definitions
 # -----------------------------
-CALIBRATION_TARGET_LEVELS = [0.65, 0.85]
-CALIBRATION_TARGET_LABELS = ["CAL65", "CAL85"]
+CALIBRATION_TARGET_LEVELS = [0.65, 0.90]
+CALIBRATION_TARGET_LABELS = ["CAL65", "CAL90"]
 MAIN_BLOCK_ORDER_LABELS = ["SPLIT_MANUAL"]
 RELIABILITY_PHASE_SIZE = 400
 RELIABILITY_BLOCK_SIZE = RELIABILITY_PHASE_SIZE  # compatibility alias for existing output code
@@ -522,10 +522,6 @@ SLIDER_ITEMS_AUTOMATION = [
     {
         "key": "perc_auto_correct",
         "question": "For the automation's recommendations, what percentage do you think were correct in the preceding block of trials?",
-    },
-    {
-        "key": "perc_self_correct",
-        "question": "For your responses, what percentage do you think were correct in the preceding block of trials?",
     },
 ]
 
