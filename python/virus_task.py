@@ -2,7 +2,7 @@
 Random Dot Classification (Bartlett & McCarley–style)
 
 Responses:
-- Mouse-click V-BLACK / V-WHITE response buttons
+- D/J = classify as V-BLACK or V-WHITE, counterbalanced by participant
 - Option/Alt + Q = hard quit
 - ESC = quit from final completion screen
 """
@@ -267,7 +267,11 @@ def manual_condition_instruction_slide() -> str:
 
 
 def block_order_index_for_participant(participant_id: int) -> int:
-    return (participant_id - 1) % len(SCHEDULED_MAIN_BLOCK_ORDERS)
+    return ((participant_id - 1) // 2) % len(SCHEDULED_MAIN_BLOCK_ORDERS)
+
+
+def keymap_flip_for_participant(participant_id: int) -> bool:
+    return ((participant_id - 1) % 2) == 1
 
 
 def transparency_instruction_slide(transparency_level: str) -> str:
@@ -429,7 +433,7 @@ FONT_DIR_CANDIDATES = [
 # -----------------------------
 # Text coloring toggles
 # -----------------------------
-TEXT_COLORING_UI_ON = False      # participant-facing response buttons
+TEXT_COLORING_UI_ON = False      # participant-facing response-key prompt
 TEXT_COLORING_AID_ON = True      # automated recommendation stays coloured
 
 RAW_COLOR_TOKENS = {"BLACK": VBLACK, "WHITE": VWHITE}
@@ -1123,16 +1127,31 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
     ]
 
 
-def response_mapping_for_participant(participant_id: int):
-    """Mouse responses use fixed participant-facing V-BLACK/V-WHITE button positions."""
+def key_mapping_for_participant(participant_id: int):
+    """
+    Counterbalance D/J response mapping within the 12-participant cycle:
+      - standard  (D->BLACK, J->WHITE)
+      - flipped   (J->BLACK, D->WHITE)
+    """
+    flip = keymap_flip_for_participant(participant_id)
+
+    if not flip:
+        key_black = pygame.K_d
+        key_white = pygame.K_j
+        key_black_name = "D"
+        key_white_name = "J"
+    else:
+        key_black = pygame.K_j
+        key_white = pygame.K_d
+        key_black_name = "J"
+        key_white_name = "D"
+
     return {
-        "keymap_flip": False,
-        "key_black_name": None,
-        "key_white_name": None,
-        "left_response": "BLACK",
-        "right_response": "WHITE",
-        "left_label": "V-BLACK",
-        "right_label": "V-WHITE",
+        "flip": flip,
+        "key_black": key_black,
+        "key_white": key_white,
+        "key_black_name": key_black_name,
+        "key_white_name": key_white_name,
     }
 
 def draw_countdown_timer(surface, font, ms_left, x, y, color=WHITE):
@@ -1783,7 +1802,8 @@ def run_participant_number_screen(screen, clock, font) -> Dict[str, Any]:
         pygame.display.flip()
 
 
-def run_instructions(screen, font_title, font_body, font_body_bold, clock, min_show_ms=250):
+def run_instructions(screen, font_title, font_body, font_body_bold, clock,
+                     key_black_name, key_white_name, min_show_ms=250):
 
     title = "VIRUS DETECTION TASK"
 
@@ -1796,8 +1816,8 @@ def run_instructions(screen, font_title, font_body, font_body_bold, clock, min_s
         "Your job is to evaluate the following samples to determine which virus is present.\n"
     )
 
-    press1 = "Click V-BLACK if the sample looks more BLACK overall"
-    press2 = "Click V-WHITE if the sample looks more WHITE overall"
+    press1 = f"Press {key_black_name} if the sample looks more BLACK overall (V-BLACK)"
+    press2 = f"Press {key_white_name} if the sample looks more WHITE overall (V-WHITE)"
     speed  = "Try to respond as quickly and accurately as possible\n"
 
     # ---- Layout constants ----
@@ -2130,41 +2150,6 @@ def display_label_for_aid_recommendation(response):
     return str(response)
 
 
-def response_button_specs(initial_response=None):
-    specs = [
-        {"response": "BLACK", "label": "V-BLACK", "sub_label": None},
-        {"response": "WHITE", "label": "V-WHITE", "sub_label": None},
-    ]
-    if initial_response in ("BLACK", "WHITE"):
-        for spec in specs:
-            spec["sub_label"] = (
-                "Confirm initial decision"
-                if spec["response"] == initial_response
-                else "Switch initial decision"
-            )
-    return specs
-
-
-def response_button_rects(y_pos):
-    anchor_btn_w = min(S(430), max(S(260), (WIDTH - S(240)) // 2))
-    btn_w = max(1, anchor_btn_w // 2)
-    btn_h = S(72)
-    gap = S(44)
-    total_w = anchor_btn_w * 2 + gap
-    left_x = WIDTH // 2 - total_w // 2
-    anchor_rects = [
-        pygame.Rect(left_x, y_pos, anchor_btn_w, btn_h),
-        pygame.Rect(left_x + anchor_btn_w + gap, y_pos, anchor_btn_w, btn_h),
-    ]
-
-    rects = []
-    for anchor_rect in anchor_rects:
-        rect = pygame.Rect(0, y_pos, btn_w, btn_h)
-        rect.center = anchor_rect.center
-        rects.append(rect)
-    return rects
-
-
 def render_text_fit_width(font, text, color, max_width):
     img = font.render(text, True, color)
     if img.get_width() <= max_width:
@@ -2178,43 +2163,101 @@ def decision_phase_label(initial_response=None) -> str:
     return "Final decision?" if initial_response in ("BLACK", "WHITE") else "Initial decision"
 
 
-def draw_bottom_phase_label(screen, font, label, y_pos=None):
+def response_key_prompt_rect(font, y_pos=None, key_black_name="D", key_white_name="J"):
     if y_pos is None:
-        y_pos = HEIGHT - S(104)
-    rects = response_button_rects(y_pos)
-    label_img = font.render(label, True, WHITE)
-    label_rect = label_img.get_rect(
-        center=((rects[0].right + rects[1].left) // 2, rects[0].centery)
+        y_pos = HEIGHT - S(80)
+
+    meaning_by_key = {
+        key_black_name: "BLACK",
+        key_white_name: "WHITE",
+    }
+
+    def label_for_key(key_name: str):
+        return "V-BLACK" if meaning_by_key.get(key_name) == "BLACK" else "V-WHITE"
+
+    left_top = label_for_key("D")
+    right_top = label_for_key("J")
+    left_bottom = "Press D"
+    right_bottom = "Press J"
+
+    phase_w = max(font.size("Initial decision")[0], font.size("Final decision?")[0])
+    col_gap = max(S(160), phase_w + S(36))
+    line_gap = max(1, S(4))
+    left_w = max(font.size(left_top)[0], font.size(left_bottom)[0])
+    right_w = max(font.size(right_top)[0], font.size(right_bottom)[0])
+    total_w = left_w + col_gap + right_w
+    total_h = font.get_height() * 2 + line_gap
+    return pygame.Rect(
+        WIDTH // 2 - total_w // 2,
+        y_pos,
+        total_w,
+        total_h,
     )
+
+
+def draw_bottom_phase_label(screen, font, label, y_pos=None, key_black_name="D", key_white_name="J"):
+    prompt_rect = response_key_prompt_rect(font, y_pos, key_black_name, key_white_name)
+    label_img = font.render(label, True, WHITE)
+    label_rect = label_img.get_rect(center=prompt_rect.center)
     screen.blit(label_img, label_rect)
     return label_rect
 
 
-def draw_response_buttons(screen, font, initial_response=None, y_pos=None):
+def draw_trial_prompt_stacked(screen, font_small, y_pos=None, key_black_name="D",
+                              key_white_name="J", initial_response=None):
+    """
+    Bottom response prompt: D is fixed left and J is fixed right, while
+    V-BLACK/V-WHITE meaning follows the participant-specific key mapping.
+    """
     if y_pos is None:
-        y_pos = HEIGHT - S(104)
-    specs = response_button_specs(initial_response)
-    rects = response_button_rects(y_pos)
-    for spec, rect in zip(specs, rects):
-        pygame.draw.rect(screen, (50, 50, 50), rect, 0, border_radius=max(1, S(10)))
-        pygame.draw.rect(screen, WHITE, rect, max(1, S(3)), border_radius=max(1, S(10)))
-        max_text_w = max(1, rect.w - S(24))
-        main_img = render_text_fit_width(font, spec["label"], WHITE, max_text_w)
-        if spec["sub_label"] is None:
-            screen.blit(main_img, main_img.get_rect(center=rect.center))
-        else:
-            sub_img = render_text_fit_width(font, spec["sub_label"], LIGHT_GREY, max_text_w)
-            gap = S(4)
-            total_h = main_img.get_height() + gap + sub_img.get_height()
-            main_rect = main_img.get_rect(center=(rect.centerx, rect.centery - total_h // 2 + main_img.get_height() // 2))
-            sub_rect = sub_img.get_rect(center=(rect.centerx, main_rect.bottom + gap + sub_img.get_height() // 2))
-            screen.blit(main_img, main_rect)
-            screen.blit(sub_img, sub_rect)
-    draw_bottom_phase_label(screen, font, decision_phase_label(initial_response), y_pos=y_pos)
-    return [
-        {"response": spec["response"], "rect": rect}
-        for spec, rect in zip(specs, rects)
-    ]
+        y_pos = HEIGHT - S(80)
+
+    meaning_by_key = {
+        key_black_name: "BLACK",
+        key_white_name: "WHITE",
+    }
+
+    def label_and_color_for_key(key_name: str):
+        if meaning_by_key.get(key_name) == "BLACK":
+            return "V-BLACK", BLACK
+        return "V-WHITE", WHITE
+
+    left_top, left_col = label_and_color_for_key("D")
+    right_top, right_col = label_and_color_for_key("J")
+    left_bottom = "Press D"
+    right_bottom = "Press J"
+
+    lt_img = font_small.render(left_top, True, left_col)
+    lb_img = font_small.render(left_bottom, True, left_col)
+    rt_img = font_small.render(right_top, True, right_col)
+    rb_img = font_small.render(right_bottom, True, right_col)
+
+    phase_w = font_small.size(decision_phase_label(initial_response))[0]
+    col_gap = max(S(160), phase_w + S(36))
+    line_gap = max(1, S(4))
+    left_w = max(lt_img.get_width(), lb_img.get_width())
+    right_w = max(rt_img.get_width(), rb_img.get_width())
+    total_w = left_w + col_gap + right_w
+    start_x = WIDTH // 2 - total_w // 2
+
+    y_top = y_pos
+    y_bottom = y_pos + font_small.get_height() + line_gap
+    screen.blit(lt_img, (start_x + (left_w - lt_img.get_width()) // 2, y_top))
+    screen.blit(lb_img, (start_x + (left_w - lb_img.get_width()) // 2, y_bottom))
+
+    right_x = start_x + left_w + col_gap
+    screen.blit(rt_img, (right_x + (right_w - rt_img.get_width()) // 2, y_top))
+    screen.blit(rb_img, (right_x + (right_w - rb_img.get_width()) // 2, y_bottom))
+
+    prompt_rect = pygame.Rect(
+        start_x,
+        y_top,
+        total_w,
+        y_bottom + font_small.get_height() - y_top,
+    )
+    phase_img = font_small.render(decision_phase_label(initial_response), True, WHITE)
+    screen.blit(phase_img, phase_img.get_rect(center=prompt_rect.center))
+    return prompt_rect
 
 
 def make_aid_recommendation(stimulus, accuracy):
@@ -2592,13 +2635,15 @@ def prepare_block_state(block_cfg, participant_id):
     }
 
 
-def show_block_intro(screen, clock, fonts, block_cfg):
+def show_block_intro(screen, clock, fonts, block_cfg, keymap):
     run_instructions(
         screen,
         fonts["title"],
         fonts["body"],
         fonts["body_bold"],
         clock,
+        keymap["key_black_name"],
+        keymap["key_white_name"],
         min_show_ms=250,
     )
 
@@ -2647,6 +2692,7 @@ def pick_trial_vblack_prop(block_state, trial_index):
 
 def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, ms_left=None, initial_response=None):
     fonts = ui_payload["fonts"]
+    key_names = ui_payload.get("key_names", {"black": "D", "white": "J"})
 
     screen.fill(BG)
     if ms_left is not None:
@@ -2671,7 +2717,13 @@ def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, m
         pygame.draw.circle(dot_layer, (r, g, b, DOT_ALPHA), (x, y), DOT_RADIUS)
     screen.blit(dot_layer, (0, 0))
 
-    draw_response_buttons(screen, fonts["small"], initial_response=initial_response)
+    draw_trial_prompt_stacked(
+        screen,
+        fonts["small"],
+        key_black_name=key_names["black"],
+        key_white_name=key_names["white"],
+        initial_response=initial_response,
+    )
 
     if aid_payload["mode"] == "automation":
         draw_aid_recommendation_top_center(
@@ -2721,6 +2773,7 @@ def draw_aid_only_frame(
     phase_label=None,
 ):
     fonts = ui_payload["fonts"]
+    key_names = ui_payload.get("key_names", {"black": "D", "white": "J"})
 
     screen.fill(BG)
     draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
@@ -2737,13 +2790,26 @@ def draw_aid_only_frame(
     )
 
     if show_prompt:
-        draw_response_buttons(screen, fonts["small"], initial_response=initial_response)
+        draw_trial_prompt_stacked(
+            screen,
+            fonts["small"],
+            key_black_name=key_names["black"],
+            key_white_name=key_names["white"],
+            initial_response=initial_response,
+        )
     elif phase_label:
-        draw_bottom_phase_label(screen, fonts["small"], phase_label)
+        draw_bottom_phase_label(
+            screen,
+            fonts["small"],
+            phase_label,
+            key_black_name=key_names["black"],
+            key_white_name=key_names["white"],
+        )
 
 
 def draw_masked_placeholder_frame(screen, ui_payload, show_prompt=False, initial_response=None, phase_label=None):
     fonts = ui_payload["fonts"]
+    key_names = ui_payload.get("key_names", {"black": "D", "white": "J"})
 
     screen.fill(BG)
     draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
@@ -2759,9 +2825,21 @@ def draw_masked_placeholder_frame(screen, ui_payload, show_prompt=False, initial
     )
 
     if show_prompt:
-        draw_response_buttons(screen, fonts["small"], initial_response=initial_response)
+        draw_trial_prompt_stacked(
+            screen,
+            fonts["small"],
+            key_black_name=key_names["black"],
+            key_white_name=key_names["white"],
+            initial_response=initial_response,
+        )
     elif phase_label:
-        draw_bottom_phase_label(screen, fonts["small"], phase_label)
+        draw_bottom_phase_label(
+            screen,
+            fonts["small"],
+            phase_label,
+            key_black_name=key_names["black"],
+            key_white_name=key_names["white"],
+        )
 
 
 def run_aid_preview_phase(screen, clock, aid_payload, ui_payload, duration_ms):
@@ -2794,7 +2872,7 @@ def run_masked_preview_phase(screen, clock, ui_payload, duration_ms):
         pygame.display.flip()
 
 
-def collect_mouse_response(screen, clock, draw_frame_fn, initial_response=None, deadline_ms=None, update_fn=None):
+def collect_key_response(screen, clock, keymap, draw_frame_fn, deadline_ms=None, update_fn=None):
     phase_start_ticks = pygame.time.get_ticks()
     phase_start_perf = time.perf_counter()
 
@@ -2808,15 +2886,16 @@ def collect_mouse_response(screen, clock, draw_frame_fn, initial_response=None, 
             if ev.type == pygame.KEYDOWN:
                 if is_hard_quit_event(ev):
                     quit_clean()
-            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
-                specs = response_button_specs(initial_response)
-                rects = response_button_rects(HEIGHT - S(104))
-                for spec, rect in zip(specs, rects):
-                    if rect.collidepoint(ev.pos):
-                        return {
-                            "response": spec["response"],
-                            "rt_ms": (time.perf_counter() - phase_start_perf) * 1000.0,
-                        }
+                if ev.key == keymap["key_black"]:
+                    return {
+                        "response": "BLACK",
+                        "rt_ms": (time.perf_counter() - phase_start_perf) * 1000.0,
+                    }
+                if ev.key == keymap["key_white"]:
+                    return {
+                        "response": "WHITE",
+                        "rt_ms": (time.perf_counter() - phase_start_perf) * 1000.0,
+                    }
 
         if deadline_ms is not None and (now - phase_start_ticks) >= deadline_ms:
             return {"response": "TIMEOUT", "rt_ms": None}
@@ -2857,11 +2936,11 @@ def collect_stimulus_response(screen, clock, dot_layer, dots, center, keymap, ai
             initial_response=initial_response,
         )
 
-    return collect_mouse_response(
+    return collect_key_response(
         screen,
         clock,
+        keymap=keymap,
         draw_frame_fn=draw_frame,
-        initial_response=initial_response,
         deadline_ms=deadline_ms,
         update_fn=update_fn,
     )
@@ -2871,11 +2950,11 @@ def collect_aid_only_response(screen, clock, keymap, aid_payload, ui_payload, in
     def draw_frame(ms_left):
         draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=True, initial_response=initial_response)
 
-    return collect_mouse_response(
+    return collect_key_response(
         screen,
         clock,
+        keymap=keymap,
         draw_frame_fn=draw_frame,
-        initial_response=initial_response,
         deadline_ms=None,
         update_fn=None,
     )
@@ -2897,11 +2976,11 @@ def collect_masked_response(
             initial_response=initial_response,
         )
 
-    return collect_mouse_response(
+    return collect_key_response(
         screen,
         clock,
+        keymap=keymap,
         draw_frame_fn=draw_frame,
-        initial_response=initial_response,
         deadline_ms=None,
         update_fn=None,
     )
@@ -2950,7 +3029,7 @@ def update_staircase_state(block_state, is_correct, trial_in_block, target_acc):
     return step_down_now, step_up_now
 
 
-def build_trial_row(participant_id, run_timestamp, block_name, block_idx, trial_number,
+def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx, trial_number,
                     global_trial_index, block_cfg, block_state, trial_data, feedback_msg,
                     delta_realised, step_down_now, step_up_now):
     difficulty_mode = block_state["difficulty_mode"]
@@ -2959,6 +3038,9 @@ def build_trial_row(participant_id, run_timestamp, block_name, block_idx, trial_
     return {
         "participant_id": participant_id,
         "run_timestamp": run_timestamp,
+        "key_black": keymap["key_black_name"],
+        "key_white": keymap["key_white_name"],
+        "keymap_flip": keymap["flip"],
         "block_idx": block_idx,
         "condition_code": block_condition_code(block_cfg),
         "aid_condition": aid_condition_for_block(block_cfg),
@@ -3045,6 +3127,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
         "fonts": fonts,
         "trials_left": trials_left,
         "n_trials": block_cfg["N_TRIALS"],
+        "key_names": {"black": keymap["key_black_name"], "white": keymap["key_white_name"]},
     }
     aid_render_payload = {
         "label": aid_label,
@@ -3208,6 +3291,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
     row = build_trial_row(
         participant_id=block_cfg["participant_id"],
         run_timestamp=run_timestamp,
+        keymap=keymap,
         block_name=block_cfg["name"],
         block_idx=block_cfg["block_idx"],
         trial_number=trial_number,
@@ -3410,7 +3494,7 @@ def compute_performance_score(all_results):
     return (n_correct / len(scored_trials)) * 100.0
 
 
-def run_trial_block(screen, clock, dot_layer, center, fonts, response_map, block_cfg,
+def run_trial_block(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
                     run_timestamp, output_dir, global_trial_index):
     block_state = prepare_block_state(
         block_cfg,
@@ -3428,7 +3512,7 @@ def run_trial_block(screen, clock, dot_layer, center, fonts, response_map, block
             dot_layer,
             center,
             fonts,
-            response_map,
+            keymap,
             block_cfg,
             block_state,
             trials_left,
@@ -3502,8 +3586,13 @@ def main():
         quit_clean()
 
     participant_id = res["participant"]
-    response_map = response_mapping_for_participant(participant_id)
-    print("[RESPONSE MAP]", participant_id, "-> V-BLACK=BLACK, V-WHITE=WHITE")
+    keymap = key_mapping_for_participant(participant_id)
+    print(
+        "[KEY MAP]",
+        participant_id,
+        f"-> V-BLACK={keymap['key_black_name']}, V-WHITE={keymap['key_white_name']}",
+        "(flipped)" if keymap["flip"] else "(standard)",
+    )
 
     center = (WIDTH // 2, HEIGHT // 2 + S(20))
     all_results = []
@@ -3519,14 +3608,14 @@ def main():
         practice_cfg = copy_block_config(PRACTICE_BLOCK)
         practice_cfg["block_idx"] = 0
         practice_cfg["participant_id"] = participant_id
-        show_block_intro(screen, clock, fonts, practice_cfg)
+        show_block_intro(screen, clock, fonts, practice_cfg, keymap)
         _, _, practice_delta_summary = run_trial_block(
             screen=screen,
             clock=clock,
             dot_layer=dot_layer,
             center=center,
             fonts=fonts,
-            response_map=response_map,
+            keymap=keymap,
             block_cfg=practice_cfg,
             run_timestamp=run_ts,
             output_dir=output_dir,
@@ -3552,14 +3641,14 @@ def main():
                 practice_delta_sd,
                 source_path=practice_delta_path,
             )
-        show_block_intro(screen, clock, fonts, block_cfg)
+        show_block_intro(screen, clock, fonts, block_cfg, keymap)
         block_results, global_trial_index, _ = run_trial_block(
             screen=screen,
             clock=clock,
             dot_layer=dot_layer,
             center=center,
             fonts=fonts,
-            response_map=response_map,
+            keymap=keymap,
             block_cfg=block_cfg,
             run_timestamp=run_ts,
             output_dir=output_dir,

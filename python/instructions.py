@@ -591,10 +591,12 @@ def draw_example_task_display(
     screen.blit(dot_layer, (0, 0))
 
     # bottom prompt
-    prompt_rect, prompt_button_rects = draw_trial_prompt_stacked(
+    prompt_rect = draw_trial_prompt_stacked(
         screen,
         font_small,
-        HEIGHT - S(104),
+        HEIGHT - S(80),
+        key_black_name="D",
+        key_white_name="J",
     )
 
     return {
@@ -605,7 +607,6 @@ def draw_example_task_display(
             PB_PAD + PB_H + font_small.get_height() + S(8),
         ),
         "prompt_rect": prompt_rect,
-        "prompt_button_rects": prompt_button_rects,
     }
     
 
@@ -683,13 +684,14 @@ def draw_example_task_slide(
         )
 
     elif callout == "responses":
-        responses_title = "Response buttons"
-        responses_body = "Click one of these boxes to classify the sample"
+        responses_title = "Response keys"
+        responses_body = "The response keys to use will be shown here"
         kw, kh = measure_callout_box(responses_title, responses_body, callout_title_font, callout_body_font)
 
+        # moved slightly lower
         rect_keys = pygame.Rect(
-            S(220),
-            HEIGHT - S(370),
+            WIDTH // 2 - kw // 2 - S(120),
+            HEIGHT - S(260),
             kw,
             kh,
         )
@@ -702,15 +704,17 @@ def draw_example_task_slide(
             callout_title_font,
             callout_body_font,
         )
-        arrow_start = rect_keys.midbottom
-        for button_rect in meta["prompt_button_rects"]:
-            draw_arrow(
-                screen,
-                arrow_start,
-                button_rect.midtop,
-                color=WHITE,
-                width=max(1, S(2)),
-            )
+        target = (
+            meta["prompt_rect"].midtop[0],
+            meta["prompt_rect"].midtop[1] - S(12),
+        )
+        draw_arrow(
+            screen,
+            rect_keys.midbottom,
+            target,
+            color=WHITE,
+            width=max(1, S(2)),
+        )
     
 
 def draw_aid_recommendation_centered(
@@ -987,37 +991,57 @@ def display_label_for_aid_recommendation(response):
     return str(response)
 
 
-def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name=None, key_white_name=None):
-    """Bottom prompt matching the main task's mouse-click response buttons."""
-    anchor_btn_w = min(S(380), max(S(240), (WIDTH - S(440)) // 2))
-    btn_w = max(1, anchor_btn_w // 2)
-    btn_h = S(72)
-    gap = S(44)
-    total_w = anchor_btn_w * 2 + gap
-    left_x = WIDTH // 2 - total_w // 2
-    anchor_rects = [
-        pygame.Rect(left_x, y_pos, anchor_btn_w, btn_h),
-        pygame.Rect(left_x + anchor_btn_w + gap, y_pos, anchor_btn_w, btn_h),
-    ]
-    rects = []
-    for anchor_rect in anchor_rects:
-        rect = pygame.Rect(0, y_pos, btn_w, btn_h)
-        rect.center = anchor_rect.center
-        rects.append(rect)
+def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name="D", key_white_name="J"):
+    """
+    Bottom response prompt: D is fixed left and J is fixed right, while
+    V-BLACK/V-WHITE meaning follows the participant-specific key mapping.
+    """
+    meaning_by_key = {
+        key_black_name: "BLACK",
+        key_white_name: "WHITE",
+    }
 
-    labels = ["V-BLACK", "V-WHITE"]
+    def label_and_color_for_key(key_name: str):
+        if meaning_by_key.get(key_name) == "BLACK":
+            return "V-BLACK", BLACK
+        return "V-WHITE", WHITE
 
-    for label, rect in zip(labels, rects):
-        pygame.draw.rect(screen, (50, 50, 50), rect, 0, border_radius=max(1, S(10)))
-        pygame.draw.rect(screen, WHITE, rect, max(1, S(3)), border_radius=max(1, S(10)))
-        img = font_small.render(label, True, WHITE)
-        screen.blit(img, img.get_rect(center=rect.center))
+    left_top, left_col = label_and_color_for_key("D")
+    right_top, right_col = label_and_color_for_key("J")
+    left_bottom = "Press D"
+    right_bottom = "Press J"
 
-    phase_img = font_small.render("Decision 1", True, WHITE)
-    phase_center = ((rects[0].right + rects[1].left) // 2, rects[0].centery)
-    screen.blit(phase_img, phase_img.get_rect(center=phase_center))
+    lt_img = font_small.render(left_top, True, left_col)
+    lb_img = font_small.render(left_bottom, True, left_col)
+    rt_img = font_small.render(right_top, True, right_col)
+    rb_img = font_small.render(right_bottom, True, right_col)
 
-    return rects[0].union(rects[1]), rects
+    phase_w = font_small.size("Initial decision")[0]
+    col_gap = max(S(160), phase_w + S(36))
+    line_gap = max(1, S(4))
+    left_w = max(lt_img.get_width(), lb_img.get_width())
+    right_w = max(rt_img.get_width(), rb_img.get_width())
+    total_w = left_w + col_gap + right_w
+    start_x = WIDTH // 2 - total_w // 2
+
+    y_top = y_pos
+    y_bottom = y_pos + font_small.get_height() + line_gap
+    screen.blit(lt_img, (start_x + (left_w - lt_img.get_width()) // 2, y_top))
+    screen.blit(lb_img, (start_x + (left_w - lb_img.get_width()) // 2, y_bottom))
+
+    right_x = start_x + left_w + col_gap
+    screen.blit(rt_img, (right_x + (right_w - rt_img.get_width()) // 2, y_top))
+    screen.blit(rb_img, (right_x + (right_w - rb_img.get_width()) // 2, y_bottom))
+
+    prompt_rect = pygame.Rect(
+        start_x,
+        y_top,
+        total_w,
+        y_bottom + font_small.get_height() - y_top,
+    )
+    phase_img = font_small.render("Initial decision", True, WHITE)
+    screen.blit(phase_img, phase_img.get_rect(center=prompt_rect.center))
+    return prompt_rect
 
 
 def draw_aid_recommendation_top_center(

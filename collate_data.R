@@ -130,6 +130,9 @@ select_current_cols <- function(dat, cols) {
 current_trial_all_cols <- c(
   "participant_id",
   "run_timestamp",
+  "key_black",
+  "key_white",
+  "keymap_flip",
   "block_idx",
   "condition_code",
   "aid_condition",
@@ -170,6 +173,9 @@ current_trial_all_cols <- c(
 
 current_trial_summary_cols <- c(
   "participant_id",
+  "key_black",
+  "key_white",
+  "keymap_flip",
   "block_idx",
   "condition_code",
   "aid_condition",

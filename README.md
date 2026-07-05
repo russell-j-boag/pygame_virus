@@ -15,7 +15,7 @@ Based on Bartlett & McCarley RDC task.
 
 ## Current task design
 
-The task uses a three-block within-participant design after a combined practice/calibration phase. Before the first main block, each participant completes a 60-trial `PRACTICE` block to familiarise them with the 2-decision trial sequence and calibrate stimulus difficulty. Each participant then completes one `MANUAL`, one `AIDFIRST`, and one `STIMFIRST` block. Each trial has two mouse-click decision phases; the second decision is the final answer.
+The task uses a three-block within-participant design after a combined practice/calibration phase. Before the first main block, each participant completes a 60-trial `PRACTICE` block to familiarise them with the 2-decision trial sequence and calibrate stimulus difficulty. Each participant then completes one `MANUAL`, one `AIDFIRST`, and one `STIMFIRST` block. Each trial has two keypress decision phases; the second decision is the final answer.
 
 | Code | Mode | Trial structure | Trials |
 | --- | --- | --- | ---: |
@@ -26,7 +26,7 @@ The task uses a three-block within-participant design after a combined practice/
 
 The `PRACTICE` block uses an adaptive staircase that starts at the prior across-participant fixed-delta distribution (`delta = 0.040324718919`, SD `0.014615991726`). The first 20 practice trials are treated as burn-in with a larger annealed step size, and the final 40 trials are used to calculate the participant-specific delta mean and SD used for all subsequent main blocks. Single-block runs that skip practice use the same prior fixed-delta defaults directly; `derive_prior_calibration_delta.R` reproduces these fallback constants from the local prior data file. The automated aid uses a single global reliability of 85% in the `AIDFIRST` and `STIMFIRST` blocks. The `PRACTICE` and `MANUAL` blocks show the masked aid string `#####` instead of a real recommendation during masked preview and final-decision screens. Real aid recommendations display as `BLACK` or `WHITE`; these indicate that the aid recommends the `V-BLACK` or `V-WHITE` response, respectively.
 
-Responses are made with fixed mouse-click buttons. The left button is `V-BLACK` and maps to the internally stored `BLACK` response. The right button is `V-WHITE` and maps to the internally stored `WHITE` response. On the second decision screen, the same two buttons are shown with parenthetical text indicating whether each option would confirm or switch the participant's initial decision.
+Responses are made with the `D` and `J` keys. The standard key mapping is `D = V-BLACK` and `J = V-WHITE`; the flipped key mapping is `J = V-BLACK` and `D = V-WHITE`. On the second decision screen, participants use the same keys to confirm their first response or switch to the other response.
 
 Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid is reasonably reliable but not perfect in automation blocks, and that automation advice errors remain possible.
 
@@ -43,11 +43,13 @@ The block order uses the full set of six permutations of the three scheduled con
 | `O5` | `AIDFIRST -> MANUAL -> STIMFIRST` |
 | `O6` | `STIMFIRST -> MANUAL -> AIDFIRST` |
 
-Block order is assigned deterministically from participant ID as `(participant_id - 1) %% 6`, so the order advances every participant.
+Block order and key mapping are assigned deterministically from participant ID in a 12-participant cycle. Each block order appears once with the standard key mapping and once with the flipped key mapping before the cycle repeats.
 
 For the planned sample of `N = 60`, this gives:
 
 - 10 participants per block order overall.
+- 30 participants per key mapping overall.
+- 5 participants per full `block order x key mapping` cell.
 - 20 appearances of each condition in each serial position.
 
 ## Output fields
@@ -56,6 +58,7 @@ The main trial and post-block output files include fields that identify the desi
 
 | Field | Meaning |
 | --- | --- |
+| `key_black`, `key_white`, `keymap_flip` | Participant-specific D/J mapping for `V-BLACK` and `V-WHITE` |
 | `condition_code` | `PRACTICE`, `MANUAL`, `AIDFIRST`, or `STIMFIRST` |
 | `aid_condition` | `manual`, `aid_first`, or `stimulus_first_change` |
 | `aid_accuracy_setting` | `0.85` for aided automation blocks, or blank for `MANUAL` |

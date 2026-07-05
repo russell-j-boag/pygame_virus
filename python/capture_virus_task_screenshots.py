@@ -252,6 +252,8 @@ def draw_participant_number_screen_state(
 def draw_main_instruction_screen_state(
     surface: pygame.Surface,
     fonts: dict[str, pygame.font.Font],
+    key_black_name: str,
+    key_white_name: str,
     button_enabled: bool = True,
 ) -> None:
     title = "VIRUS DETECTION TASK"
@@ -263,8 +265,8 @@ def draw_main_instruction_screen_state(
         "You'll be shown a similar number of V-BLACK and V-WHITE samples. \n"
         "Your job is to evaluate the following samples to determine which virus is present.\n"
     )
-    press1 = "Click V-BLACK if the sample looks more BLACK overall"
-    press2 = "Click V-WHITE if the sample looks more WHITE overall"
+    press1 = f"Press {key_black_name} if the sample looks more BLACK overall (V-BLACK)"
+    press2 = f"Press {key_white_name} if the sample looks more WHITE overall (V-WHITE)"
     speed = "Try to respond as quickly and accurately as possible\n"
 
     font_title = fonts["title"]
@@ -740,7 +742,7 @@ def draw_likert_question_screen_state(
     )
 
 
-def example_trial_context(fonts, block_cfg: dict, trial_number: int = 1) -> dict:
+def example_trial_context(fonts, block_cfg: dict, keymap: dict, trial_number: int = 1) -> dict:
     trial_number = max(1, min(block_cfg["N_TRIALS"], trial_number))
     trials_left = block_cfg["N_TRIALS"] - trial_number + 1
     center = (task.WIDTH // 2, task.HEIGHT // 2 + task.S(20))
@@ -767,6 +769,7 @@ def example_trial_context(fonts, block_cfg: dict, trial_number: int = 1) -> dict
             "fonts": fonts,
             "trials_left": trials_left,
             "n_trials": block_cfg["N_TRIALS"],
+            "key_names": {"black": keymap["key_black_name"], "white": keymap["key_white_name"]},
         },
         "aid_payload": {
             "label": aid_label,
@@ -810,10 +813,11 @@ def render_trial_sequence(
     surface: pygame.Surface,
     fonts: dict[str, pygame.font.Font],
     block_cfg: dict,
+    keymap: dict,
     prefix: str,
     trial_number: int = 1,
 ) -> None:
-    context = example_trial_context(fonts, block_cfg, trial_number=trial_number)
+    context = example_trial_context(fonts, block_cfg, keymap, trial_number=trial_number)
     aid_condition = task.aid_condition_for_block(block_cfg)
 
     draw_fixation_screen_state(surface)
@@ -921,10 +925,17 @@ def render_block(
     surface: pygame.Surface,
     fonts: dict[str, pygame.font.Font],
     block_cfg: dict,
+    keymap: dict,
 ) -> None:
     prefix = block_slug(block_cfg)
 
-    draw_main_instruction_screen_state(surface, fonts, button_enabled=True)
+    draw_main_instruction_screen_state(
+        surface,
+        fonts,
+        keymap["key_black_name"],
+        keymap["key_white_name"],
+        button_enabled=True,
+    )
     writer.save(surface, f"{prefix}_main_instructions")
 
     payload = task.get_block_instruction_payload(block_cfg["name"], block_cfg=block_cfg)
@@ -941,7 +952,7 @@ def render_block(
     draw_begin_block_screen_state(surface, fonts["body"], block_cfg)
     writer.save(surface, f"{prefix}_begin_block")
 
-    render_trial_sequence(writer, surface, fonts, block_cfg, prefix)
+    render_trial_sequence(writer, surface, fonts, block_cfg, keymap, prefix)
 
     draw_block_complete_screen_state(surface, fonts["body"], block_cfg)
     writer.save(surface, f"{prefix}_block_complete")
@@ -986,6 +997,7 @@ def render_screens(
     writer = ScreenshotWriter(output_dir)
 
     blocks = build_participant_blocks(participant_id)
+    keymap = task.key_mapping_for_participant(participant_id)
 
     draw_participant_number_screen_state(
         surface,
@@ -997,7 +1009,7 @@ def render_screens(
     writer.save(surface, "participant_number")
 
     for block_cfg in blocks:
-        render_block(writer, surface, fonts, block_cfg)
+        render_block(writer, surface, fonts, block_cfg, keymap)
 
     draw_final_complete_screen_state(surface, fonts["body"], perf_score=80.0)
     writer.save(surface, "experiment_complete")
