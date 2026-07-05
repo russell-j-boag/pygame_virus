@@ -141,10 +141,10 @@ SLIDES = [
         "kind": "text",
         "title": "MONITORING THE AID",
         "body": (
-            "The automated decision aid is not perfect. Its recommendations may be correct "
-            "or incorrect.\n\n"
-            "Your task is to monitor the aid carefully while still judging each virus sample yourself. "
-            "If the aid makes an incorrect recommendation, you should make the correct classification."
+            "Note that the reliability of the automated advice may fluctuate.\n\n"
+            "Sometimes, the automation may perform at a lower level of reliability for a run of multiple trials in a row. "
+            "It is also possible for the automation's reliability to recover after a period of low reliability.\n\n"
+            "Keeping track of the recent level of automation reliability may help you adjust your use of the advice. "
         ),
     },
     {
@@ -153,7 +153,7 @@ SLIDES = [
         "body": (
             "We will keep an ongoing tally of your performance. "
             "At the end of the experiment you will receive a point-based bonus, up to $25, based on your performance score.\n\n"
-            "In each block, you will have up to 5 seconds to respond on each trial. "
+            "You will have up to 5 seconds to respond on each trial. "
             "Incorrect responses and responses not made before the deadline will reduce your performance score, "
             "so try to respond as quickly and accurately as possible.\n\n"
             "You may take short breaks at any time between trials\n\n"

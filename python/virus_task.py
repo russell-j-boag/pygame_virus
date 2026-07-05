@@ -221,9 +221,11 @@ def aid_onset_ms_for_block(block_cfg):
 
 def automation_reliability_instruction_slide() -> str:
     return (
-        "In this block, the automated decision aid will provide a recommendation "
-        "on each trial. Its recommendations may be correct or incorrect. Please monitor "
-        "the aid carefully and continue to make the correct classification on each trial."
+        "In this block, the automated decision aid will provide a recommendation on each trial. "
+        "Note that the reliability of the automated advice may fluctuate. "
+        "Sometimes, the automation may perform at a lower level of reliability for a run of multiple trials in a row. "
+        "It is also possible for the automation's reliability to recover after a period of low reliability. "
+        "Keeping track of the recent level of automation reliability may help you adjust your use of the advice. "
     )
 
 
