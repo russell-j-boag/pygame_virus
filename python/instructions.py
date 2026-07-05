@@ -137,7 +137,7 @@ SLIDES = [
         "body": (
             "On every trial, you will classify the same sample twice.\n\n"
             "The initial decision phase records your first judgement. The final decision phase then asks "
-            "for your final answer. In the final decision phase you can confirm your first response or switch "
+            "for your final answer. In the final decision phase, you can confirm your first response or switch "
             "to the other response.\n\n"
             "Only the final decision phase counts as your final classification for that sample."
         ),
