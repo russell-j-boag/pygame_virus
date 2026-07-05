@@ -252,8 +252,8 @@ def aid_condition_instruction_slide(block_cfg) -> str:
 
 def automation_accuracy_instruction_slide() -> str:
     return (
-        "In the next block, although the automation is reasonably reliable, it is not perfect, "
-        "and automation advice errors may be relatively common."
+        "In the next block, although the automation reliability is very good, it is not perfect, "
+        "and automation advice errors may occur."
     )
 
 
@@ -348,7 +348,7 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 LIGHT_GREY = (170, 170, 170)
 DARK_GREY = (60, 60, 60)
-MASKED_AID_COLOR = BG_INSTRUCTIONS
+MASKED_AID_COLOR = (35, 85, 125)
 FIX_COLOR = LIGHT_GREY      # fixation cross colour
 
 # V-BLACK cell colour
@@ -1236,7 +1236,7 @@ def run_slider_question_screen(
     if anchors is None:
         anchors = [
             (0, "All incorrect"),
-            (50, "Half correct and half incorrect"),
+            (50, "Half correct and half incorrect\n(guessing at random)"),
             (100, "All correct"),
         ]
 
@@ -1412,13 +1412,13 @@ def run_postblock_slider_questions(
         if it["key"] == "perc_self_correct":
             anchors = [
                 (0, "All incorrect"),
-                (50, "Half correct and half incorrect"),
+                (50, "Half correct and half incorrect\n(guessing at random)"),
                 (100, "All correct"),
             ]
         else:
             anchors = [
                 (0, "All incorrect"),
-                (50, "Half correct and half incorrect"),
+                (50, "Half correct and half incorrect\n(guessing at random)"),
                 (100, "All correct"),
             ]
 

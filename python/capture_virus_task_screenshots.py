@@ -497,7 +497,7 @@ def draw_slider_question_screen_state(
     if anchors is None:
         anchors = [
             (0, "All incorrect"),
-            (50, "Half correct and half incorrect"),
+            (50, "Half correct and half incorrect\n(guessing at random)"),
             (100, "All correct"),
         ]
 
