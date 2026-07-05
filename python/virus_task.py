@@ -151,7 +151,7 @@ BLOCK_INSTRUCTIONS = {
         "title": "MANUAL BLOCK",
         "slides": [
             (
-            "In this block, there is no special information shown at the top of the display.\n"
+            "In this block, there is no advice shown at the top of the display.\n"
             "There is simply a string '#####', which you should ignore."
             ),
         ],
