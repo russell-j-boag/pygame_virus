@@ -189,11 +189,15 @@ def render_slides(output_dir: Path, width: int, height: int) -> list[Path]:
     random.seed(1234)
     initialize_instruction_metrics(width, height)
     fonts = load_instruction_fonts()
+    font_phase_label = instructions.load_font(
+        instructions.FONT_BOLD,
+        max(9, instructions.S(instructions.FONT_SMALL_BASE)),
+    )
     surface = pygame.Surface((width, height))
 
     written = []
     for slide_idx, slide in enumerate(instructions.SLIDES):
-        instructions.draw_slide(surface, *fonts, slide_idx)
+        instructions.draw_slide(surface, *fonts, slide_idx, font_phase_label=font_phase_label)
         out_path = output_dir / slide_filename(slide_idx, slide)
         pygame.image.save(surface, str(out_path))
         written.append(out_path)

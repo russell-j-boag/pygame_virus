@@ -29,6 +29,7 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 LIGHT_GREY = (170, 170, 170)
 MASKED_AID_COLOR = BG_INSTRUCTIONS
+DECISION_PHASE_COLOR = (35, 85, 125)
 VBLACK = BLACK
 VWHITE = WHITE
 DISH_FILL = (128, 128, 128)   # neutral mid-grey (halfway between black/white)
@@ -557,6 +558,7 @@ def draw_example_task_display(
     font_small,
     font_aid_label,
     font_aid,
+    font_phase_label=None,
 ):
     """
     Frozen example of a task trial for instruction slides.
@@ -597,6 +599,7 @@ def draw_example_task_display(
         HEIGHT - S(80),
         key_black_name="D",
         key_white_name="J",
+        phase_font=font_phase_label,
     )
 
     return {
@@ -618,6 +621,7 @@ def draw_example_task_slide(
     font_aid_label,
     font_aid,
     callout=None,
+    font_phase_label=None,
 ):
     meta = draw_example_task_display(
         screen,
@@ -626,6 +630,7 @@ def draw_example_task_slide(
         font_small=font_small,
         font_aid_label=font_aid_label,
         font_aid=font_aid,
+        font_phase_label=font_phase_label,
     )
 
     callout_title_font = font_body
@@ -991,11 +996,21 @@ def display_label_for_aid_recommendation(response):
     return str(response)
 
 
-def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name="D", key_white_name="J"):
+def draw_trial_prompt_stacked(
+    screen,
+    font_small,
+    y_pos,
+    key_black_name="D",
+    key_white_name="J",
+    phase_font=None,
+):
     """
     Bottom response prompt: D is fixed left and J is fixed right, while
     V-BLACK/V-WHITE meaning follows the participant-specific key mapping.
     """
+    if phase_font is None:
+        phase_font = load_font(FONT_BOLD, max(9, S(FONT_SMALL_BASE)))
+
     meaning_by_key = {
         key_black_name: "BLACK",
         key_white_name: "WHITE",
@@ -1016,7 +1031,7 @@ def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name="D", key
     rt_img = font_small.render(right_top, True, right_col)
     rb_img = font_small.render(right_bottom, True, right_col)
 
-    phase_w = font_small.size("Initial decision")[0]
+    phase_w = phase_font.size("Initial decision")[0]
     col_gap = max(S(160), phase_w + S(36))
     line_gap = max(1, S(4))
     left_w = max(lt_img.get_width(), lb_img.get_width())
@@ -1039,7 +1054,7 @@ def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name="D", key
         total_w,
         y_bottom + font_small.get_height() - y_top,
     )
-    phase_img = font_small.render("Initial decision", True, WHITE)
+    phase_img = phase_font.render("Initial decision", True, DECISION_PHASE_COLOR)
     screen.blit(phase_img, phase_img.get_rect(center=prompt_rect.center))
     return prompt_rect
 
@@ -1091,7 +1106,17 @@ def draw_aid_recommendation_top_center(
 # -----------------------------
 # Slide drawing
 # -----------------------------
-def draw_slide(screen, font_title, font_body, font_button, font_small, font_aid_label, font_aid, slide_idx):
+def draw_slide(
+    screen,
+    font_title,
+    font_body,
+    font_button,
+    font_small,
+    font_aid_label,
+    font_aid,
+    slide_idx,
+    font_phase_label=None,
+):
     slide = SLIDES[slide_idx]
     kind = slide.get("kind", "text")
 
@@ -1139,6 +1164,7 @@ def draw_slide(screen, font_title, font_body, font_button, font_small, font_aid_
             font_aid_label=font_aid_label,
             font_aid=font_aid,
             callout=slide.get("callout"),
+            font_phase_label=font_phase_label,
         )
         
     elif kind == "automation_example":
@@ -1211,6 +1237,7 @@ def main():
     font_body = load_font(FONT_LIGHT, max(10, S(FONT_BODY_BASE)))
     font_button = load_font(FONT_LIGHT, max(10, S(FONT_BUTTON_BASE)))
     font_small = load_font(FONT_LIGHT, max(9, S(18)))
+    font_phase_label = load_font(FONT_BOLD, max(9, S(18)))
     font_aid_label = load_font(FONT_LIGHT, max(9, S(20)))
     font_aid = load_font(FONT_BOLD, max(10, S(32)))
 
@@ -1229,6 +1256,7 @@ def main():
             font_aid_label,
             font_aid,
             current_slide,
+            font_phase_label=font_phase_label,
         )
         pygame.display.flip()
 

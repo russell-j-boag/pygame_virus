@@ -355,6 +355,7 @@ WHITE = (255, 255, 255)
 LIGHT_GREY = (170, 170, 170)
 DARK_GREY = (60, 60, 60)
 MASKED_AID_COLOR = (35, 85, 125)
+DECISION_PHASE_COLOR = MASKED_AID_COLOR
 FIX_COLOR = LIGHT_GREY      # fixation cross colour
 
 # V-BLACK cell colour
@@ -2163,9 +2164,11 @@ def decision_phase_label(initial_response=None) -> str:
     return "Final decision?" if initial_response in ("BLACK", "WHITE") else "Initial decision"
 
 
-def response_key_prompt_rect(font, y_pos=None, key_black_name="D", key_white_name="J"):
+def response_key_prompt_rect(font, y_pos=None, key_black_name="D", key_white_name="J", phase_font=None):
     if y_pos is None:
         y_pos = HEIGHT - S(80)
+    if phase_font is None:
+        phase_font = load_font(FONT_BOLD, max(9, S(FONT_SMALL_BASE)))
 
     meaning_by_key = {
         key_black_name: "BLACK",
@@ -2180,7 +2183,7 @@ def response_key_prompt_rect(font, y_pos=None, key_black_name="D", key_white_nam
     left_bottom = "Press D"
     right_bottom = "Press J"
 
-    phase_w = max(font.size("Initial decision")[0], font.size("Final decision?")[0])
+    phase_w = max(phase_font.size("Initial decision")[0], phase_font.size("Final decision?")[0])
     col_gap = max(S(160), phase_w + S(36))
     line_gap = max(1, S(4))
     left_w = max(font.size(left_top)[0], font.size(left_bottom)[0])
@@ -2195,22 +2198,34 @@ def response_key_prompt_rect(font, y_pos=None, key_black_name="D", key_white_nam
     )
 
 
-def draw_bottom_phase_label(screen, font, label, y_pos=None, key_black_name="D", key_white_name="J"):
-    prompt_rect = response_key_prompt_rect(font, y_pos, key_black_name, key_white_name)
-    label_img = font.render(label, True, WHITE)
+def draw_bottom_phase_label(
+    screen,
+    font,
+    label,
+    y_pos=None,
+    key_black_name="D",
+    key_white_name="J",
+    phase_font=None,
+):
+    if phase_font is None:
+        phase_font = load_font(FONT_BOLD, max(9, S(FONT_SMALL_BASE)))
+    prompt_rect = response_key_prompt_rect(font, y_pos, key_black_name, key_white_name, phase_font)
+    label_img = phase_font.render(label, True, DECISION_PHASE_COLOR)
     label_rect = label_img.get_rect(center=prompt_rect.center)
     screen.blit(label_img, label_rect)
     return label_rect
 
 
 def draw_trial_prompt_stacked(screen, font_small, y_pos=None, key_black_name="D",
-                              key_white_name="J", initial_response=None):
+                              key_white_name="J", initial_response=None, phase_font=None):
     """
     Bottom response prompt: D is fixed left and J is fixed right, while
     V-BLACK/V-WHITE meaning follows the participant-specific key mapping.
     """
     if y_pos is None:
         y_pos = HEIGHT - S(80)
+    if phase_font is None:
+        phase_font = load_font(FONT_BOLD, max(9, S(FONT_SMALL_BASE)))
 
     meaning_by_key = {
         key_black_name: "BLACK",
@@ -2232,7 +2247,7 @@ def draw_trial_prompt_stacked(screen, font_small, y_pos=None, key_black_name="D"
     rt_img = font_small.render(right_top, True, right_col)
     rb_img = font_small.render(right_bottom, True, right_col)
 
-    phase_w = font_small.size(decision_phase_label(initial_response))[0]
+    phase_w = phase_font.size(decision_phase_label(initial_response))[0]
     col_gap = max(S(160), phase_w + S(36))
     line_gap = max(1, S(4))
     left_w = max(lt_img.get_width(), lb_img.get_width())
@@ -2255,7 +2270,7 @@ def draw_trial_prompt_stacked(screen, font_small, y_pos=None, key_black_name="D"
         total_w,
         y_bottom + font_small.get_height() - y_top,
     )
-    phase_img = font_small.render(decision_phase_label(initial_response), True, WHITE)
+    phase_img = phase_font.render(decision_phase_label(initial_response), True, DECISION_PHASE_COLOR)
     screen.blit(phase_img, phase_img.get_rect(center=prompt_rect.center))
     return prompt_rect
 
@@ -2515,6 +2530,7 @@ def load_ui_fonts():
         "body": load_font(FONT_LIGHT, max(10, S(FONT_BODY_BASE))),
         "body_bold": load_font(FONT_BOLD, max(10, S(FONT_BODY_BASE))),
         "small": load_font(FONT_LIGHT, max(9, S(FONT_SMALL_BASE))),
+        "phase_label": load_font(FONT_BOLD, max(9, S(FONT_SMALL_BASE))),
         "aid_label": load_font(FONT_LIGHT, max(9, S(FONT_AID_LABEL_BASE))),
         "aid": load_font(FONT_BOLD, max(10, S(FONT_AID_BASE))),
     }
@@ -2723,6 +2739,7 @@ def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, m
         key_black_name=key_names["black"],
         key_white_name=key_names["white"],
         initial_response=initial_response,
+        phase_font=fonts["phase_label"],
     )
 
     if aid_payload["mode"] == "automation":
@@ -2796,6 +2813,7 @@ def draw_aid_only_frame(
             key_black_name=key_names["black"],
             key_white_name=key_names["white"],
             initial_response=initial_response,
+            phase_font=fonts["phase_label"],
         )
     elif phase_label:
         draw_bottom_phase_label(
@@ -2804,6 +2822,7 @@ def draw_aid_only_frame(
             phase_label,
             key_black_name=key_names["black"],
             key_white_name=key_names["white"],
+            phase_font=fonts["phase_label"],
         )
 
 
@@ -2831,6 +2850,7 @@ def draw_masked_placeholder_frame(screen, ui_payload, show_prompt=False, initial
             key_black_name=key_names["black"],
             key_white_name=key_names["white"],
             initial_response=initial_response,
+            phase_font=fonts["phase_label"],
         )
     elif phase_label:
         draw_bottom_phase_label(
@@ -2839,6 +2859,7 @@ def draw_masked_placeholder_frame(screen, ui_payload, show_prompt=False, initial
             phase_label,
             key_black_name=key_names["black"],
             key_white_name=key_names["white"],
+            phase_font=fonts["phase_label"],
         )
 
 
