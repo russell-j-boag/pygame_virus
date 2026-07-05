@@ -1348,7 +1348,7 @@ def run_slider_question_screen(
     if anchors is None:
         anchors = [
             (0, "All incorrect"),
-            (50, "Half correct and half incorrect"),
+            (50, "Half correct and half incorrect\n(guessing at random)"),
             (100, "All correct"),
         ]
 
@@ -1529,13 +1529,13 @@ def run_postblock_slider_questions(
         if it["key"] == "perc_self_correct":
             anchors = [
                 (0, "All incorrect"),
-                (50, "Half correct and half incorrect"),
+                (50, "Half correct and half incorrect\n(guessing at random)"),
                 (100, "All correct"),
             ]
         else:
             anchors = [
                 (0, "All incorrect"),
-                (50, "Half correct and half incorrect"),
+                (50, "Half correct and half incorrect\n(guessing at random)"),
                 (100, "All correct"),
             ]
 
@@ -2412,7 +2412,7 @@ def draw_slider_question_screen_state(
     if anchors is None:
         anchors = [
             (0, "All incorrect"),
-            (50, "Half correct and half incorrect"),
+            (50, "Half correct and half incorrect\n(guessing at random)"),
             (100, "All correct"),
         ]
 
