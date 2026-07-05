@@ -45,7 +45,7 @@ run_task <- function(
   valid_blocks <- c(
     "AUTOMATION"
   )
-  valid_aid_conditions <- c("manual", "aid_first", "stimulus_first_change")
+  valid_aid_conditions <- c("manual", "aid_first", "stimulus_first")
   if (!is.null(aid_condition)) {
     aid_condition <- tolower(aid_condition)
   }

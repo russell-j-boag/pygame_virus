@@ -27,10 +27,10 @@ condition_label <- function(aid_condition) {
   out <- dplyr::case_when(
     !is.na(aid_condition) & aid_condition == "manual" ~ "Manual",
     !is.na(aid_condition) & aid_condition == "aid_first" ~ "Aid first",
-    !is.na(aid_condition) & aid_condition == "stimulus_first_change" ~ "Stimulus first, change allowed",
+    !is.na(aid_condition) & aid_condition == "stimulus_first" ~ "Stimulus first",
     TRUE ~ NA_character_
   )
-  factor(out, levels = c("Manual", "Aid first", "Stimulus first, change allowed"))
+  factor(out, levels = c("Manual", "Aid first", "Stimulus first"))
 }
 
 add_running_accuracy <- function(data) {

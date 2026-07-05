@@ -39,7 +39,7 @@ GLOBAL_AID_ACCURACY = 0.85
 SCHEDULED_AUTOMATION_AID_CONDITIONS = {
     "manual": "Manual",
     "aid_first": "Aid first",
-    "stimulus_first_change": "Stimulus first, change allowed",
+    "stimulus_first": "Stimulus first",
 }
 HIDDEN_AUTOMATION_AID_CONDITIONS = {
     "simultaneous": "Aid + stimulus",
@@ -48,7 +48,7 @@ AUTOMATION_AID_CONDITIONS = {
     **SCHEDULED_AUTOMATION_AID_CONDITIONS,
     **HIDDEN_AUTOMATION_AID_CONDITIONS,
 }
-REAL_AID_CONDITIONS = {"simultaneous", "aid_first", "stimulus_first_change"}
+REAL_AID_CONDITIONS = {"simultaneous", "aid_first", "stimulus_first"}
 SCHEDULED_MAIN_BLOCK_ORDERS = (
     ("MANUAL", "AIDFIRST", "STIMFIRST"),
     ("STIMFIRST", "AIDFIRST", "MANUAL"),
@@ -95,7 +95,7 @@ BLOCKS = [
         AUTOMATION_ON=True,       # automation on
         AID_ACCURACY=GLOBAL_AID_ACCURACY,
         AID_TRANSPARENCY="none",
-        AID_CONDITION="stimulus_first_change",
+        AID_CONDITION="stimulus_first",
         STAIRCASE_ON=False,       # staircase off
         FIXED_DELTA_ON=True,
         FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
@@ -241,7 +241,7 @@ def aid_condition_instruction_slide(block_cfg) -> str:
             "In the next block, the aid's recommendation will appear before the virus sample."
         )
 
-    if aid_condition == "stimulus_first_change":
+    if aid_condition == "stimulus_first":
         return (
             "In the next block, the virus sample will appear before the aid's recommendation."
         )
@@ -2863,6 +2863,33 @@ def draw_masked_placeholder_frame(screen, ui_payload, show_prompt=False, initial
         )
 
 
+def draw_final_decision_frame(screen, ui_payload, initial_response=None, ms_left=None):
+    fonts = ui_payload["fonts"]
+    key_names = ui_payload.get("key_names", {"black": "D", "white": "J"})
+
+    screen.fill(BG)
+    if ms_left is not None:
+        draw_countdown_timer(
+            surface=screen,
+            font=fonts["body"],
+            ms_left=ms_left,
+            x=PB_PAD,
+            y=PB_PAD,
+            color=WHITE,
+        )
+
+    draw_progress_bar(screen, trials_left=ui_payload["trials_left"], total_trials=ui_payload["n_trials"])
+    draw_samples_left_label(screen, fonts["small"], ui_payload["trials_left"])
+    draw_trial_prompt_stacked(
+        screen,
+        fonts["small"],
+        key_black_name=key_names["black"],
+        key_white_name=key_names["white"],
+        initial_response=initial_response,
+        phase_font=fonts["phase_label"],
+    )
+
+
 def run_aid_preview_phase(screen, clock, aid_payload, ui_payload, duration_ms):
     t0 = pygame.time.get_ticks()
 
@@ -2891,6 +2918,29 @@ def run_masked_preview_phase(screen, clock, ui_payload, duration_ms):
 
         draw_masked_placeholder_frame(screen, ui_payload, show_prompt=False, phase_label="Preview")
         pygame.display.flip()
+
+
+def decision2_preview_display_for_condition(aid_condition, aid_label):
+    if aid_condition == "stimulus_first":
+        return "aid_only", aid_label
+    if aid_condition in {"manual", "aid_first", "simultaneous"}:
+        return "masked_placeholder", "#####"
+    raise ValueError(
+        f"Unsupported aid condition '{aid_condition}'. "
+        f"Valid values: {sorted(AUTOMATION_AID_CONDITIONS)}"
+    )
+
+
+def run_decision2_preview_phase(screen, clock, aid_condition, aid_payload, ui_payload, duration_ms):
+    preview_display, preview_label = decision2_preview_display_for_condition(
+        aid_condition,
+        aid_payload["label"],
+    )
+    if preview_display == "aid_only":
+        run_aid_preview_phase(screen, clock, aid_payload, ui_payload, duration_ms)
+    else:
+        run_masked_preview_phase(screen, clock, ui_payload, duration_ms)
+    return preview_display, preview_label
 
 
 def collect_key_response(screen, clock, keymap, draw_frame_fn, deadline_ms=None, update_fn=None):
@@ -3007,6 +3057,25 @@ def collect_masked_response(
     )
 
 
+def collect_final_decision_response(screen, clock, keymap, ui_payload, initial_response=None):
+    def draw_frame(ms_left):
+        draw_final_decision_frame(
+            screen,
+            ui_payload,
+            initial_response=initial_response,
+            ms_left=ms_left,
+        )
+
+    return collect_key_response(
+        screen,
+        clock,
+        keymap=keymap,
+        draw_frame_fn=draw_frame,
+        deadline_ms=None,
+        update_fn=None,
+    )
+
+
 def response_correct(response, stimulus):
     if response in ("BLACK", "WHITE"):
         return response == stimulus
@@ -3090,6 +3159,8 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "decision1_correct": trial_data["decision1_correct"],
         "decision1_rt_s": (trial_data["decision1_rt_ms"] / 1000.0) if trial_data["decision1_rt_ms"] is not None else None,
         "decision1_matches_aid": trial_data["decision1_matches_aid"],
+        "decision2_preview_display": trial_data["decision2_preview_display"],
+        "decision2_preview_label": trial_data["decision2_preview_label"],
         "decision2_display": trial_data["decision2_display"],
         "decision2_label": trial_data["decision2_label"],
         "decision2_response": trial_data["decision2_response"],
@@ -3167,6 +3238,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
     decision2 = dict(decision1)
     preview_display = None
     preview_label = None
+    decision2_preview_display = None
+    decision2_preview_label = None
     decision2_label = None
 
     if block_cfg["AUTOMATION_ON"]:
@@ -3185,15 +3258,6 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             decision1 = make_decision_record(
                 decision1_result, stimulus, aid_label, display_type="stimulus_only"
             )
-            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
-            decision2_label = "#####"
-            decision2_result = collect_masked_response(
-                screen, clock, center, keymap, ui_payload,
-                initial_response=decision1["response"],
-            )
-            decision2 = make_decision_record(
-                decision2_result, stimulus, aid_label, display_type="masked_placeholder"
-            )
 
         elif aid_condition == "simultaneous":
             preview_display = "masked_placeholder"
@@ -3206,14 +3270,6 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             )
             decision1 = make_decision_record(
                 decision1_result, stimulus, aid_label, display_type="aid_stimulus"
-            )
-            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
-            decision2_label = "#####"
-            decision2_result = collect_masked_response(
-                screen, clock, center, keymap, ui_payload, initial_response=decision1["response"],
-            )
-            decision2 = make_decision_record(
-                decision2_result, stimulus, aid_label, display_type="masked_placeholder"
             )
 
         elif aid_condition == "aid_first":
@@ -3231,17 +3287,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             decision1 = make_decision_record(
                 decision1_result, stimulus, aid_label, display_type="stimulus_only"
             )
-            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
-            decision2_label = "#####"
-            decision2_result = collect_masked_response(
-                screen, clock, center, keymap, ui_payload,
-                initial_response=decision1["response"],
-            )
-            decision2 = make_decision_record(
-                decision2_result, stimulus, aid_label, display_type="masked_placeholder"
-            )
 
-        elif aid_condition == "stimulus_first_change":
+        elif aid_condition == "stimulus_first":
             preview_display = "masked_placeholder"
             preview_label = "#####"
             run_masked_preview_phase(screen, clock, ui_payload, AUTOMATION_PRE_PHASE_MS)
@@ -3254,20 +3301,32 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
                 decision1_result, stimulus, aid_label, display_type="stimulus_only"
             )
 
-            fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
-            decision2_label = aid_label
-            decision2_result = collect_aid_only_response(
-                screen, clock, keymap, aid_render_payload, ui_payload, initial_response=decision1["response"],
-            )
-            decision2 = make_decision_record(
-                decision2_result, stimulus, aid_label, display_type="aid_only"
-            )
-
         else:
             raise ValueError(
                 f"Unsupported aid condition '{aid_condition}'. "
                 f"Valid values: {sorted(AUTOMATION_AID_CONDITIONS)}"
             )
+
+        fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+        decision2_preview_display, decision2_preview_label = run_decision2_preview_phase(
+            screen,
+            clock,
+            aid_condition,
+            aid_render_payload,
+            ui_payload,
+            duration_ms=AUTOMATION_PRE_PHASE_MS,
+        )
+        fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
+        decision2_result = collect_final_decision_response(
+            screen,
+            clock,
+            keymap,
+            ui_payload,
+            initial_response=decision1["response"],
+        )
+        decision2 = make_decision_record(
+            decision2_result, stimulus, aid_label, display_type="blank_response"
+        )
 
         response = decision2["response"]
         rt_ms = decision2["rt_ms"]
@@ -3333,6 +3392,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             "decision1_correct": decision1["correct"],
             "decision1_rt_ms": decision1["rt_ms"],
             "decision1_matches_aid": decision1["matches_aid"],
+            "decision2_preview_display": decision2_preview_display,
+            "decision2_preview_label": decision2_preview_label,
             "decision2_display": decision2["display"],
             "decision2_label": decision2_label,
             "decision2_response": decision2["response"],

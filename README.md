@@ -19,12 +19,12 @@ The task uses a three-block within-participant design after a combined practice/
 
 | Code | Mode | Trial structure | Trials |
 | --- | --- | --- | ---: |
-| `PRACTICE` | Manual-style practice/calibration | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 60 |
-| `MANUAL` | Manual control | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 260 |
-| `AIDFIRST` | Automation | fixation -> aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 260 |
-| `STIMFIRST` | Automation | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> aid until decision 2 -> feedback | 260 |
+| `PRACTICE` | Manual-style practice/calibration | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked final preview 1000 ms -> fixation -> HUD-only decision 2 -> feedback | 60 |
+| `MANUAL` | Manual control | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked final preview 1000 ms -> fixation -> HUD-only decision 2 -> feedback | 260 |
+| `AIDFIRST` | Automation | fixation -> aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked final preview 1000 ms -> fixation -> HUD-only decision 2 -> feedback | 260 |
+| `STIMFIRST` | Automation | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> aid final preview 1000 ms -> fixation -> HUD-only decision 2 -> feedback | 260 |
 
-The `PRACTICE` block uses an adaptive staircase that starts at the prior across-participant fixed-delta distribution (`delta = 0.040324718919`, SD `0.014615991726`). The first 20 practice trials are treated as burn-in with a larger annealed step size, and the final 40 trials are used to calculate the participant-specific delta mean and SD used for all subsequent main blocks. Single-block runs that skip practice use the same prior fixed-delta defaults directly; `derive_prior_calibration_delta.R` reproduces these fallback constants from the local prior data file. The automated aid uses a single global reliability of 85% in the `AIDFIRST` and `STIMFIRST` blocks. The `PRACTICE` and `MANUAL` blocks show the masked aid string `#####` instead of a real recommendation during masked preview and final-decision screens. Real aid recommendations display as `BLACK` or `WHITE`; these indicate that the aid recommends the `V-BLACK` or `V-WHITE` response, respectively.
+The `PRACTICE` block uses an adaptive staircase that starts at the prior across-participant fixed-delta distribution (`delta = 0.040324718919`, SD `0.014615991726`). The first 20 practice trials are treated as burn-in with a larger annealed step size, and the final 40 trials are used to calculate the participant-specific delta mean and SD used for all subsequent main blocks. Single-block runs that skip practice use the same prior fixed-delta defaults directly; `derive_prior_calibration_delta.R` reproduces these fallback constants from the local prior data file. The automated aid uses a single global reliability of 85% in the `AIDFIRST` and `STIMFIRST` blocks. The `PRACTICE` and `MANUAL` blocks show the masked aid string `#####` instead of a real recommendation during masked preview screens. Real aid recommendations display as `BLACK` or `WHITE`; these indicate that the aid recommends the `V-BLACK` or `V-WHITE` response, respectively. Final-decision response screens show only the progress HUD and response prompt.
 
 Responses are made with the `D` and `J` keys. The standard key mapping is `D = V-BLACK` and `J = V-WHITE`; the flipped key mapping is `J = V-BLACK` and `D = V-WHITE`. On the second decision screen, participants use the same keys to confirm their first response or switch to the other response.
 
@@ -60,12 +60,13 @@ The main trial and post-block output files include fields that identify the desi
 | --- | --- |
 | `key_black`, `key_white`, `keymap_flip` | Participant-specific D/J mapping for `V-BLACK` and `V-WHITE` |
 | `condition_code` | `PRACTICE`, `MANUAL`, `AIDFIRST`, or `STIMFIRST` |
-| `aid_condition` | `manual`, `aid_first`, or `stimulus_first_change` |
+| `aid_condition` | `manual`, `aid_first`, or `stimulus_first` |
 | `aid_accuracy_setting` | `0.85` for aided automation blocks, or blank for `MANUAL` |
 | `trial_deadline_s` | Blank in the current self-paced design |
 | `preview_display`, `preview_label` | Display type and visible value shown on the initial preview screen |
-| `decision1_display`, `decision2_display` | Display type for each decision phase |
-| `decision2_label` | Visible value shown during the second decision phase, such as `#####`, `BLACK`, or `WHITE` |
+| `decision1_display`, `decision2_display` | Display type for each decision phase; second decisions use `blank_response` |
+| `decision2_preview_display`, `decision2_preview_label` | Display type and visible value shown on the final preview screen before decision 2 |
+| `decision2_label` | Blank in the current HUD-only second decision screen |
 | `decision1_response`, `decision1_correct`, `decision1_rt_s`, `decision1_matches_aid` | First automation classification fields |
 | `decision2_response`, `decision2_correct`, `decision2_rt_s`, `decision2_matches_aid` | Second automation classification fields |
 | `changed_response` | Whether decision 2 differs from decision 1 |
@@ -80,7 +81,7 @@ Single-block runs require an explicit aid condition, for example:
 
 ```r
 run_task(block = "AUTOMATION", aid_condition = "manual")
-run_task(block = "AUTOMATION", aid_condition = "stimulus_first_change")
+run_task(block = "AUTOMATION", aid_condition = "stimulus_first")
 ```
 
 ## Screenshot review deck

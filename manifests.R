@@ -15,8 +15,8 @@ CALIB_SUMMARY_LAST_N <- 150
 PLOT_DIR <- "plots"
 BLOCK_RAW_LEVELS <- c("AUTOMATION")
 BLOCK_DISPLAY_LEVELS <- c("Automation")
-BLOCK_LEVELS <- c("Manual", "Aid first", "Stimulus first, change allowed")
-AUTOMATION_BLOCK_LEVELS <- c("Manual", "Aid first", "Stimulus first, change allowed")
+BLOCK_LEVELS <- c("Manual", "Aid first", "Stimulus first")
+AUTOMATION_BLOCK_LEVELS <- c("Manual", "Aid first", "Stimulus first")
 AUTOMATION_FACET_LEVELS <- c("Automation")
 FACET_GROUP_LEVELS <- AUTOMATION_FACET_LEVELS
 GLOBAL_AID_ACCURACY <- 0.85
@@ -44,7 +44,7 @@ factor_condition_block <- function(aid_condition) {
   condition <- case_when(
     !is.na(aid_condition) & aid_condition == "manual" ~ "Manual",
     !is.na(aid_condition) & aid_condition == "aid_first" ~ "Aid first",
-    !is.na(aid_condition) & aid_condition == "stimulus_first_change" ~ "Stimulus first, change allowed",
+    !is.na(aid_condition) & aid_condition == "stimulus_first" ~ "Stimulus first",
     TRUE ~ NA_character_
   )
   factor(condition, levels = BLOCK_LEVELS)

@@ -12,7 +12,7 @@ library("forcats")
 ONSET_LEVELS <- c(
   "Manual",
   "Aid first",
-  "Stimulus first, change allowed"
+  "Stimulus first"
 )
 
 ensure_onset_columns <- function(data) {
@@ -29,7 +29,7 @@ make_block_onset <- function(aid_condition) {
   condition <- case_when(
     !is.na(aid_condition) & aid_condition == "manual" ~ "Manual",
     !is.na(aid_condition) & aid_condition == "aid_first" ~ "Aid first",
-    !is.na(aid_condition) & aid_condition == "stimulus_first_change" ~ "Stimulus first, change allowed",
+    !is.na(aid_condition) & aid_condition == "stimulus_first" ~ "Stimulus first",
     TRUE ~ NA_character_
   )
   factor(condition, levels = ONSET_LEVELS)

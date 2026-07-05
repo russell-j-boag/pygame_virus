@@ -838,17 +838,6 @@ def render_trial_sequence(
         draw_stimulus_decision(surface, context)
         writer.save(surface, f"{prefix}_trial_04_decision1_stimulus_only")
 
-        draw_fixation_screen_state(surface)
-        writer.save(surface, f"{prefix}_trial_05_fixation")
-
-        task.draw_masked_placeholder_frame(
-            surface,
-            context["ui_payload"],
-            show_prompt=True,
-            initial_response=context["initial_response"],
-        )
-        writer.save(surface, f"{prefix}_trial_06_decision2_masked_placeholder")
-
     elif aid_condition == "aid_first":
         task.draw_aid_only_frame(
             surface,
@@ -865,18 +854,7 @@ def render_trial_sequence(
         draw_stimulus_decision(surface, context)
         writer.save(surface, f"{prefix}_trial_04_decision1_stimulus_only")
 
-        draw_fixation_screen_state(surface)
-        writer.save(surface, f"{prefix}_trial_05_fixation")
-
-        task.draw_masked_placeholder_frame(
-            surface,
-            context["ui_payload"],
-            show_prompt=True,
-            initial_response=context["initial_response"],
-        )
-        writer.save(surface, f"{prefix}_trial_06_decision2_masked_placeholder")
-
-    elif aid_condition == "stimulus_first_change":
+    elif aid_condition == "stimulus_first":
         task.draw_masked_placeholder_frame(
             surface,
             context["ui_payload"],
@@ -891,20 +869,43 @@ def render_trial_sequence(
         draw_stimulus_decision(surface, context)
         writer.save(surface, f"{prefix}_trial_04_decision1_stimulus_only")
 
-        draw_fixation_screen_state(surface)
-        writer.save(surface, f"{prefix}_trial_05_fixation")
+    else:
+        raise RuntimeError(f"unsupported scheduled aid condition: {aid_condition}")
 
+    draw_fixation_screen_state(surface)
+    writer.save(surface, f"{prefix}_trial_05_fixation")
+
+    decision2_preview_display, _decision2_preview_label = task.decision2_preview_display_for_condition(
+        aid_condition,
+        context["aid_payload"]["label"],
+    )
+    if decision2_preview_display == "aid_only":
         task.draw_aid_only_frame(
             surface,
             context["aid_payload"],
             context["ui_payload"],
-            show_prompt=True,
-            initial_response=context["initial_response"],
+            show_prompt=False,
+            phase_label="Preview",
         )
-        writer.save(surface, f"{prefix}_trial_06_decision2_aid_only")
-
+        writer.save(surface, f"{prefix}_trial_06_final_preview_aid")
     else:
-        raise RuntimeError(f"unsupported scheduled aid condition: {aid_condition}")
+        task.draw_masked_placeholder_frame(
+            surface,
+            context["ui_payload"],
+            show_prompt=False,
+            phase_label="Preview",
+        )
+        writer.save(surface, f"{prefix}_trial_06_final_preview_masked_aid")
+
+    draw_fixation_screen_state(surface)
+    writer.save(surface, f"{prefix}_trial_07_fixation")
+
+    task.draw_final_decision_frame(
+        surface,
+        context["ui_payload"],
+        initial_response=context["initial_response"],
+    )
+    writer.save(surface, f"{prefix}_trial_08_decision2_blank_response")
 
     feedback_msg, feedback_color = FEEDBACK_EXAMPLES[condition_code(block_cfg)]
     draw_feedback_screen_state(
@@ -917,7 +918,7 @@ def render_trial_sequence(
         prompt_font=fonts["body"],
         prompt_color=task.WHITE,
     )
-    writer.save(surface, f"{prefix}_trial_07_feedback_{slugify(feedback_msg)}")
+    writer.save(surface, f"{prefix}_trial_09_feedback_{slugify(feedback_msg)}")
 
 
 def render_block(
