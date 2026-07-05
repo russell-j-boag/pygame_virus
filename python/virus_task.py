@@ -221,7 +221,7 @@ def aid_onset_ms_for_block(block_cfg):
 
 def automation_reliability_instruction_slide() -> str:
     return (
-        "In the next block, the automated decision aid will provide a recommendation "
+        "In this block, the automated decision aid will provide a recommendation "
         "on each trial. Its recommendations may be correct or incorrect. Please monitor "
         "the aid carefully and continue to make the correct classification on each trial."
     )
