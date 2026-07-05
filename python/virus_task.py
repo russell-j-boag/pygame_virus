@@ -305,13 +305,13 @@ def time_pressure_instruction_slide(block_cfg) -> str:
 def automation_reliability_instruction_slide(reliability_group: str) -> str:
     if reliability_group == "high":
         return (
-            "In the next block, although the automation is highly reliable, it is not perfect, "
+            "In this block, although the automation is highly reliable, it is not perfect, "
             "and automation advice errors are unlikely but still possible."
         )
 
     if reliability_group == "low":
         return (
-            "In the next block, although the automation is reasonably reliable, it is not perfect, "
+            "In this block, although the automation is reasonably reliable, it is not perfect, "
             "and automation advice errors may be relatively common."
         )
 
@@ -504,7 +504,7 @@ LIGHT_GREY = (170, 170, 170)
 DARK_GREY = (60, 60, 60)
 FIX_COLOR = LIGHT_GREY      # fixation cross colour
 MASKED_AID_LABEL = "#####"
-MASKED_AID_COLOR = (90, 150, 210)
+MASKED_AID_COLOR = (35, 85, 125)
 
 # V-BLACK cell colour
 VBLACK = BLACK         # black
