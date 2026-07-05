@@ -157,8 +157,7 @@ BLOCK_INSTRUCTIONS = {
         "slides": [
             (
                 "You will now complete 60 practice trials.\n\n"
-                "These trials are to familiarise you with the 2-decision trial sequence "
-                "and set the difficulty level for the later blocks.\n\n"
+                "These trials are to familiarise you with the 2-decision format.\n\n"
                 "No advice will be shown in the centre of the display.\n"
                 "There is simply a string '#####', which you should ignore."
             ),
