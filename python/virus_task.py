@@ -420,6 +420,8 @@ WHITE = (255, 255, 255)
 LIGHT_GREY = (170, 170, 170)
 DARK_GREY = (60, 60, 60)
 FIX_COLOR = LIGHT_GREY      # fixation cross colour
+MASKED_AID_LABEL = "#####"
+MASKED_AID_COLOR = (35, 85, 125)
 
 # V-BLACK cell colour
 VBLACK = BLACK         # black
@@ -2829,7 +2831,7 @@ def draw_aid_recommendation_top_center(
 
     if show_value:
         phrase = f"{rec_label}"
-        col = WHITE if rec_label == "#####" else COLOR_TOKENS_AID.get(rec_label, WHITE)
+        col = MASKED_AID_COLOR if rec_label == MASKED_AID_LABEL else COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
 
         detail_lines = []
@@ -3196,7 +3198,7 @@ def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, m
             screen,
             fonts["aid_label"],
             fonts["aid"],
-            rec_label="#####",
+            rec_label=MASKED_AID_LABEL,
             show_value=True,
             transparency_level="none",
             dish_top_limit=center[1] - DISH_RADIUS,
