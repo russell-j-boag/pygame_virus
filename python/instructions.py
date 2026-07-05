@@ -142,15 +142,11 @@ SLIDES = [
         ),
     },
     {
-        "kind": "trial_sequence",
-        "title": "EXAMPLE TRIAL SEQUENCE",
-    },
-    {
         "kind": "text",
         "title": "AID TIMING",
         "body": (
             "Across the experimental blocks, the order of information will vary. "
-            "On some trials the aid recommendation will appear first as a preview, followed by the virus sample. "
+            "On some trials the aid recommendation will appear first, followed by the virus sample. "
             "On other trials the virus sample will appear before the aid recommendation. "
             "Some screens will show the aid display masked as #####.\n\n"
             "Your job is always to classify the sample as accurately as possible."
@@ -161,7 +157,7 @@ SLIDES = [
         "title": "PERFORMANCE", 
         "body": (
             "We will keep an ongoing tally of your performance. "
-            "At the end of the experiment you will receive a point-based bonus, up to $25, based on your performance score.\n\n"
+            "At the end of the experiment you will see a summary of your point-based performance score.\n\n"
             "In the experimental blocks, each decision phase will remain on screen until you respond. "
             "Incorrect final responses will reduce your performance score, so try to respond accurately.\n\n"
             "You may take short breaks at any time between trials\n\n"
@@ -1024,213 +1020,6 @@ def draw_trial_prompt_stacked(screen, font_small, y_pos, key_black_name=None, ke
     return rects[0].union(rects[1]), rects
 
 
-def draw_sequence_fixation(surface, center, size, color=WHITE):
-    thickness = max(1, S(2))
-    pygame.draw.line(
-        surface,
-        color,
-        (center[0] - size, center[1]),
-        (center[0] + size, center[1]),
-        thickness,
-    )
-    pygame.draw.line(
-        surface,
-        color,
-        (center[0], center[1] - size),
-        (center[0], center[1] + size),
-        thickness,
-    )
-
-
-def draw_sequence_petri(surface, center, radius):
-    pygame.draw.circle(surface, DISH_FILL, center, radius, width=0)
-    pygame.draw.circle(surface, DISH_RING, center, radius + max(1, S(2)), width=max(1, S(2)))
-    pygame.draw.circle(surface, DISH_EDGE, center, radius, width=max(1, S(1)))
-
-    n_dots = 180
-    dot_r = max(1, S(1.6))
-    golden_angle = math.pi * (3.0 - math.sqrt(5.0))
-    for i in range(n_dots):
-        rr = (radius - dot_r - max(1, S(2))) * math.sqrt((i + 0.5) / n_dots)
-        ang = i * golden_angle
-        x = int(round(center[0] + rr * math.cos(ang)))
-        y = int(round(center[1] + rr * math.sin(ang)))
-        col = VBLACK if i % 10 < 6 else VWHITE
-        pygame.draw.circle(surface, col, (x, y), dot_r)
-
-
-def draw_sequence_phase_label(surface, rect, font, label):
-    label_img = font.render(label, True, WHITE)
-    surface.blit(label_img, label_img.get_rect(center=rect.center))
-
-
-def draw_sequence_aid_display(surface, rect, font, value_text):
-    label_img = font.render("AID JUDGES:", True, WHITE)
-    value_img = None
-    gap = max(1, S(6))
-    if value_text.startswith("#####"):
-        value_parts = [
-            font.render("#####", True, WHITE),
-            font.render(value_text[len("#####"):], True, WHITE),
-        ]
-        value_w = sum(part.get_width() for part in value_parts)
-        value_h = max(part.get_height() for part in value_parts)
-    else:
-        value_img = font.render(value_text, True, WHITE)
-        value_parts = None
-        value_w = value_img.get_width()
-        value_h = value_img.get_height()
-    total_h = label_img.get_height() + gap + value_h
-    y = rect.centery - total_h // 2
-    surface.blit(label_img, label_img.get_rect(midtop=(rect.centerx, y)))
-    value_y = y + label_img.get_height() + gap
-    if value_parts is not None:
-        x = rect.centerx - value_w // 2
-        for part in value_parts:
-            surface.blit(part, part.get_rect(topleft=(x, value_y)))
-            x += part.get_width()
-    else:
-        surface.blit(value_img, value_img.get_rect(midtop=(rect.centerx, value_y)))
-
-
-def draw_sequence_response_buttons(surface, rect, font):
-    btn_gap = S(14)
-    label_gap = btn_gap
-    btn_w = max(1, (rect.width - label_gap - 2 * btn_gap) // 2)
-    btn_h = min(S(34), rect.height)
-    y = rect.centery - btn_h // 2
-    left_btn = pygame.Rect(rect.x, y, btn_w, btn_h)
-    right_btn = pygame.Rect(rect.right - btn_w, y, btn_w, btn_h)
-    buttons = [
-        left_btn,
-        right_btn,
-    ]
-    for label, btn in zip(("V-BLACK", "V-WHITE"), buttons):
-        pygame.draw.rect(surface, (50, 50, 50), btn, 0, border_radius=max(1, S(6)))
-        pygame.draw.rect(surface, WHITE, btn, max(1, S(2)), border_radius=max(1, S(6)))
-        img = font.render(label, True, WHITE)
-        surface.blit(img, img.get_rect(center=btn.center))
-
-
-def draw_sequence_panel(surface, rect, step_num, title, panel_kind, font_body, font_small, font_aid):
-    pygame.draw.rect(surface, (58, 58, 58), rect, 0, border_radius=max(1, S(8)))
-    pygame.draw.rect(surface, LIGHT_GREY, rect, max(1, S(2)), border_radius=max(1, S(8)))
-
-    step_center = (rect.x + S(22), rect.y + S(22))
-    step_radius = S(14)
-    pygame.draw.circle(surface, (35, 35, 35), step_center, step_radius)
-    pygame.draw.circle(surface, WHITE, step_center, step_radius, max(1, S(2)))
-    step_img = font_small.render(str(step_num), True, WHITE)
-    surface.blit(step_img, step_img.get_rect(center=step_center))
-
-    title_img = font_small.render(title, True, WHITE)
-    title_rect = title_img.get_rect(midtop=(rect.centerx, rect.y + S(13)))
-    surface.blit(title_img, title_rect)
-
-    content = pygame.Rect(
-        rect.x + S(14),
-        rect.y + S(48),
-        rect.width - S(28),
-        rect.height - S(62),
-    )
-
-    if panel_kind == "fixation":
-        draw_sequence_fixation(surface, content.center, S(14))
-
-    elif panel_kind == "preview":
-        draw_sequence_aid_display(surface, content, font_small, "##### / BLACK / WHITE")
-
-    elif panel_kind == "decision1":
-        dish_radius = min(content.width // 7, content.height // 4)
-        dish_center = (content.centerx, content.y + S(32))
-        draw_sequence_petri(surface, dish_center, dish_radius)
-        btn_rect = pygame.Rect(content.x + S(8), content.bottom - S(34), content.width - S(16), S(32))
-        draw_sequence_response_buttons(surface, btn_rect, font_small)
-
-    elif panel_kind == "decision2":
-        btn_rect = pygame.Rect(content.x + S(8), content.bottom - S(34), content.width - S(16), S(32))
-        aid_rect = pygame.Rect(content.x, content.y, content.width, btn_rect.y - content.y - S(4))
-        draw_sequence_aid_display(surface, aid_rect, font_small, "##### / BLACK / WHITE")
-        draw_sequence_response_buttons(surface, btn_rect, font_small)
-
-
-def draw_trial_sequence_slide(screen, font_title, font_body, font_small, font_aid):
-    screen.fill(BG_INSTRUCTIONS)
-
-    title = "EXAMPLE TRIAL SEQUENCE"
-    body = (
-        "Each trial moves through the same three phases: Preview, Decision 1, Decision 2.\n"
-        "The Preview and Decision 2 screens may show ##### or an aid recommendation, depending on the block."
-    )
-
-    content_x = S(80)
-    content_w = WIDTH - S(160)
-    title_y = max(S(34), HEIGHT // 2 - S(305))
-
-    title_img = font_title.render(title, True, WHITE)
-    screen.blit(title_img, title_img.get_rect(midtop=(WIDTH // 2, title_y)))
-
-    body_y = title_y + title_img.get_height() + S(18)
-    body_h = _measure_wrapped_height(body, font_body, content_w, S(8), S(18))
-    draw_wrapped_block_centered(
-        screen,
-        body,
-        font_body,
-        WHITE,
-        (content_x, 0, content_w, HEIGHT),
-        y_start=body_y,
-        line_spacing=S(8),
-        blank_spacing=S(18),
-    )
-
-    gap = S(26)
-    panel_w = (content_w - 2 * gap) // 3
-    panel_h = S(160)
-    row_gap = S(40)
-    grid_top = body_y + body_h + S(28)
-    panels = []
-    for row in range(2):
-        for col in range(3):
-            x = content_x + col * (panel_w + gap)
-            y = grid_top + row * (panel_h + row_gap)
-            panels.append(pygame.Rect(x, y, panel_w, panel_h))
-
-    steps = [
-        ("Fixation", "fixation"),
-        ("Preview", "preview"),
-        ("Fixation", "fixation"),
-        ("Decision 1", "decision1"),
-        ("Fixation", "fixation"),
-        ("Decision 2 (final)", "decision2"),
-    ]
-    for idx, (rect, (step_title, panel_kind)) in enumerate(zip(panels, steps), start=1):
-        draw_sequence_panel(
-            screen,
-            rect,
-            idx,
-            step_title,
-            panel_kind,
-            font_body,
-            font_small,
-            font_aid,
-        )
-
-    for left, right in (
-        (panels[0], panels[1]),
-        (panels[1], panels[2]),
-        (panels[3], panels[4]),
-        (panels[4], panels[5]),
-    ):
-        draw_arrow(
-            screen,
-            (left.right + S(4), left.centery),
-            (right.left - S(4), right.centery),
-            color=WHITE,
-            width=max(1, S(2)),
-            head_len=S(10),
-        )
-
-
 def draw_aid_recommendation_top_center(
     screen,
     font_label,
@@ -1340,15 +1129,6 @@ def draw_slide(screen, font_title, font_body, font_button, font_small, font_aid_
             callout=slide.get("callout"),
         )
 
-    elif kind == "trial_sequence":
-        draw_trial_sequence_slide(
-            screen,
-            font_title=font_title,
-            font_body=font_body,
-            font_small=font_small,
-            font_aid=font_aid,
-        )
-        
     # buttons always on top
     btn_w = S(170)
     btn_h = S(58)

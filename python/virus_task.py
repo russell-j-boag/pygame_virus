@@ -157,7 +157,7 @@ BLOCK_INSTRUCTIONS = {
             (
                 "You will now complete 20 practice trials.\n\n"
                 "These trials are to familiarise you with the 2-decision trial sequence.\n\n"
-                "No special information will be shown in the centre of the display.\n"
+                "No advice will be shown in the centre of the display.\n"
                 "There is simply a string '#####', which you should ignore."
             ),
         ],
@@ -259,7 +259,7 @@ def automation_accuracy_instruction_slide() -> str:
 
 def manual_condition_instruction_slide() -> str:
     return (
-        "In the next block, no special information will be shown in the centre of the display.\n"
+        "In the next block, no advice will be shown in the centre of the display.\n"
         "There is simply a string '#####', which you should ignore."
     )
 
