@@ -203,7 +203,7 @@ BLOCK_INSTRUCTIONS = {
     "MANUAL": {
         "title": "MANUAL BLOCK",
         "slides": [
-            "In this block, there is no special information shown at the top of the display.\nThere is simply a string '#####', which you should ignore."
+            "In this block, there is no advice shown at the top of the display.\nThere is simply a string '#####', which you should ignore."
         ],
     },
 
