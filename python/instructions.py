@@ -136,10 +136,10 @@ SLIDES = [
         "title": "TWO DECISIONS PER SAMPLE",
         "body": (
             "On every trial, you will classify the same sample twice.\n\n"
-            "Decision 1 records your initial judgement. Later in the trial, Decision 2 asks "
-            "for your final answer. At Decision 2, you can confirm your first response or switch "
+            "The initial decision phase records your first judgement. The final decision phase then asks "
+            "for your final answer. In the final decision phase you can confirm your first response or switch "
             "to the other response.\n\n"
-            "Only Decision 2 counts as your final classification for that sample."
+            "Only the final decision phase counts as your final classification for that sample."
         ),
     },
     {
