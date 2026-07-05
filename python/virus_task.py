@@ -9,6 +9,7 @@ Keys:
 
 import argparse
 import csv
+import itertools
 import sys
 import random
 import math
@@ -51,32 +52,15 @@ AUTOMATION_RELIABILITY_PATTERNS = {
         "LP": "high",
     },
 }
-COUNTERBALANCE_CYCLE_N = 16
-POST_CALIBRATION_BLOCK_ORDERS = (
-    (
-        ("HP", "MANUAL"),
-        ("HP", "AUTOMATION"),
-        ("LP", "AUTOMATION"),
-        ("LP", "MANUAL"),
-    ),
-    (
-        ("HP", "AUTOMATION"),
-        ("LP", "MANUAL"),
-        ("HP", "MANUAL"),
-        ("LP", "AUTOMATION"),
-    ),
-    (
-        ("LP", "MANUAL"),
-        ("LP", "AUTOMATION"),
-        ("HP", "AUTOMATION"),
-        ("HP", "MANUAL"),
-    ),
-    (
-        ("LP", "AUTOMATION"),
-        ("HP", "MANUAL"),
-        ("LP", "MANUAL"),
-        ("HP", "AUTOMATION"),
-    ),
+COUNTERBALANCE_CYCLE_N = 96
+POST_CALIBRATION_ORDER_CELLS = (
+    ("HP", "MANUAL"),
+    ("HP", "AUTOMATION"),
+    ("LP", "AUTOMATION"),
+    ("LP", "MANUAL"),
+)
+POST_CALIBRATION_BLOCK_ORDERS = tuple(
+    itertools.permutations(POST_CALIBRATION_ORDER_CELLS)
 )
 COUNTERBALANCE_FACTOR_ASSIGNMENTS = tuple(
     {
@@ -1269,7 +1253,8 @@ def is_hard_quit_event(event) -> bool:
 def build_blocks_for_participant(participant_id: int, blocks_template):
     """
     One calibration block is assigned first, then the four post-calibration
-    manual/automation x HP/LP cells are ordered from a balanced Latin square.
+    manual/automation x HP/LP cells are ordered from a full factorial
+    permutation counterbalance.
     """
     blocks_by_cell = {
         (b["TIME_PRESSURE_CONDITION"], b["name"]): copy_block_config(b)
@@ -1303,7 +1288,7 @@ def build_blocks_for_participant(participant_id: int, blocks_template):
 
 def key_mapping_for_participant(participant_id: int):
     """
-    Flip key mapping within the 16-participant counterbalancing cycle:
+    Flip key mapping within the 96-participant counterbalancing cycle:
       - standard  (D->BLACK, J->WHITE)
       - flipped   (J->BLACK, D->WHITE)
     """
@@ -1427,7 +1412,7 @@ def run_slider_question_screen(
     if anchors is None:
         anchors = [
             (0, "All incorrect"),
-            (50, "Half correct and half incorrect"),
+            (50, "Half correct and half incorrect\n(guessing at random)"),
             (100, "All correct"),
         ]
 
@@ -1605,13 +1590,13 @@ def run_postblock_slider_questions(
         if it["key"] == "perc_self_correct":
             anchors = [
                 (0, "All incorrect"),
-                (50, "Half correct and half incorrect"),
+                (50, "Half correct and half incorrect\n(guessing at random)"),
                 (100, "All correct"),
             ]
         else:
             anchors = [
                 (0, "All incorrect"),
-                (50, "Half correct and half incorrect"),
+                (50, "Half correct and half incorrect\n(guessing at random)"),
                 (100, "All correct"),
             ]
 
@@ -2460,7 +2445,7 @@ def draw_slider_question_screen_state(
     if anchors is None:
         anchors = [
             (0, "All incorrect"),
-            (50, "Half correct and half incorrect"),
+            (50, "Half correct and half incorrect\n(guessing at random)"),
             (100, "All correct"),
         ]
 
@@ -3917,7 +3902,7 @@ def main():
             f"No prior CALIBRATION delta file found for participant {participant_id}"
         )
         
-    # ---- key counterbalancing (within the 16-participant design cycle) ----
+    # ---- key counterbalancing (within the 96-participant design cycle) ----
     km = key_mapping_for_participant(participant_id)
     KEY_BLACK_NAME = km["key_black_name"]
     KEY_WHITE_NAME = km["key_white_name"]

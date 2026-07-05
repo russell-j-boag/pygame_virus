@@ -53,53 +53,50 @@ Participant-facing automation instructions are qualitative rather than numeric. 
 
 ## Counterbalancing
 
-Counterbalancing is assigned deterministically from participant ID in a 16-participant cycle. Calibration is always first and always uses `CAL_LP`. The four post-calibration blocks are ordered using a balanced Latin square for the crossed manual/automation x HP/LP cells:
+Counterbalancing is assigned deterministically from participant ID in a 96-participant cycle. Calibration is always first and always uses `CAL_LP`. The four post-calibration blocks are ordered using the full factorial set of all `4! = 24` permutations of the crossed manual/automation x HP/LP cells:
 
 | Factor | Levels |
 | --- | --- |
-| Post-calibration block order | 4 Latin-square orders of `M_HP`, `A_HP`, `M_LP`, `A_LP` |
+| Post-calibration block order | 24 permutations of `M_HP`, `A_HP`, `A_LP`, `M_LP` |
 | Reliability pattern | `HP95_LP65`, `HP65_LP95` |
 | Key mapping | standard, flipped |
 
-The Latin-square orders are:
+The post-calibration order set is:
 
 | Order | Sequence |
 | --- | --- |
-| `O1` | `M_HP -> A_HP -> A_LP -> M_LP` |
-| `O2` | `A_HP -> M_LP -> M_HP -> A_LP` |
-| `O3` | `M_LP -> A_LP -> A_HP -> M_HP` |
-| `O4` | `A_LP -> M_HP -> M_LP -> A_HP` |
+| `O01` | `M_HP -> A_HP -> A_LP -> M_LP` |
+| `O02` | `M_HP -> A_HP -> M_LP -> A_LP` |
+| `O03` | `M_HP -> A_LP -> A_HP -> M_LP` |
+| `O04` | `M_HP -> A_LP -> M_LP -> A_HP` |
+| `O05` | `M_HP -> M_LP -> A_HP -> A_LP` |
+| `O06` | `M_HP -> M_LP -> A_LP -> A_HP` |
+| `O07` | `A_HP -> M_HP -> A_LP -> M_LP` |
+| `O08` | `A_HP -> M_HP -> M_LP -> A_LP` |
+| `O09` | `A_HP -> A_LP -> M_HP -> M_LP` |
+| `O10` | `A_HP -> A_LP -> M_LP -> M_HP` |
+| `O11` | `A_HP -> M_LP -> M_HP -> A_LP` |
+| `O12` | `A_HP -> M_LP -> A_LP -> M_HP` |
+| `O13` | `A_LP -> M_HP -> A_HP -> M_LP` |
+| `O14` | `A_LP -> M_HP -> M_LP -> A_HP` |
+| `O15` | `A_LP -> A_HP -> M_HP -> M_LP` |
+| `O16` | `A_LP -> A_HP -> M_LP -> M_HP` |
+| `O17` | `A_LP -> M_LP -> M_HP -> A_HP` |
+| `O18` | `A_LP -> M_LP -> A_HP -> M_HP` |
+| `O19` | `M_LP -> M_HP -> A_HP -> A_LP` |
+| `O20` | `M_LP -> M_HP -> A_LP -> A_HP` |
+| `O21` | `M_LP -> A_HP -> M_HP -> A_LP` |
+| `O22` | `M_LP -> A_HP -> A_LP -> M_HP` |
+| `O23` | `M_LP -> A_LP -> M_HP -> A_HP` |
+| `O24` | `M_LP -> A_LP -> A_HP -> M_HP` |
 
-These four orders are crossed with reliability pattern and key mapping, giving `4 x 2 x 2 = 16` allocation cells per cycle. The cycle is intentionally not shuffled: participant numbers advance through block order first, then reliability pattern, then key mapping. For example, a participant assigned to order `O4` receives:
+These 24 orders are crossed with reliability pattern and key mapping, giving `24 x 2 x 2 = 96` allocation cells per cycle. The cycle is intentionally not shuffled: for each order, the task assigns `HP95_LP65` standard/flipped, then `HP65_LP95` standard/flipped. Participant 1 is assigned to `O01 x HP95_LP65 x standard` and receives:
 
 ```text
-CAL_LP -> A_LP -> M_HP -> M_LP -> A_HP
+CAL_LP -> M_HP -> A_HP -> A_LP -> M_LP
 ```
 
-Within each 16-participant cycle, there are 4 participants per Latin-square order, 8 per reliability pattern, 8 per key mapping, and 1 per full `order x reliability pattern x key mapping` cell.
-
-The 16-participant cycle is:
-
-| Participant | Order | Reliability pattern | Key mapping |
-| ---: | --- | --- | --- |
-| `1` | `O1` | `HP95_LP65` | standard |
-| `2` | `O1` | `HP95_LP65` | flipped |
-| `3` | `O1` | `HP65_LP95` | standard |
-| `4` | `O1` | `HP65_LP95` | flipped |
-| `5` | `O2` | `HP95_LP65` | standard |
-| `6` | `O2` | `HP95_LP65` | flipped |
-| `7` | `O2` | `HP65_LP95` | standard |
-| `8` | `O2` | `HP65_LP95` | flipped |
-| `9` | `O3` | `HP95_LP65` | standard |
-| `10` | `O3` | `HP95_LP65` | flipped |
-| `11` | `O3` | `HP65_LP95` | standard |
-| `12` | `O3` | `HP65_LP95` | flipped |
-| `13` | `O4` | `HP95_LP65` | standard |
-| `14` | `O4` | `HP95_LP65` | flipped |
-| `15` | `O4` | `HP65_LP95` | standard |
-| `16` | `O4` | `HP65_LP95` | flipped |
-
-For the planned sample of `N = 96`, the 16-participant cycle repeats six times. This gives 24 participants per Latin-square order, 48 per reliability pattern, 48 per key mapping, and 6 participants per full `order x reliability pattern x key mapping` cell.
+For the planned sample of `N = 96`, the full allocation cycle is completed exactly once. This gives 4 participants per post-calibration order, 48 per reliability pattern, 48 per key mapping, and 1 participant per full `order x reliability pattern x key mapping` cell. Across the full cycle, each post-calibration condition appears 24 times in each serial position. The full order set intentionally includes sequences with adjacent manual/manual, adjacent automation/automation, adjacent HP/HP, and adjacent LP/LP blocks.
 
 The standard key mapping is `D = V-BLACK` and `J = V-WHITE`. The flipped key mapping is `J = V-BLACK` and `D = V-WHITE`.
 

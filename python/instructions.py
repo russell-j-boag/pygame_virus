@@ -152,6 +152,7 @@ SLIDES = [
             "We will keep an ongoing tally of your performance. "
             "At the end of the experiment you will receive a point-based bonus, up to $25, based on your performance score.\n\n"
             "Response deadlines vary by block, and you will be told the deadline before each block. "
+            "The deadline will be either 1.5 or 3 seconds, depending on the block. "
             "Incorrect responses and responses not made before the deadline will reduce your performance score, so try "
             "to respond as quickly and accurately as possible.\n\n"
             "You may take short breaks at any time between trials\n\n"
