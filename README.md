@@ -15,16 +15,16 @@ Based on Bartlett & McCarley RDC task.
 
 ## Current task design
 
-The task uses a three-block within-participant design. There is no calibration block. Before the first main block, each participant completes a 20-trial `PRACTICE` block to familiarise them with the 2-decision trial sequence. Each participant then completes one `MANUAL`, one `AIDFIRST`, and one `STIMFIRST` block. Each trial has two mouse-click decision phases; the second decision is the final answer.
+The task uses a three-block within-participant design after a combined practice/calibration phase. Before the first main block, each participant completes a 60-trial `PRACTICE` block to familiarise them with the 2-decision trial sequence and calibrate stimulus difficulty. Each participant then completes one `MANUAL`, one `AIDFIRST`, and one `STIMFIRST` block. Each trial has two mouse-click decision phases; the second decision is the final answer.
 
 | Code | Mode | Trial structure | Trials |
 | --- | --- | --- | ---: |
-| `PRACTICE` | Manual-style practice | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 20 |
+| `PRACTICE` | Manual-style practice/calibration | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 60 |
 | `MANUAL` | Manual control | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 260 |
 | `AIDFIRST` | Automation | fixation -> aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked placeholder until decision 2 -> feedback | 260 |
 | `STIMFIRST` | Automation | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> aid until decision 2 -> feedback | 260 |
 
-All blocks sample stimulus difficulty from a fixed delta distribution derived from a prior 80%-calibrated virus task dataset. The current task uses the across-participant mean (`delta = 0.040324718919`) and SD (`0.014615991726`) of each prior participant's last 150 calibration-trial staircase deltas; `derive_prior_calibration_delta.R` reproduces these constants from the local prior data file. The automated aid uses a single global reliability of 85% in the `AIDFIRST` and `STIMFIRST` blocks. The `PRACTICE` and `MANUAL` blocks show the masked aid string `#####` instead of a real recommendation during masked preview and final-decision screens. Real aid recommendations display as `BLACK` or `WHITE`; these indicate that the aid recommends the `V-BLACK` or `V-WHITE` response, respectively.
+The `PRACTICE` block uses an adaptive staircase that starts at the prior across-participant fixed-delta distribution (`delta = 0.040324718919`, SD `0.014615991726`). The first 20 practice trials are treated as burn-in with a larger annealed step size, and the final 40 trials are used to calculate the participant-specific delta mean and SD used for all subsequent main blocks. Single-block runs that skip practice use the same prior fixed-delta defaults directly; `derive_prior_calibration_delta.R` reproduces these fallback constants from the local prior data file. The automated aid uses a single global reliability of 85% in the `AIDFIRST` and `STIMFIRST` blocks. The `PRACTICE` and `MANUAL` blocks show the masked aid string `#####` instead of a real recommendation during masked preview and final-decision screens. Real aid recommendations display as `BLACK` or `WHITE`; these indicate that the aid recommends the `V-BLACK` or `V-WHITE` response, respectively.
 
 Responses are made with fixed mouse-click buttons. The left button is `V-BLACK` and maps to the internally stored `BLACK` response. The right button is `V-WHITE` and maps to the internally stored `WHITE` response. On the second decision screen, the same two buttons are shown with parenthetical text indicating whether each option would confirm or switch the participant's initial decision.
 
@@ -56,7 +56,7 @@ The main trial and post-block output files include fields that identify the desi
 
 | Field | Meaning |
 | --- | --- |
-| `condition_code` | `MANUAL`, `AIDFIRST`, or `STIMFIRST` |
+| `condition_code` | `PRACTICE`, `MANUAL`, `AIDFIRST`, or `STIMFIRST` |
 | `aid_condition` | `manual`, `aid_first`, or `stimulus_first_change` |
 | `aid_accuracy_setting` | `0.85` for aided automation blocks, or blank for `MANUAL` |
 | `trial_deadline_s` | Blank in the current self-paced design |
@@ -70,6 +70,8 @@ The main trial and post-block output files include fields that identify the desi
 The current schema intentionally omits older compatibility aliases such as `condition_deadline_code`, `initial_*`, `final_*`, and generic final-response fields (`response`, `correct`, `rt_s`). Timing fields are recorded in seconds only.
 
 Practice trials are saved separately as `results_p###_<timestamp>_b00_PRACTICE.csv` with `condition_code = PRACTICE`. They are not included in `b00_ALL.csv`, final performance scoring, or post-block measures.
+
+Practice calibration also writes `delta_p###_<timestamp>_b00_PRACTICE.csv`. This summary excludes the first 20 burn-in trials and reports the delta mean/SD from the final 40 practice trials that set the main-block difficulty.
 
 Single-block runs require an explicit aid condition, for example:
 

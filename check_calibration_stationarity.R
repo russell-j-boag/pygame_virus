@@ -7,12 +7,17 @@ library("zoo")
 library("readr")
 
 TARGET_ACC <- 0.85
+BURNIN_TRIALS <- 20
 
 files <- list.files(
   "output",
-  pattern = "^results_.*_b00_ALL\\.csv$",
+  pattern = "^results_.*_b00_PRACTICE\\.csv$",
   full.names = TRUE
 )
+
+if (!length(files)) {
+  stop("No practice calibration results files found in output/.")
+}
 
 latest_file <- files[which.max(file.info(files)$mtime)]
 print(latest_file)
@@ -28,10 +33,10 @@ if (!"condition_code" %in% names(dat) && "block" %in% names(dat)) {
     mutate(condition_code = block)
 }
 
-# Keep only calibration staircase trials
+# Keep only practice calibration staircase trials
 cal <- dat %>%
-  filter(condition_code == "CALIBRATION") %>%
-  arrange(global_trial) %>%
+  filter(condition_code == "PRACTICE", difficulty_mode == "staircase") %>%
+  arrange(trial) %>%
   mutate(
     correct_num = as.integer(decision2_correct),
     stair_trial = row_number(),                  # trial index within staircase
@@ -39,12 +44,12 @@ cal <- dat %>%
   )
 
 if (nrow(cal) == 0) {
-  message("No calibration trials found in latest results file; skipping stationarity checks.")
+  message("No practice calibration trials found in latest results file; skipping stationarity checks.")
   quit(save = "no", status = 0)
 }
 
 # Define burn-in period
-burn_in <- floor(2/3 * nrow(cal))
+burn_in <- BURNIN_TRIALS
 cal_post <- cal %>%
   filter(stair_trial > burn_in)
 
@@ -141,7 +146,7 @@ binom.test(
 )$conf.int
 
 # Example write-up:
-# After excluding the first 2/3 of calibration trials as burn-in, 
+# After excluding the first 20 practice calibration trials as burn-in,
 # we tested whether the staircase had stabilized. A linear model 
 # showed no reliable remaining trend in staircase difficulty over 
 # trial number. A logistic regression likewise showed no remaining 

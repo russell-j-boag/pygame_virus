@@ -28,9 +28,10 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 # Block definitions
 # -----------------------------
 MAIN_BLOCK_N_TRIALS = 260
-PRACTICE_N_TRIALS = 20
-# Fixed difficulty is derived from a prior 80%-calibrated virus task dataset.
-# See derive_prior_calibration_delta.R for the reproducible summary.
+PRACTICE_N_TRIALS = 60
+# Prior across-participant difficulty distribution. Practice starts here, and
+# single-block runs use these values directly when no practice calibration runs.
+# See derive_prior_calibration_delta.R for the reproducible prior-data summary.
 GLOBAL_FIXED_DELTA = 0.040324718919
 GLOBAL_FIXED_DELTA_SD = 0.014615991726
 AUTOMATION_PRE_PHASE_MS = 1000
@@ -112,8 +113,8 @@ PRACTICE_BLOCK = dict(
     AID_ACCURACY=None,
     AID_TRANSPARENCY="none",
     AID_CONDITION="manual",
-    STAIRCASE_ON=False,
-    FIXED_DELTA_ON=True,
+    STAIRCASE_ON=True,
+    FIXED_DELTA_ON=False,
     FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
     FIXED_DELTA_SD=GLOBAL_FIXED_DELTA_SD,
     TRIAL_FEEDBACK_ON=True,
@@ -155,8 +156,9 @@ BLOCK_INSTRUCTIONS = {
         "title": "PRACTICE BLOCK",
         "slides": [
             (
-                "You will now complete 20 practice trials.\n\n"
-                "These trials are to familiarise you with the 2-decision trial sequence.\n\n"
+                "You will now complete 60 practice trials.\n\n"
+                "These trials are to familiarise you with the 2-decision trial sequence "
+                "and set the difficulty level for the later blocks.\n\n"
                 "No advice will be shown in the centre of the display.\n"
                 "There is simply a string '#####', which you should ignore."
             ),
@@ -369,20 +371,20 @@ VBLACK_PROPORTION_LEVELS = [0.40, 0.42, 0.44, 0.46, 0.48, 0.52, 0.54, 0.56, 0.58
 AID_TRANSPARENCY_LEVELS = {"none", "low", "high"}
 
 # -----------------------------
-# Adaptive staircase (manual-only)
+# Adaptive staircase (practice calibration)
 # -----------------------------
-DELTA_INIT = 0.20            # starting distance from 0.5 (e.g., 0.20 -> 0.30/0.70)
-DELTA_SD   = 0.01            # sampling SD for trial-wise delta in staircase mode
+DELTA_INIT = GLOBAL_FIXED_DELTA      # start at prior across-participant mean
+DELTA_SD   = GLOBAL_FIXED_DELTA_SD   # trial-wise sampling SD around staircase mean
 DELTA_MIN  = 1/N_DOTS        # hardest allowed (closest to 0.5)
 DELTA_MAX  = 0.25            # easiest allowed
 DELTA_STEP_DOWN = 0.01       # starting (large) down-step
-DELTA_STEP_DOWN_MIN = 0.001  # target min down-step by trial 50
+DELTA_STEP_DOWN_MIN = 0.001  # target min down-step after burn-in
 # Burn-in period with annealing
-BURNIN_TRIALS = 50           # reach DELTA_STEP_DOWN_MIN at trial 50 (inclusive)
+BURNIN_TRIALS = 20           # first 20 practice trials use the larger annealed step
 # Calibration summary window
 # None = use all eligible trials after burn-in exclusion
 # int  = use only the most recent N eligible trials after burn-in exclusion
-CALIB_SUMMARY_LAST_N = 150
+CALIB_SUMMARY_LAST_N = 40
 
 # -----------------------------
 # Fixed-delta mode (works for automation and manual blocks)
@@ -1579,17 +1581,17 @@ def pick_vblack_prop_from_delta(delta):
 
 def burnin_step_down(trial_in_block_1based, step_start, step_min, burnin_trials):
     """
-    Linearly decreases step_start -> step_min over trials 1..burnin_trials.
-    From trial burnin_trials onward, returns step_min.
+    Linearly decreases step_start -> step_min across the burn-in trials.
+    From the first post-burn-in trial onward, returns step_min.
     """
     if burnin_trials <= 1:
         return step_min
 
     t = max(1, int(trial_in_block_1based))
-    if t >= burnin_trials:
+    if t > burnin_trials:
         return step_min
 
-    frac = (t - 1) / (burnin_trials - 1)   # 0 at trial 1, 1 at trial burnin_trials
+    frac = (t - 1) / burnin_trials
     return step_start + frac * (step_min - step_start)
 
 # Smooth Brownian motion update for dots
@@ -2375,7 +2377,7 @@ def parse_cli_args():
     if args.block is not None:
         args.block = args.block.upper()
         if args.block != "AUTOMATION":
-            parser.error("--block must be AUTOMATION for the current no-calibration design")
+            parser.error("--block must be AUTOMATION for scheduled main-block runs")
 
     if args.aid_condition is not None and args.block is None:
         parser.error("--aid-condition requires --block")
@@ -2504,7 +2506,7 @@ def choose_blocks_to_run(args, participant_id):
 def resolve_difficulty_mode(block_cfg):
     if block_cfg["FIXED_DELTA_ON"]:
         return "fixed_delta"
-    if (not block_cfg["AUTOMATION_ON"]) and block_cfg["STAIRCASE_ON"]:
+    if block_cfg["STAIRCASE_ON"]:
         return "staircase"
     return "fixed_props"
 
@@ -2512,6 +2514,40 @@ def resolve_difficulty_mode(block_cfg):
 def resolve_fixed_delta_source(block_name, participant_id, fixed_delta_value, fixed_delta_sd):
     print(f"[{block_name}] Using fixed delta mean {fixed_delta_value}, sd={fixed_delta_sd}")
     return fixed_delta_value, fixed_delta_sd
+
+
+def apply_practice_delta_to_block(block_cfg, delta_mean, delta_sd, source_path=None):
+    try:
+        mean_value = float(delta_mean)
+    except (TypeError, ValueError):
+        mean_value = None
+
+    if mean_value is None or not math.isfinite(mean_value):
+        print(
+            f"[{block_condition_code(block_cfg)}] Practice delta mean unavailable; "
+            "using default fixed delta."
+        )
+        return block_cfg
+
+    try:
+        sd_value = float(delta_sd)
+    except (TypeError, ValueError):
+        sd_value = 0.0
+
+    if not math.isfinite(sd_value):
+        sd_value = 0.0
+
+    block_cfg["FIXED_DELTA_ON"] = True
+    block_cfg["STAIRCASE_ON"] = False
+    block_cfg["FIXED_DELTA_VALUE"] = mean_value
+    block_cfg["FIXED_DELTA_SD"] = sd_value
+
+    source_detail = f" from {source_path}" if source_path else ""
+    print(
+        f"[{block_condition_code(block_cfg)}] Using practice-calibrated delta "
+        f"mean {mean_value}, sd={sd_value}{source_detail}"
+    )
+    return block_cfg
 
 
 def prepare_block_state(block_cfg, participant_id):
@@ -2540,6 +2576,9 @@ def prepare_block_state(block_cfg, participant_id):
         vblack_props = None
 
     delta_step_up = None
+    if difficulty_mode == "staircase":
+        target_acc = block_cfg.get("TARGET_ACC", GLOBAL_AID_ACCURACY)
+        delta_step_up = DELTA_STEP_DOWN * (target_acc / (1.0 - target_acc))
 
     return {
         "difficulty_mode": difficulty_mode,
@@ -3421,8 +3460,9 @@ def run_trial_block(screen, clock, dot_layer, center, fonts, response_map, block
     write_csv_rows(block_csv_path, block_results)
     print(f"[{block_cfg['name']}] Results saved to: {block_csv_path}")
 
+    delta_summary = None
     if block_state["difficulty_mode"] == "staircase":
-        write_delta_summary(
+        delta_summary = write_delta_summary(
             output_dir=output_dir,
             participant_id=block_cfg["participant_id"],
             run_timestamp=run_timestamp,
@@ -3433,7 +3473,7 @@ def run_trial_block(screen, clock, dot_layer, center, fonts, response_map, block
             delta_step_up=block_state["delta_step_up_setting"],
         )
 
-    return block_results, global_trial_index
+    return block_results, global_trial_index, delta_summary
   
   
 # -----------------------------
@@ -3473,13 +3513,14 @@ def main():
     output_dir = "output"
 
     blocks_to_run = choose_blocks_to_run(args, participant_id)
+    practice_delta_summary = None
 
     if args.block is None:
         practice_cfg = copy_block_config(PRACTICE_BLOCK)
         practice_cfg["block_idx"] = 0
         practice_cfg["participant_id"] = participant_id
         show_block_intro(screen, clock, fonts, practice_cfg)
-        run_trial_block(
+        _, _, practice_delta_summary = run_trial_block(
             screen=screen,
             clock=clock,
             dot_layer=dot_layer,
@@ -3503,8 +3544,16 @@ def main():
         block_cfg = copy_block_config(blk)
         block_cfg["block_idx"] = b_idx
         block_cfg["participant_id"] = participant_id
+        if practice_delta_summary is not None:
+            practice_delta_mean, practice_delta_sd, practice_delta_path = practice_delta_summary
+            apply_practice_delta_to_block(
+                block_cfg,
+                practice_delta_mean,
+                practice_delta_sd,
+                source_path=practice_delta_path,
+            )
         show_block_intro(screen, clock, fonts, block_cfg)
-        block_results, global_trial_index = run_trial_block(
+        block_results, global_trial_index, _ = run_trial_block(
             screen=screen,
             clock=clock,
             dot_layer=dot_layer,
