@@ -295,9 +295,8 @@ def format_deadline_s(deadline_s) -> str:
 def time_pressure_instruction_slide(block_cfg) -> str:
     deadline_s = trial_deadline_s_for_block(block_cfg)
     deadline_text = format_deadline_s(deadline_s)
-    pressure_label = block_time_pressure_label(block_cfg)
     return (
-        f"This is a {pressure_label} block. Each trial has a response deadline of {deadline_text} seconds. "
+        f"In this block, each trial has a response deadline of {deadline_text} seconds. "
         "If you do not respond before the deadline, the trial will be recorded as incorrect. "
         "Please respond as accurately as possible while staying within the deadline."
     )
