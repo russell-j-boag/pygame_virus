@@ -85,7 +85,7 @@ Participants report perceived self accuracy after calibration and after each man
 
 ## Output fields
 
-The main trial and post-block output files include fields that identify the design cell:
+The main trial output files include fields that identify the design cell:
 
 | Field | Meaning |
 | --- | --- |
@@ -100,11 +100,10 @@ The main trial and post-block output files include fields that identify the desi
 | `reliability_phase_label` | Phase label such as `P1_95`, `P2_70`, or `P3_95` |
 | `aid_reliability_level` | Current aided-phase aid accuracy level |
 | `automation_reliability_group` | High/low grouping derived from aid reliability |
-| `postblock_scope` | Scope for post-block ratings; automation ratings use `full_automation_block` |
 | `trial_deadline_s` | Fixed response window in seconds |
 | `rt_s` | Response time in seconds; this is the canonical RT field |
 
-For automation post-block ratings, `reliability_phase_label` is `DROP95_70_95` and single-phase fields such as `reliability_phase_idx`, `trial_in_reliability_phase`, `aid_reliability_level`, and `automation_reliability_group` are left blank because the ratings refer to the complete aided block rather than one 400-trial phase.
+Post-block output files keep the block-level design fields plus `reliability_phase_label`, `postblock_scope`, `trial_deadline_s`, and the question/response fields. For automation post-block ratings, `reliability_phase_label` is `DROP95_70_95`; single-phase fields such as `reliability_phase_idx`, `trial_in_reliability_phase`, `aid_reliability_level`, and `automation_reliability_group` are omitted because the ratings refer to the complete aided block rather than one 400-trial phase.
 
 Single-block runs can be selected for the current task sequence:
 

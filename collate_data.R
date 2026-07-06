@@ -9,6 +9,12 @@ library("tidyverse")
 library("zoo")
 library("patchwork")
 
+postblock_single_phase_cols <- c(
+  "reliability_phase_idx",
+  "trial_in_reliability_phase",
+  "aid_reliability_level",
+  "automation_reliability_group"
+)
 
 # 1) First collate all choice-RT results files ----------------------------
 
@@ -140,7 +146,8 @@ print(latest_per_participant %>% select(participant_id, path, mtime))
 dat <- latest_per_participant %>%
   mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
   pull(data) %>%
-  bind_rows()
+  bind_rows() %>%
+  select(-any_of(postblock_single_phase_cols))
 
 # Inspect combined data
 head(dat)
@@ -204,6 +211,9 @@ if (!"response" %in% names(dat) && "response_percent" %in% names(dat)) {
   dat <- dat %>%
     mutate(response = response_percent)
 }
+
+dat <- dat %>%
+  select(-any_of(postblock_single_phase_cols))
 
 # Inspect combined data
 head(dat)
