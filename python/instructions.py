@@ -28,6 +28,8 @@ BG_INSTRUCTIONS = (40, 40, 40)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 LIGHT_GREY = (170, 170, 170)
+MASKED_AID_LABEL = "#####"
+MASKED_AID_COLOR = (35, 85, 125)
 VBLACK = BLACK
 VWHITE = WHITE
 DISH_FILL = (128, 128, 128)   # neutral mid-grey (halfway between black/white)
@@ -1099,7 +1101,7 @@ def draw_aid_recommendation_top_center(
 
     if show_value:
         phrase = f"{rec_label}"
-        col = COLOR_TOKENS_AID.get(rec_label, WHITE)
+        col = MASKED_AID_COLOR if rec_label == MASKED_AID_LABEL else COLOR_TOKENS_AID.get(rec_label, WHITE)
         img_main = font_main.render(phrase, True, col)
 
     total_height = img_label.get_height()
