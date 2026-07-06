@@ -952,6 +952,7 @@ def run_postblock_questionnaire(
     clock,
     font,
     participant_id=None,
+    run_timestamp=None,
     block_name=None,
     block_idx=None,
     block_cfg=None,
@@ -980,6 +981,7 @@ def run_postblock_questionnaire(
 
         responses.append({
             "participant_id": participant_id,
+            "run_timestamp": run_timestamp,
             "block": block_name,
             "block_idx": block_idx,
             **output_block_metadata(block_cfg),
@@ -3796,6 +3798,7 @@ def run_post_block_measures(screen, clock, fonts, participant_id, run_timestamp,
             clock,
             fonts["body"],
             participant_id=participant_id,
+            run_timestamp=run_timestamp,
             block_name=block_name,
             block_idx=block_idx,
             block_cfg=block_cfg,
