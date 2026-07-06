@@ -58,6 +58,7 @@ The main trial and post-block output files include fields that identify the desi
 
 | Field | Meaning |
 | --- | --- |
+| `participant_id`, `run_timestamp` | Participant number and timestamp identifying the run |
 | `key_black`, `key_white`, `keymap_flip` | Participant-specific D/J mapping for `V-BLACK` and `V-WHITE` |
 | `condition_code` | `PRACTICE`, `MANUAL`, `AIDFIRST`, or `STIMFIRST` |
 | `aid_condition` | `manual`, `aid_first`, or `stimulus_first` |

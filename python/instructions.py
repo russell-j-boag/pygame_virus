@@ -599,7 +599,14 @@ def draw_example_task_display(
         HEIGHT - S(80),
         key_black_name="D",
         key_white_name="J",
+    )
+    draw_bottom_phase_label(
+        screen,
+        font_small,
+        "Initial decision",
         phase_font=font_phase_label,
+        stimulus_bottom_y=center[1] + DISH_RADIUS,
+        prompt_rect=prompt_rect,
     )
 
     return {
@@ -996,21 +1003,85 @@ def display_label_for_aid_recommendation(response):
     return str(response)
 
 
+def response_key_prompt_rect(font, y_pos, key_black_name="D", key_white_name="J"):
+    meaning_by_key = {
+        key_black_name: "BLACK",
+        key_white_name: "WHITE",
+    }
+
+    def label_for_key(key_name: str):
+        return "V-BLACK" if meaning_by_key.get(key_name) == "BLACK" else "V-WHITE"
+
+    left_top = label_for_key("D")
+    right_top = label_for_key("J")
+    left_bottom = "Press D"
+    right_bottom = "Press J"
+
+    col_gap = 80
+    line_gap = 4
+    left_w = max(font.size(left_top)[0], font.size(left_bottom)[0])
+    right_w = max(font.size(right_top)[0], font.size(right_bottom)[0])
+    total_w = left_w + col_gap + right_w
+    total_h = font.get_height() * 2 + line_gap
+    return pygame.Rect(WIDTH // 2 - total_w // 2, y_pos, total_w, total_h)
+
+
+def default_stimulus_disc_bottom_y():
+    return HEIGHT // 2 + S(20) + DISH_RADIUS
+
+
+def phase_label_center_y(phase_font, prompt_rect, stimulus_bottom_y=None):
+    if stimulus_bottom_y is None:
+        stimulus_bottom_y = default_stimulus_disc_bottom_y()
+
+    label_half_h = phase_font.get_height() // 2
+    clearance = max(2, S(4))
+    target_y = int(round((stimulus_bottom_y + prompt_rect.top) / 2.0))
+    min_y = int(stimulus_bottom_y + label_half_h + clearance)
+    max_y = int(prompt_rect.top - label_half_h - clearance)
+
+    if min_y <= max_y:
+        return max(min_y, min(target_y, max_y))
+    return min(target_y, max_y)
+
+
+def draw_bottom_phase_label(
+    screen,
+    font,
+    label,
+    y_pos=None,
+    key_black_name="D",
+    key_white_name="J",
+    phase_font=None,
+    stimulus_bottom_y=None,
+    prompt_rect=None,
+):
+    if y_pos is None:
+        y_pos = HEIGHT - S(80)
+    if phase_font is None:
+        phase_font = load_font(FONT_BOLD, max(9, S(FONT_SMALL_BASE)))
+    if prompt_rect is None:
+        prompt_rect = response_key_prompt_rect(font, y_pos, key_black_name, key_white_name)
+
+    label_img = phase_font.render(label, True, DECISION_PHASE_COLOR)
+    label_rect = label_img.get_rect(
+        center=(WIDTH // 2, phase_label_center_y(phase_font, prompt_rect, stimulus_bottom_y))
+    )
+    screen.blit(label_img, label_rect)
+    return label_rect
+
+
 def draw_trial_prompt_stacked(
     screen,
     font_small,
     y_pos,
     key_black_name="D",
     key_white_name="J",
-    phase_font=None,
 ):
     """
     Bottom response prompt: D is fixed left and J is fixed right, while
     V-BLACK/V-WHITE meaning follows the participant-specific key mapping.
     """
-    if phase_font is None:
-        phase_font = load_font(FONT_BOLD, max(9, S(FONT_SMALL_BASE)))
-
     meaning_by_key = {
         key_black_name: "BLACK",
         key_white_name: "WHITE",
@@ -1031,9 +1102,8 @@ def draw_trial_prompt_stacked(
     rt_img = font_small.render(right_top, True, right_col)
     rb_img = font_small.render(right_bottom, True, right_col)
 
-    phase_w = phase_font.size("Initial decision")[0]
-    col_gap = max(S(160), phase_w + S(36))
-    line_gap = max(1, S(4))
+    col_gap = 80
+    line_gap = 4
     left_w = max(lt_img.get_width(), lb_img.get_width())
     right_w = max(rt_img.get_width(), rb_img.get_width())
     total_w = left_w + col_gap + right_w
@@ -1054,8 +1124,6 @@ def draw_trial_prompt_stacked(
         total_w,
         y_bottom + font_small.get_height() - y_top,
     )
-    phase_img = phase_font.render("Initial decision", True, DECISION_PHASE_COLOR)
-    screen.blit(phase_img, phase_img.get_rect(center=prompt_rect.center))
     return prompt_rect
 
 
