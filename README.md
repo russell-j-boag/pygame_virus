@@ -79,11 +79,13 @@ Practice trials are saved separately as `results_p###_<timestamp>_b00_PRACTICE.c
 
 Practice calibration also writes `delta_p###_<timestamp>_b00_PRACTICE.csv`. This summary records `staircase_target_accuracy`, excludes the first 20 burn-in trials, and reports the delta mean/SD from the final 40 practice trials that set the main-block difficulty. Legacy practice files without target metadata are interpreted as having used the previous 85% target by `check_calibration_stationarity.R`.
 
-Single-block runs require an explicit aid condition, for example:
+To run practice/calibration or one main condition on its own, specify the condition:
 
 ```r
-run_task(block = "AUTOMATION", aid_condition = "manual")
-run_task(block = "AUTOMATION", aid_condition = "stimulus_first")
+run_task(aid_condition = "practice")
+run_task(aid_condition = "manual")
+run_task(aid_condition = "aid_first")
+run_task(aid_condition = "stimulus_first")
 ```
 
 ## Screenshot review deck

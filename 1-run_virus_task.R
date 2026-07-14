@@ -10,7 +10,8 @@ run_instructions()
 # Run task
 run_task()
 
-# You can also run one block at a time:
-# run_task(block = "AUTOMATION", aid_condition = "manual")
-# run_task(block = "AUTOMATION", aid_condition = "aid_first")
-# run_task(block = "AUTOMATION", aid_condition = "stimulus_first")
+# You can also run one condition at a time:
+# run_task(aid_condition = "practice")
+# run_task(aid_condition = "manual")
+# run_task(aid_condition = "aid_first")
+# run_task(aid_condition = "stimulus_first")

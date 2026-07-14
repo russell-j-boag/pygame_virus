@@ -2437,80 +2437,39 @@ def draw_aid_recommendation_centered(
 
 def parse_cli_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--block",
-        type=str,
-        default=None,
-        help="Run only a selected block. Valid value: AUTOMATION",
-    )
+    selectable_conditions = set(SCHEDULED_AUTOMATION_AID_CONDITIONS) | {"practice"}
     parser.add_argument(
         "--aid-condition",
-        type=str,
+        type=str.lower,
+        choices=sorted(selectable_conditions),
         default=None,
-        help="Select an AUTOMATION block by aid condition.",
+        help="Run only practice/calibration or the selected scheduled main condition.",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    if args.block is not None:
-        args.block = args.block.upper()
-        if args.block != "AUTOMATION":
-            parser.error("--block must be AUTOMATION for scheduled main-block runs")
-
-    if args.aid_condition is not None and args.block is None:
-        parser.error("--aid-condition requires --block")
-    if args.aid_condition is not None and args.block != "AUTOMATION":
-        parser.error("--aid-condition can only be used with --block AUTOMATION")
-    if args.aid_condition is not None:
-        args.aid_condition = args.aid_condition.lower()
-        if args.aid_condition not in AUTOMATION_AID_CONDITIONS:
-            parser.error(
-                "--aid-condition must be one of: "
-                + ", ".join(sorted(AUTOMATION_AID_CONDITIONS))
-            )
-
-    return args
-
-def select_single_block(block_name: str, blocks_template, participant_id: int, aid_condition=None):
+def select_single_block_by_aid_condition(blocks_template, aid_condition):
     """
-    Return block configs matching block_name and, when needed, aid_condition.
-    Raises a clear error if the block is not available in BLOCKS.
+    Return the scheduled block config matching aid_condition.
     """
-    matches = [copy_block_config(b) for b in blocks_template if b["name"] == block_name]
+    matches = [
+        copy_block_config(b)
+        for b in blocks_template
+        if aid_condition_for_block(b) == aid_condition
+    ]
 
     if not matches:
-        available = sorted(set(b["name"] for b in blocks_template))
+        available = sorted(set(aid_condition_for_block(b) for b in blocks_template))
         raise ValueError(
-            f"Unknown block '{block_name}'. Available blocks in this script: {available}"
+            f"Unknown aid condition '{aid_condition}'. "
+            f"Available scheduled conditions: {available}"
         )
-
-    if aid_condition is not None:
-        matches = [
-            b for b in matches
-            if aid_condition_for_block(b) == aid_condition
-        ]
-        if not matches:
-            available = sorted(
-                set(
-                    aid_condition_for_block(b)
-                    for b in blocks_template
-                    if b["name"] == block_name
-                )
-            )
-            raise ValueError(
-                f"No {block_name} block has aid condition '{aid_condition}'. "
-                f"Available aid conditions for this block: {available}"
-            )
 
     if len(matches) > 1:
-        available = sorted(
-            set(aid_condition_for_block(b) for b in matches)
-        )
         raise ValueError(
-            f"Block '{block_name}' has multiple aid-condition variants. "
-            f"Pass --aid-condition with one of: {available}"
+            f"Aid condition '{aid_condition}' matches multiple scheduled blocks."
         )
 
-    return [copy_block_config(matches[0])]
+    return matches
 
 
 def create_display_surface():
@@ -2555,21 +2514,23 @@ def load_ui_fonts():
     }
 
 
-def choose_blocks_to_run(args, participant_id):
-    if args.block is not None:
-        blocks_to_run = select_single_block(
-            args.block,
+def resolve_run_selection(args, participant_id):
+    if args.aid_condition == "practice":
+        print("[SINGLE CONDITION MODE]", participant_id, "->", ["PRACTICE"])
+        return True, []
+
+    if args.aid_condition is not None:
+        blocks_to_run = select_single_block_by_aid_condition(
             BLOCKS,
-            participant_id=participant_id,
-            aid_condition=args.aid_condition,
+            args.aid_condition,
         )
         print(
-            "[SINGLE BLOCK MODE]",
+            "[SINGLE CONDITION MODE]",
             participant_id,
             "->",
             [block_condition_code(b) for b in blocks_to_run],
         )
-        return blocks_to_run
+        return False, blocks_to_run
 
     blocks_to_run = build_blocks_for_participant(participant_id, BLOCKS)
     print(
@@ -2578,7 +2539,7 @@ def choose_blocks_to_run(args, participant_id):
         "->",
         [block_condition_code(b) for b in blocks_to_run],
     )
-    return blocks_to_run
+    return True, blocks_to_run
 
 
 def resolve_difficulty_mode(block_cfg):
@@ -3745,10 +3706,10 @@ def main():
     global_trial_index = 0
     output_dir = "output"
 
-    blocks_to_run = choose_blocks_to_run(args, participant_id)
+    run_practice, blocks_to_run = resolve_run_selection(args, participant_id)
     practice_delta_summary = None
 
-    if args.block is None:
+    if run_practice:
         practice_cfg = copy_block_config(PRACTICE_BLOCK)
         practice_cfg["block_idx"] = 0
         practice_cfg["participant_id"] = participant_id
@@ -3772,6 +3733,9 @@ def main():
             practice_cfg["name"],
             block_cfg=practice_cfg,
         )
+
+        if not blocks_to_run:
+            quit_clean()
 
     for b_idx, blk in enumerate(blocks_to_run, start=1):
         block_cfg = copy_block_config(blk)

@@ -35,34 +35,17 @@ run_instructions <- function(
 
 # Helper function to run virus task
 run_task <- function(
-    block      = NULL,
     aid_condition = NULL,
     conda_env  = "r-pygame",
     script     = "python/virus_task.py",
     extra_args = NULL
 ) {
-  
-  valid_blocks <- c(
-    "AUTOMATION"
-  )
-  valid_aid_conditions <- c("manual", "aid_first", "stimulus_first")
+
+  valid_aid_conditions <- c("practice", "manual", "aid_first", "stimulus_first")
   if (!is.null(aid_condition)) {
     aid_condition <- tolower(aid_condition)
   }
-  
-  # Validate block if provided
-  if (!is.null(block) && !block %in% valid_blocks) {
-    stop(
-      "Invalid block. Must be one of: ",
-      paste(valid_blocks, collapse = ", ")
-    )
-  }
-  if (!is.null(aid_condition) && is.null(block)) {
-    stop("'aid_condition' can only be used when 'block' is specified.")
-  }
-  if (!is.null(aid_condition) && block != "AUTOMATION") {
-    stop("'aid_condition' can only be used with block = 'AUTOMATION'.")
-  }
+
   if (!is.null(aid_condition) && !aid_condition %in% valid_aid_conditions) {
     stop(
       "Invalid aid_condition. Must be one of: ",
@@ -84,13 +67,8 @@ run_task <- function(
   
   # Base args
   args <- c(script)
-  
-  # Add block argument
-  if (!is.null(block)) {
-    args <- c(args, "--block", block)
-  }
-  
-  # Add aid-condition selector for scheduled automation-block variants
+
+  # Add selector for a single scheduled main condition
   if (!is.null(aid_condition)) {
     args <- c(args, "--aid-condition", aid_condition)
   }
