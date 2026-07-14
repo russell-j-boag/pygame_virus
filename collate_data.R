@@ -140,6 +140,7 @@ current_trial_all_cols <- c(
   "trial",
   "global_trial",
   "difficulty_mode",
+  "staircase_target_accuracy",
   "delta_fixed_mean",
   "delta_fixed_sd",
   "delta_stair_realised",

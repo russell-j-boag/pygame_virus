@@ -35,6 +35,7 @@ PRACTICE_N_TRIALS = 60
 GLOBAL_FIXED_DELTA = 0.040324718919
 GLOBAL_FIXED_DELTA_SD = 0.014615991726
 AUTOMATION_PRE_PHASE_MS = 1000
+CALIBRATION_TARGET_ACCURACY = 0.75
 GLOBAL_AID_ACCURACY = 0.85
 SCHEDULED_AUTOMATION_AID_CONDITIONS = {
     "manual": "Manual",
@@ -114,6 +115,7 @@ PRACTICE_BLOCK = dict(
     AID_TRANSPARENCY="none",
     AID_CONDITION="manual",
     STAIRCASE_ON=True,
+    TARGET_ACC=CALIBRATION_TARGET_ACCURACY,
     FIXED_DELTA_ON=False,
     FIXED_DELTA_VALUE=GLOBAL_FIXED_DELTA,
     FIXED_DELTA_SD=GLOBAL_FIXED_DELTA_SD,
@@ -2651,10 +2653,19 @@ def prepare_block_state(block_cfg, participant_id):
     else:
         vblack_props = None
 
+    staircase_target_accuracy = None
     delta_step_up = None
     if difficulty_mode == "staircase":
-        target_acc = block_cfg.get("TARGET_ACC", GLOBAL_AID_ACCURACY)
-        delta_step_up = DELTA_STEP_DOWN * (target_acc / (1.0 - target_acc))
+        staircase_target_accuracy = float(
+            block_cfg.get("TARGET_ACC", CALIBRATION_TARGET_ACCURACY)
+        )
+        if not 0.0 < staircase_target_accuracy < 1.0:
+            raise ValueError(
+                f"TARGET_ACC must be between 0 and 1 for block '{block_cfg['name']}'"
+            )
+        delta_step_up = DELTA_STEP_DOWN * (
+            staircase_target_accuracy / (1.0 - staircase_target_accuracy)
+        )
 
     return {
         "difficulty_mode": difficulty_mode,
@@ -2662,6 +2673,7 @@ def prepare_block_state(block_cfg, participant_id):
         "fixed_delta_sd": fixed_delta_sd,
         "aid_transparency": transparency,
         "vblack_props": vblack_props,
+        "staircase_target_accuracy": staircase_target_accuracy,
         "delta_mean": DELTA_INIT,
         "deltas_realised": [],
         "delta_step_up_setting": delta_step_up,
@@ -3184,6 +3196,7 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "trial": trial_number,
         "global_trial": global_trial_index,
         "difficulty_mode": difficulty_mode,
+        "staircase_target_accuracy": block_state["staircase_target_accuracy"],
         "delta_fixed_mean": block_state["fixed_delta_mean"] if difficulty_mode == "fixed_delta" else None,
         "delta_fixed_sd": block_state["fixed_delta_sd"] if difficulty_mode == "fixed_delta" else None,
         "delta_stair_realised": delta_realised if difficulty_mode == "staircase" else None,
@@ -3411,7 +3424,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
         block_state,
         correct_for_feedback,
         trial_number,
-        block_cfg.get("TARGET_ACC", GLOBAL_AID_ACCURACY),
+        block_state["staircase_target_accuracy"],
     )
 
     row = build_trial_row(
@@ -3458,7 +3471,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
 
 
 def write_delta_summary(output_dir, participant_id, run_timestamp, block_name, block_idx, deltas_realised,
-                        delta_mean, delta_step_up):
+                        delta_mean, delta_step_up, staircase_target_accuracy):
     delta_out_path = os.path.join(
         output_dir,
         f"delta_p{participant_id:03d}_{run_timestamp}_b{block_idx:02d}_{block_name}.csv"
@@ -3494,6 +3507,7 @@ def write_delta_summary(output_dir, participant_id, run_timestamp, block_name, b
         "n_trials_post_burnin": len(deltas_post_burnin),
         "summary_last_n_setting": summary_last_n_used,
         "n_trials_summarised": len(deltas_summary),
+        "staircase_target_accuracy": staircase_target_accuracy,
         "delta_init": DELTA_INIT,
         "delta_sd_setting": DELTA_SD,
         "delta_step_down": DELTA_STEP_DOWN,
@@ -3684,6 +3698,7 @@ def run_trial_block(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             deltas_realised=block_state["deltas_realised"],
             delta_mean=block_state["delta_mean"],
             delta_step_up=block_state["delta_step_up_setting"],
+            staircase_target_accuracy=block_state["staircase_target_accuracy"],
         )
 
     return block_results, global_trial_index, delta_summary

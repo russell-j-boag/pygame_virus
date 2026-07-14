@@ -24,7 +24,7 @@ The task uses a three-block within-participant design after a combined practice/
 | `AIDFIRST` | Automation | fixation -> aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> masked final preview 1000 ms -> fixation -> HUD-only decision 2 -> feedback | 260 |
 | `STIMFIRST` | Automation | fixation -> masked aid preview 1000 ms -> fixation -> stimulus until decision 1 -> fixation -> aid final preview 1000 ms -> fixation -> HUD-only decision 2 -> feedback | 260 |
 
-The `PRACTICE` block uses an adaptive staircase that starts at the prior across-participant fixed-delta distribution (`delta = 0.040324718919`, SD `0.014615991726`). The first 20 practice trials are treated as burn-in with a larger annealed step size, and the final 40 trials are used to calculate the participant-specific delta mean and SD used for all subsequent main blocks. Single-block runs that skip practice use the same prior fixed-delta defaults directly; `derive_prior_calibration_delta.R` reproduces these fallback constants from the local prior data file. The automated aid uses a single global reliability of 85% in the `AIDFIRST` and `STIMFIRST` blocks. The `PRACTICE` and `MANUAL` blocks show the masked aid string `#####` instead of a real recommendation during masked preview screens. Real aid recommendations display as `BLACK` or `WHITE`; these indicate that the aid recommends the `V-BLACK` or `V-WHITE` response, respectively. Final-decision response screens show only the progress HUD and response prompt.
+The `PRACTICE` block uses an adaptive staircase targeting 75% final-decision accuracy. It starts at the prior across-participant fixed-delta distribution (`delta = 0.040324718919`, SD `0.014615991726`). The first 20 practice trials are treated as burn-in with a larger annealed step size, and the final 40 trials are used to calculate the participant-specific delta mean and SD used for all subsequent main blocks. Single-block runs that skip practice use the same prior fixed-delta defaults directly; `derive_prior_calibration_delta.R` reproduces these fallback constants from the local prior data file. The participant calibration target is separate from the automated aid, which retains a single global reliability of 85% in the `AIDFIRST` and `STIMFIRST` blocks. The `PRACTICE` and `MANUAL` blocks show the masked aid string `#####` instead of a real recommendation during masked preview screens. Real aid recommendations display as `BLACK` or `WHITE`; these indicate that the aid recommends the `V-BLACK` or `V-WHITE` response, respectively. Final-decision response screens show only the progress HUD and response prompt.
 
 Responses are made with the `D` and `J` keys. The standard key mapping is `D = V-BLACK` and `J = V-WHITE`; the flipped key mapping is `J = V-BLACK` and `D = V-WHITE`. On the second decision screen, participants use the same keys to confirm their first response or switch to the other response.
 
@@ -63,6 +63,7 @@ The main trial and post-block output files include fields that identify the desi
 | `condition_code` | `PRACTICE`, `MANUAL`, `AIDFIRST`, or `STIMFIRST` |
 | `aid_condition` | `manual`, `aid_first`, or `stimulus_first` |
 | `aid_accuracy_setting` | `0.85` for aided automation blocks, or blank for `MANUAL` |
+| `staircase_target_accuracy` | `0.75` for `PRACTICE` staircase trials, or blank for fixed-difficulty main blocks |
 | `trial_deadline_s` | Blank in the current self-paced design |
 | `preview_display`, `preview_label` | Display type and visible value shown on the initial preview screen |
 | `decision1_display`, `decision2_display` | Display type for each decision phase; second decisions use `blank_response` |
@@ -76,7 +77,7 @@ The current schema intentionally omits older compatibility aliases such as `cond
 
 Practice trials are saved separately as `results_p###_<timestamp>_b00_PRACTICE.csv` with `condition_code = PRACTICE`. They are not included in `b00_ALL.csv`, final performance scoring, or post-block measures.
 
-Practice calibration also writes `delta_p###_<timestamp>_b00_PRACTICE.csv`. This summary excludes the first 20 burn-in trials and reports the delta mean/SD from the final 40 practice trials that set the main-block difficulty.
+Practice calibration also writes `delta_p###_<timestamp>_b00_PRACTICE.csv`. This summary records `staircase_target_accuracy`, excludes the first 20 burn-in trials, and reports the delta mean/SD from the final 40 practice trials that set the main-block difficulty. Legacy practice files without target metadata are interpreted as having used the previous 85% target by `check_calibration_stationarity.R`.
 
 Single-block runs require an explicit aid condition, for example:
 

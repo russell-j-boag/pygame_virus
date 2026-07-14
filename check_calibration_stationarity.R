@@ -6,7 +6,7 @@ library("broom")
 library("zoo")
 library("readr")
 
-TARGET_ACC <- 0.85
+LEGACY_TARGET_ACC <- 0.85
 BURNIN_TRIALS <- 20
 
 files <- list.files(
@@ -32,6 +32,10 @@ if (!"condition_code" %in% names(dat) && "block" %in% names(dat)) {
   dat <- dat %>%
     mutate(condition_code = block)
 }
+if (!"staircase_target_accuracy" %in% names(dat)) {
+  dat <- dat %>%
+    mutate(staircase_target_accuracy = NA_real_)
+}
 
 # Keep only practice calibration staircase trials
 cal <- dat %>%
@@ -46,6 +50,24 @@ cal <- dat %>%
 if (nrow(cal) == 0) {
   message("No practice calibration trials found in latest results file; skipping stationarity checks.")
   quit(save = "no", status = 0)
+}
+
+target_values <- unique(
+  suppressWarnings(as.numeric(cal$staircase_target_accuracy))
+)
+target_values <- target_values[is.finite(target_values)]
+
+if (length(target_values) == 0) {
+  TARGET_ACC <- LEGACY_TARGET_ACC
+  message("No staircase target recorded; assuming legacy target of ", TARGET_ACC, ".")
+} else if (length(target_values) == 1) {
+  TARGET_ACC <- target_values[[1]]
+  message("Using recorded staircase target of ", TARGET_ACC, ".")
+} else {
+  stop(
+    "Practice file contains multiple staircase targets: ",
+    paste(sort(target_values), collapse = ", ")
+  )
 }
 
 # Define burn-in period
