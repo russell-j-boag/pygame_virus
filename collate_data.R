@@ -8,13 +8,31 @@ library("readr")
 library("stringr")
 library("tibble")
 
+# Usage:
+#   Rscript collate_data.R [input_dir] [output_dir]
 
-read_latest_participant_csvs <- function(pattern) {
+args <- commandArgs(trailingOnly = TRUE)
+
+INPUT_DIR <- if (length(args) >= 1) args[[1]] else "output"
+OUTPUT_DIR <- if (length(args) >= 2) args[[2]] else "data"
+
+if (!dir.exists(INPUT_DIR)) {
+  stop("Input directory does not exist: ", INPUT_DIR, call. = FALSE)
+}
+
+dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
+
+
+read_latest_participant_csvs <- function(pattern, label) {
   files <- list.files(
-    "output",
+    INPUT_DIR,
     pattern = pattern,
     full.names = TRUE
   )
+
+  if (!length(files)) {
+    stop("No ", label, " files found in ", INPUT_DIR, call. = FALSE)
+  }
 
   file_tbl <- tibble(path = files) %>%
     mutate(
@@ -22,6 +40,10 @@ read_latest_participant_csvs <- function(pattern) {
       participant_id = str_extract(file_name, "(?<=results_)[^_]+"),
       mtime = file.info(path)$mtime
     )
+
+  if (any(is.na(file_tbl$participant_id))) {
+    stop("Could not extract participant IDs from all ", label, " filenames.", call. = FALSE)
+  }
 
   latest_per_participant <- file_tbl %>%
     group_by(participant_id) %>%
@@ -240,7 +262,10 @@ current_slider_cols <- c(
 
 # 1) Collate all choice-RT results files ----------------------------------
 
-dat <- read_latest_participant_csvs("^results_.*_b00_ALL\\.csv$") %>%
+dat <- read_latest_participant_csvs(
+  "^results_.*_b00_ALL\\.csv$",
+  "complete trial"
+) %>%
   ensure_design_current_columns() %>%
   ensure_trial_current_columns()
 
@@ -252,7 +277,7 @@ tail(trial_all)
 str(trial_all)
 length(unique(trial_all$participant_id))
 
-write_csv(trial_all, "data/data_virus_all.csv")
+write_csv(trial_all, file.path(OUTPUT_DIR, "data_virus_all.csv"))
 
 trial_summary <- dat %>%
   select_current_cols(current_trial_summary_cols)
@@ -261,12 +286,15 @@ head(trial_summary)
 tail(trial_summary)
 str(trial_summary)
 
-write_csv(trial_summary, "data/data_virus.csv")
+write_csv(trial_summary, file.path(OUTPUT_DIR, "data_virus.csv"))
 
 
 # 2) Collate post-block questionnaire files --------------------------------
 
-postblock_all <- read_latest_participant_csvs("^results_.*_b00_POSTBLOCK_ALL\\.csv$") %>%
+postblock_all <- read_latest_participant_csvs(
+  "^results_.*_b00_POSTBLOCK_ALL\\.csv$",
+  "complete post-block questionnaire"
+) %>%
   ensure_design_current_columns() %>%
   select_current_cols(current_postblock_cols)
 
@@ -274,12 +302,15 @@ head(postblock_all)
 tail(postblock_all)
 str(postblock_all)
 
-write_csv(postblock_all, "data/data_virus_postblock_all.csv")
+write_csv(postblock_all, file.path(OUTPUT_DIR, "data_virus_postblock_all.csv"))
 
 
 # 3) Collate post-block accuracy slider files ------------------------------
 
-slider_all <- read_latest_participant_csvs("^results_.*_b00_POSTBLOCK_SLIDERS_ALL\\.csv$") %>%
+slider_all <- read_latest_participant_csvs(
+  "^results_.*_b00_POSTBLOCK_SLIDERS_ALL\\.csv$",
+  "complete post-block slider"
+) %>%
   ensure_design_current_columns() %>%
   ensure_slider_current_columns() %>%
   select_current_cols(current_slider_cols)
@@ -288,4 +319,4 @@ head(slider_all)
 tail(slider_all)
 str(slider_all)
 
-write_csv(slider_all, "data/data_virus_sliders_all.csv")
+write_csv(slider_all, file.path(OUTPUT_DIR, "data_virus_sliders_all.csv"))
