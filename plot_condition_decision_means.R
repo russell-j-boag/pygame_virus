@@ -1,4 +1,4 @@
-# Plot individual and cohort decision accuracy, self-ratings, and RT by condition.
+# Plot individual and cohort decision accuracy, self-ratings, and correct RT.
 #
 # Usage:
 #   Rscript plot_condition_decision_means.R [input_dir] [output_dir] \
@@ -52,6 +52,8 @@ STUDY_TITLE <- "Aid Onset Study"
 GLOBAL_AID_ACCURACY <- 0.85
 CONDITION_CODES <- c("PRACTICE", "MANUAL", "AIDFIRST", "STIMFIRST")
 CONDITION_LABELS <- c("Practice", "Manual", "Aid first", "Stimulus first")
+AID_OUTCOME_LEVELS <- c("Aid correct", "Manual", "Aid incorrect")
+AID_OUTCOME_FACET_LEVELS <- c("Aid first", "Stimulus first")
 DECISION_LEVELS <- c("Decision 1", "Decision 2")
 DECISION_COLOURS <- c(
   "Decision 1" = "#0072B2",
@@ -109,6 +111,11 @@ as_binary <- function(x) {
     x_chr %in% c("false", "f", "0") ~ 0,
     TRUE ~ suppressWarnings(as.numeric(x_chr))
   )
+}
+
+mean_finite <- function(x) {
+  x <- x[is.finite(x)]
+  if (length(x)) mean(x) else NA_real_
 }
 
 latest_participant_files <- function(pattern, label) {
@@ -292,8 +299,12 @@ make_participant_summary <- function(dat) {
       n_trials = n(),
       decision1_accuracy = mean(decision1_correct_num, na.rm = TRUE),
       decision2_accuracy = mean(decision2_correct_num, na.rm = TRUE),
-      decision1_rt = mean(decision1_rt_valid, na.rm = TRUE),
-      decision2_rt = mean(decision2_rt_valid, na.rm = TRUE),
+      decision1_rt = mean_finite(
+        decision1_rt_valid[decision1_correct_num == 1]
+      ),
+      decision2_rt = mean_finite(
+        decision2_rt_valid[decision2_correct_num == 1]
+      ),
       changed_response_prop = mean(changed_response_num, na.rm = TRUE),
       empirical_aid_accuracy = if (all(is.na(aid_correct_num))) {
         NA_real_
@@ -318,19 +329,14 @@ make_participant_summary <- function(dat) {
 
 make_participant_change_rt_summary <- function(dat) {
   dat %>%
-    filter(
-      changed_response_num %in% c(0, 1),
-      is.finite(decision1_rt_valid),
-      is.finite(decision2_rt_valid)
-    ) %>%
+    filter(changed_response_num %in% c(0, 1)) %>%
     mutate(
       change_status = if_else(
         changed_response_num == 1,
         "Change of mind",
         "No change of mind"
       ),
-      change_status = factor(change_status, levels = CHANGE_STATUS_LEVELS),
-      rt_difference = decision2_rt_valid - decision1_rt_valid
+      change_status = factor(change_status, levels = CHANGE_STATUS_LEVELS)
     ) %>%
     group_by(
       participant_id,
@@ -340,12 +346,24 @@ make_participant_change_rt_summary <- function(dat) {
     ) %>%
     summarise(
       n_trials = n(),
-      decision1_rt = mean(decision1_rt_valid),
-      decision2_rt = mean(decision2_rt_valid),
-      mean_rt_difference = mean(rt_difference),
+      n_decision1_correct_rt = sum(
+        decision1_correct_num == 1 & is.finite(decision1_rt_valid),
+        na.rm = TRUE
+      ),
+      n_decision2_correct_rt = sum(
+        decision2_correct_num == 1 & is.finite(decision2_rt_valid),
+        na.rm = TRUE
+      ),
+      decision1_rt = mean_finite(
+        decision1_rt_valid[decision1_correct_num == 1]
+      ),
+      decision2_rt = mean_finite(
+        decision2_rt_valid[decision2_correct_num == 1]
+      ),
       .groups = "drop"
     ) %>%
     mutate(
+      mean_rt_difference = decision2_rt - decision1_rt,
       condition = factor(condition, levels = CONDITION_LABELS),
       change_status = factor(change_status, levels = CHANGE_STATUS_LEVELS)
     )
@@ -1065,7 +1083,7 @@ make_rt_plot <- function(rt_dat, title, subtitle) {
     coord_cartesian(ylim = c(0, max(rt_dat$label_y) * 1.08), clip = "off") +
     labs(
       x = "Condition",
-      y = "Mean RT (s)",
+      y = "Mean correct RT (s)",
       title = str_wrap(title, width = 66),
       subtitle = str_wrap(subtitle, width = 88)
     ) +
@@ -1106,6 +1124,10 @@ make_change_dynamics_plot <- function(
       ),
       label_vjust = if_else(decision == "Decision 1", 0, 1)
     )
+  rt_lines <- rt_dat %>%
+    group_by(condition, decision) %>%
+    filter(sum(is.finite(mean_rt)) > 1) %>%
+    ungroup()
 
   p_rt <- ggplot(
     rt_dat,
@@ -1123,7 +1145,11 @@ make_change_dynamics_plot <- function(
   }
 
   p_rt <- p_rt +
-    geom_line(aes(group = decision), linewidth = 0.85) +
+    geom_line(
+      data = rt_lines,
+      aes(group = decision),
+      linewidth = 0.85
+    ) +
     geom_point(size = 3) +
     geom_text(
       aes(
@@ -1147,7 +1173,7 @@ make_change_dynamics_plot <- function(
     ) +
     labs(
       x = "Change-of-mind status",
-      y = "Mean RT (s)",
+      y = "Mean correct RT (s)",
       title = str_wrap(title, width = 72),
       subtitle = str_wrap(subtitle, width = 100)
     ) +
@@ -1192,6 +1218,10 @@ make_change_dynamics_plot <- function(
       ),
       label_vjust = if_else(change_status == "No change of mind", 0, 1)
     )
+  difference_lines <- difference_dat %>%
+    group_by(change_status) %>%
+    filter(sum(is.finite(mean_rt_difference)) > 1) %>%
+    ungroup()
 
   difference_limits <- range(
     c(
@@ -1230,7 +1260,11 @@ make_change_dynamics_plot <- function(
   }
 
   p_difference <- p_difference +
-    geom_line(aes(group = change_status), linewidth = 0.85) +
+    geom_line(
+      data = difference_lines,
+      aes(group = change_status),
+      linewidth = 0.85
+    ) +
     geom_point(size = 3) +
     geom_text(
       aes(
@@ -1246,12 +1280,13 @@ make_change_dynamics_plot <- function(
     coord_cartesian(ylim = difference_limits, clip = "off") +
     labs(
       x = "Condition",
-      y = "Mean RT difference (s)",
-      title = "Decision 2 - Decision 1 RT",
+      y = "Mean correct RT difference (s)",
+      title = "Decision 2 - Decision 1 mean correct RT",
       caption = str_wrap(
         paste0(
-          "Differences are calculated within trial before averaging; ",
-          "negative values mean Decision 2 was faster."
+          "For each participant, the Decision 1 correct-trial mean is ",
+          "subtracted from the Decision 2 correct-trial mean; negative ",
+          "values mean correct Decision 2 responses were faster."
         ),
         width = 105
       )
@@ -1507,7 +1542,7 @@ make_individual_plots <- function(
   )
   p_rt <- make_rt_plot(
     rt_dat,
-    paste0(participant_label, " decision RT by condition"),
+    paste0(participant_label, " decision correct RT by condition"),
     common_subtitle
   )
   p_rt_change <- make_change_dynamics_plot(
@@ -1516,7 +1551,7 @@ make_individual_plots <- function(
     accuracy_difference_dat,
     paste0(
       participant_label,
-      " decision RT by change-of-mind status and overall accuracy change"
+      " decision correct RT by change-of-mind status and overall accuracy change"
     ),
     common_subtitle
   )
@@ -1539,7 +1574,7 @@ make_individual_plots <- function(
         STUDY_TITLE,
         ": ",
         participant_label,
-        " accuracy/self-ratings, response changes, and RT"
+        " accuracy/self-ratings, response changes, and correct RT"
       )
     )
 
@@ -1636,7 +1671,24 @@ make_group_plots <- function(
       mean_accuracy_difference = mean
     )
 
-  change_status_complete_n <- participant_change_rt_summary %>%
+  change_rt_complete_n <- participant_change_rt_long %>%
+    filter(is.finite(mean_rt)) %>%
+    group_by(change_status, decision, participant_id) %>%
+    summarise(n_conditions = n_distinct(condition), .groups = "drop") %>%
+    filter(n_conditions == length(CONDITION_LABELS)) %>%
+    count(change_status, decision, name = "n_complete") %>%
+    complete(
+      change_status = factor(
+        CHANGE_STATUS_LEVELS,
+        levels = CHANGE_STATUS_LEVELS
+      ),
+      decision = factor(DECISION_LEVELS, levels = DECISION_LEVELS),
+      fill = list(n_complete = 0)
+    ) %>%
+    arrange(change_status, decision)
+
+  change_difference_complete_n <- participant_change_rt_summary %>%
+    filter(is.finite(mean_rt_difference)) %>%
     group_by(change_status, participant_id) %>%
     summarise(n_conditions = n_distinct(condition), .groups = "drop") %>%
     filter(n_conditions == length(CONDITION_LABELS)) %>%
@@ -1649,6 +1701,26 @@ make_group_plots <- function(
       fill = list(n_complete = 0)
     ) %>%
     arrange(change_status)
+
+  change_rt_n_text <- change_rt_complete_n %>%
+    transmute(
+      label = paste0(
+        as.character(change_status),
+        " ",
+        as.character(decision),
+        " n = ",
+        n_complete
+      )
+    ) %>%
+    pull(label) %>%
+    paste(collapse = ", ")
+
+  change_difference_n_text <- change_difference_complete_n %>%
+    transmute(
+      label = paste0(as.character(change_status), " n = ", n_complete)
+    ) %>%
+    pull(label) %>%
+    paste(collapse = ", ")
 
   rating_summary <- summarise_repeated(
     participant_ratings %>% mutate(rating_set = "Self-rating"),
@@ -1721,20 +1793,16 @@ make_group_plots <- function(
 
   p_rt <- make_rt_plot(
     rt_summary,
-    paste0(plot_label, " group decision RT by condition"),
+    paste0(plot_label, " group decision correct RT by condition"),
     common_subtitle
   )
 
   rt_change_subtitle <- paste0(
     "Participant means with Morey-Cousineau within-participant SEs across 4 ",
-    "conditions; complete participants: no change of mind n = ",
-    change_status_complete_n$n_complete[
-      change_status_complete_n$change_status == "No change of mind"
-    ],
-    ", change of mind n = ",
-    change_status_complete_n$n_complete[
-      change_status_complete_n$change_status == "Change of mind"
-    ],
+    "conditions; complete participants for correct RT: ",
+    change_rt_n_text,
+    "; correct-RT difference: ",
+    change_difference_n_text,
     "; accuracy difference n = ",
     n_participants,
     "; ",
@@ -1746,7 +1814,7 @@ make_group_plots <- function(
     change_accuracy_difference_summary,
     paste0(
       plot_label,
-      " group decision RT by change-of-mind status and overall accuracy change"
+      " group decision correct RT by change-of-mind status and overall accuracy change"
     ),
     rt_change_subtitle
   )
@@ -1773,7 +1841,7 @@ make_group_plots <- function(
         STUDY_TITLE,
         ": ",
         plot_label,
-        " group accuracy/self-ratings, response changes, and RT"
+        " group accuracy/self-ratings, response changes, and correct RT"
       )
     )
 
@@ -1791,6 +1859,316 @@ make_group_plots <- function(
     change_rt_summary = change_rt_summary,
     change_rt_difference_summary = change_rt_difference_summary,
     change_accuracy_difference_summary = change_accuracy_difference_summary
+  )
+}
+
+make_participant_aid_outcome_summaries <- function(trial_dat) {
+  decision_trials <- trial_dat %>%
+    pivot_longer(
+      cols = matches("^decision[12]_(correct_num|rt_valid)$"),
+      names_to = c("decision_number", ".value"),
+      names_pattern = "^decision([12])_(correct_num|rt_valid)$"
+    ) %>%
+    mutate(
+      decision = factor(
+        paste("Decision", decision_number),
+        levels = DECISION_LEVELS
+      )
+    )
+
+  aided_accuracy <- decision_trials %>%
+    filter(
+      as.character(condition) %in% AID_OUTCOME_FACET_LEVELS,
+      aid_correct_num %in% c(0, 1),
+      is.finite(correct_num)
+    ) %>%
+    mutate(
+      facet_condition = as.character(condition),
+      aid_outcome = if_else(
+        aid_correct_num == 1,
+        "Aid correct",
+        "Aid incorrect"
+      )
+    ) %>%
+    group_by(participant_id, facet_condition, aid_outcome, decision) %>%
+    summarise(
+      mean_accuracy = mean(correct_num),
+      n_trials = n(),
+      .groups = "drop"
+    )
+
+  manual_accuracy <- decision_trials %>%
+    filter(
+      as.character(condition) == "Manual",
+      is.finite(correct_num)
+    ) %>%
+    group_by(participant_id, decision) %>%
+    summarise(
+      mean_accuracy = mean(correct_num),
+      n_trials = n(),
+      .groups = "drop"
+    ) %>%
+    crossing(facet_condition = AID_OUTCOME_FACET_LEVELS) %>%
+    mutate(aid_outcome = "Manual")
+
+  aided_rt <- decision_trials %>%
+    filter(
+      as.character(condition) %in% AID_OUTCOME_FACET_LEVELS,
+      aid_correct_num %in% c(0, 1),
+      correct_num == 1,
+      is.finite(rt_valid)
+    ) %>%
+    mutate(
+      facet_condition = as.character(condition),
+      aid_outcome = if_else(
+        aid_correct_num == 1,
+        "Aid correct",
+        "Aid incorrect"
+      )
+    ) %>%
+    group_by(participant_id, facet_condition, aid_outcome, decision) %>%
+    summarise(
+      mean_rt = mean(rt_valid),
+      n_trials = n(),
+      .groups = "drop"
+    )
+
+  manual_rt <- decision_trials %>%
+    filter(
+      as.character(condition) == "Manual",
+      correct_num == 1,
+      is.finite(rt_valid)
+    ) %>%
+    group_by(participant_id, decision) %>%
+    summarise(
+      mean_rt = mean(rt_valid),
+      n_trials = n(),
+      .groups = "drop"
+    ) %>%
+    crossing(facet_condition = AID_OUTCOME_FACET_LEVELS) %>%
+    mutate(aid_outcome = "Manual")
+
+  list(
+    accuracy = bind_rows(aided_accuracy, manual_accuracy) %>%
+      mutate(
+        facet_condition = factor(
+          facet_condition,
+          levels = AID_OUTCOME_FACET_LEVELS
+        ),
+        aid_outcome = factor(aid_outcome, levels = AID_OUTCOME_LEVELS),
+        decision = factor(decision, levels = DECISION_LEVELS)
+      ),
+    rt = bind_rows(aided_rt, manual_rt) %>%
+      mutate(
+        facet_condition = factor(
+          facet_condition,
+          levels = AID_OUTCOME_FACET_LEVELS
+        ),
+        aid_outcome = factor(aid_outcome, levels = AID_OUTCOME_LEVELS),
+        decision = factor(decision, levels = DECISION_LEVELS)
+      )
+  )
+}
+
+format_aid_outcome_complete_n <- function(summary_dat) {
+  complete_n <- summary_dat %>%
+    distinct(facet_condition, decision, n_participants) %>%
+    arrange(facet_condition, decision)
+
+  if (n_distinct(complete_n$n_participants) == 1) {
+    return(
+      paste0(
+        "n = ",
+        first(complete_n$n_participants),
+        " for each decision in each facet"
+      )
+    )
+  }
+
+  complete_n %>%
+    transmute(
+      label = paste0(
+        as.character(facet_condition),
+        " ",
+        as.character(decision),
+        " n = ",
+        n_participants
+      )
+    ) %>%
+    pull(label) %>%
+    paste(collapse = "; ")
+}
+
+make_group_aid_outcome_plots <- function(trial_dat, plot_label) {
+  participant <- make_participant_aid_outcome_summaries(trial_dat)
+
+  acc_summary <- summarise_repeated_complete(
+    participant$accuracy,
+    "mean_accuracy",
+    "aid_outcome",
+    c("facet_condition", "decision"),
+    expected_conditions = AID_OUTCOME_LEVELS
+  ) %>%
+    mutate(
+      facet_condition = factor(
+        facet_condition,
+        levels = AID_OUTCOME_FACET_LEVELS
+      ),
+      aid_outcome = factor(aid_outcome, levels = AID_OUTCOME_LEVELS),
+      decision = factor(decision, levels = DECISION_LEVELS),
+      mean_accuracy = mean
+    )
+
+  rt_summary <- summarise_repeated_complete(
+    participant$rt,
+    "mean_rt",
+    "aid_outcome",
+    c("facet_condition", "decision"),
+    expected_conditions = AID_OUTCOME_LEVELS
+  ) %>%
+    mutate(
+      facet_condition = factor(
+        facet_condition,
+        levels = AID_OUTCOME_FACET_LEVELS
+      ),
+      aid_outcome = factor(aid_outcome, levels = AID_OUTCOME_LEVELS),
+      decision = factor(decision, levels = DECISION_LEVELS),
+      mean_rt = mean
+    )
+
+  acc_limits <- get_axis_limits(
+    acc_summary$mean_accuracy,
+    acc_summary$se,
+    bounds = c(0, 1),
+    pad = 0.18
+  )
+  rt_limits <- get_axis_limits(
+    rt_summary$mean_rt,
+    rt_summary$se,
+    bounds = c(0, Inf),
+    pad = 0.18
+  )
+  p_acc <- ggplot(
+    acc_summary,
+    aes(
+      x = aid_outcome,
+      y = mean_accuracy,
+      colour = decision,
+      shape = decision,
+      group = decision
+    )
+  ) +
+    geom_errorbar(
+      aes(
+        ymin = pmax(0, mean_accuracy - se),
+        ymax = pmin(1, mean_accuracy + se)
+      ),
+      width = 0.08,
+      linewidth = 0.55,
+      show.legend = FALSE
+    ) +
+    geom_line(linewidth = 0.85) +
+    geom_point(size = 3.2) +
+    facet_wrap(~facet_condition, nrow = 1, drop = FALSE) +
+    scale_y_continuous(labels = scales::label_percent(accuracy = 1)) +
+    coord_cartesian(ylim = acc_limits) +
+    labs(
+      x = NULL,
+      y = "Mean accuracy",
+      title = paste0(
+        plot_label,
+        " group decision accuracy by aid correctness"
+      ),
+      subtitle = str_wrap(
+        paste0(
+          "Participant means with Morey-Cousineau SEs across three categories ",
+          "within decision and facet; ",
+          format_aid_outcome_complete_n(acc_summary)
+        ),
+        width = 75
+      )
+    ) +
+    theme_classic(base_size = 11) +
+    theme(
+      axis.text.x = element_text(angle = 15, hjust = 1),
+      legend.position = "bottom",
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    decision_scales()
+
+  p_rt <- ggplot(
+    rt_summary,
+    aes(
+      x = aid_outcome,
+      y = mean_rt,
+      colour = decision,
+      shape = decision,
+      group = decision
+    )
+  ) +
+    geom_errorbar(
+      aes(
+        ymin = pmax(0, mean_rt - se),
+        ymax = mean_rt + se
+      ),
+      width = 0.08,
+      linewidth = 0.55,
+      show.legend = FALSE
+    ) +
+    geom_line(linewidth = 0.85) +
+    geom_point(size = 3.2) +
+    facet_wrap(~facet_condition, nrow = 1, drop = FALSE) +
+    coord_cartesian(ylim = rt_limits) +
+    labs(
+      x = "Aid outcome",
+      y = "Mean correct RT (s)",
+      title = paste0(
+        plot_label,
+        " group correct RT by aid correctness"
+      ),
+      subtitle = str_wrap(
+        paste0(
+          "Correct-trial participant means with Morey-Cousineau SEs across ",
+          "three categories within decision and facet; ",
+          format_aid_outcome_complete_n(rt_summary)
+        ),
+        width = 75
+      )
+    ) +
+    theme_classic(base_size = 11) +
+    theme(
+      axis.text.x = element_text(angle = 15, hjust = 1),
+      legend.position = "bottom",
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    decision_scales()
+
+  combined <- (
+    p_acc + labs(title = NULL)
+  ) / (
+    p_rt + labs(title = NULL)
+  ) +
+    plot_layout(heights = c(1, 1), guides = "collect") +
+    plot_annotation(
+      title = paste0(
+        STUDY_TITLE,
+        ": ",
+        plot_label,
+        " group accuracy and correct RT by aid correctness"
+      )
+    ) &
+    theme(legend.position = "bottom")
+
+  list(
+    accuracy = p_acc,
+    rt = p_rt,
+    combined = combined,
+    accuracy_summary = acc_summary,
+    rt_summary = rt_summary,
+    participant_accuracy = participant$accuracy,
+    participant_rt = participant$rt
   )
 }
 
@@ -1954,6 +2332,7 @@ if (PLOT_MODE %in% c("cohort", "group")) {
     rating_references,
     PLOT_LABEL
   )
+  aid_outcome_plots <- make_group_aid_outcome_plots(trial_dat, PLOT_LABEL)
 
   written <- c(
     written,
@@ -1998,6 +2377,27 @@ if (PLOT_MODE %in% c("cohort", "group")) {
       paste0(group_prefix, "_condition_accuracy_rt_means"),
       width = 8.5,
       height = 13.5
+    ),
+    save_plot_pair(
+      aid_outcome_plots$accuracy,
+      group_dir,
+      paste0(group_prefix, "_aid_outcome_accuracy_means"),
+      width = 7.5,
+      height = 4.35
+    ),
+    save_plot_pair(
+      aid_outcome_plots$rt,
+      group_dir,
+      paste0(group_prefix, "_aid_outcome_correct_rt_means"),
+      width = 7.5,
+      height = 4.35
+    ),
+    save_plot_pair(
+      aid_outcome_plots$combined,
+      group_dir,
+      paste0(group_prefix, "_aid_outcome_accuracy_correct_rt_means"),
+      width = 7.5,
+      height = 8.625
     )
   )
 
@@ -2015,6 +2415,10 @@ if (PLOT_MODE %in% c("cohort", "group")) {
   print(group_plots$change_rt_difference_summary)
   message("Group overall accuracy-difference summary:")
   print(group_plots$change_accuracy_difference_summary)
+  message("Group decision accuracy by aid outcome summary:")
+  print(aid_outcome_plots$accuracy_summary)
+  message("Group correct RT by aid outcome summary:")
+  print(aid_outcome_plots$rt_summary)
 }
 
 cat("Wrote:\n")
