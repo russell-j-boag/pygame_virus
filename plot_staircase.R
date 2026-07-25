@@ -53,6 +53,8 @@ RELIABILITY_PATTERN_SHAPES <- c(
   "HP95_LP65" = 16,
   "HP65_LP95" = 17
 )
+AID_OUTCOME_LEVELS <- c("Aid correct", "Manual", "Aid incorrect")
+AID_OUTCOME_FACET_LEVELS <- c("HP", "LP")
 ACCURACY_MEASURE_LEVELS <- c(
   "Observed accuracy",
   "Self-rated own accuracy",
@@ -779,7 +781,7 @@ make_condition_summary_plots <- function(
     )
 
   subj_rt <- summary_dat %>%
-    filter(!is.na(rt_s)) %>%
+    filter(correct %in% TRUE, !is.na(rt_s)) %>%
     group_by(across(all_of(participant_condition_cols))) %>%
     summarise(
       mean_rt = mean(rt_s, na.rm = TRUE),
@@ -1332,8 +1334,11 @@ make_condition_summary_plots <- function(
       ) +
       labs(
         x = NULL,
-        y = "Mean RT (s)",
-        title = paste0(PLOT_LABEL, " mean RT by block and reliability pattern"),
+        y = "Mean correct RT (s)",
+        title = paste0(
+          PLOT_LABEL,
+          " mean correct RT by block and reliability pattern"
+        ),
         subtitle = rt_subtitle
       ) +
       coord_cartesian(ylim = rt_ylim, clip = "off") +
@@ -1505,8 +1510,8 @@ make_condition_summary_plots <- function(
       ) +
       labs(
         x = NULL,
-        y = "Mean RT (s)",
-        title = paste0(PLOT_LABEL, " mean RT by block"),
+        y = "Mean correct RT (s)",
+        title = paste0(PLOT_LABEL, " mean correct RT by block"),
         subtitle = rt_subtitle
       ) +
       coord_cartesian(ylim = rt_ylim, clip = "off") +
@@ -1521,6 +1526,297 @@ make_condition_summary_plots <- function(
     acc_summary = acc_summary,
     rt_summary = rt_summary,
     rating_summary = rating_summary
+  )
+}
+
+summarise_aid_outcome_mean <- function(
+  data,
+  value_col,
+  mean_name,
+  se_name
+) {
+  complete_participants <- data %>%
+    filter(!is.na(.data[[value_col]])) %>%
+    distinct(
+      participant_id,
+      facet_condition,
+      automation_reliability_pattern,
+      aid_outcome
+    ) %>%
+    count(
+      participant_id,
+      facet_condition,
+      automation_reliability_pattern,
+      name = "n_outcomes"
+    ) %>%
+    filter(n_outcomes == length(AID_OUTCOME_LEVELS)) %>%
+    select(
+      participant_id,
+      facet_condition,
+      automation_reliability_pattern
+    )
+
+  complete_data <- data %>%
+    semi_join(
+      complete_participants,
+      by = c(
+        "participant_id",
+        "facet_condition",
+        "automation_reliability_pattern"
+      )
+    )
+
+  if (nrow(complete_data) == 0) {
+    return(tibble(
+      facet_condition = factor(
+        character(0),
+        levels = AID_OUTCOME_FACET_LEVELS
+      ),
+      automation_reliability_pattern = factor(
+        character(0),
+        levels = RELIABILITY_PATTERN_LEVELS
+      ),
+      aid_outcome = factor(character(0), levels = AID_OUTCOME_LEVELS),
+      !!mean_name := numeric(0),
+      !!se_name := numeric(0),
+      n_participants = integer(0)
+    ))
+  }
+
+  summary_groups <- tidyr::crossing(
+    facet_condition = AID_OUTCOME_FACET_LEVELS,
+    automation_reliability_pattern = RELIABILITY_PATTERN_LEVELS
+  )
+
+  bind_rows(lapply(seq_len(nrow(summary_groups)), function(group_idx) {
+    facet_value <- summary_groups$facet_condition[[group_idx]]
+    pattern_value <- summary_groups$automation_reliability_pattern[[group_idx]]
+    facet_dat <- complete_data %>%
+      filter(
+        as.character(facet_condition) == facet_value,
+        as.character(automation_reliability_pattern) == pattern_value
+      )
+
+    if (nrow(facet_dat) == 0) {
+      return(NULL)
+    }
+
+    n_subjects <- n_distinct(facet_dat$participant_id)
+    morey_cf <- sqrt(
+      length(AID_OUTCOME_LEVELS) / (length(AID_OUTCOME_LEVELS) - 1)
+    )
+    grand_mean <- mean(facet_dat[[value_col]], na.rm = TRUE)
+
+    facet_dat %>%
+      group_by(participant_id) %>%
+      mutate(
+        .subj_mean = mean(.data[[value_col]], na.rm = TRUE),
+        .norm_value = .data[[value_col]] - .subj_mean + grand_mean
+      ) %>%
+      ungroup() %>%
+      group_by(aid_outcome) %>%
+      summarise(
+        !!mean_name := mean(.data[[value_col]], na.rm = TRUE),
+        !!se_name := if (n_subjects < 2) {
+          NA_real_
+        } else {
+          sd(.norm_value, na.rm = TRUE) / sqrt(n_subjects) * morey_cf
+        },
+        n_participants = n_subjects,
+        .groups = "drop"
+      ) %>%
+      mutate(
+        facet_condition = facet_value,
+        automation_reliability_pattern = pattern_value,
+        .before = 1
+      )
+  })) %>%
+    mutate(
+      facet_condition = factor(
+        facet_condition,
+        levels = AID_OUTCOME_FACET_LEVELS
+      ),
+      automation_reliability_pattern = factor(
+        automation_reliability_pattern,
+        levels = RELIABILITY_PATTERN_LEVELS
+      ),
+      aid_outcome = factor(aid_outcome, levels = AID_OUTCOME_LEVELS)
+    ) %>%
+    arrange(facet_condition, automation_reliability_pattern, aid_outcome)
+}
+
+make_aid_outcome_summary_plots <- function(dat) {
+  outcome_dat <- dat %>%
+    filter(
+      condition_deadline_code %in% POST_CONDITION_CODES,
+      automation_reliability_pattern %in% RELIABILITY_PATTERN_LEVELS
+    ) %>%
+    mutate(
+      facet_condition = time_pressure_condition,
+      aid_outcome = case_when(
+        condition_deadline_code %in% c("M_HP", "M_LP") ~ "Manual",
+        condition_deadline_code %in% c("A_HP", "A_LP") &
+          aid_correct %in% TRUE ~ "Aid correct",
+        condition_deadline_code %in% c("A_HP", "A_LP") &
+          aid_correct %in% FALSE ~ "Aid incorrect",
+        TRUE ~ NA_character_
+      ),
+      facet_condition = factor(
+        facet_condition,
+        levels = AID_OUTCOME_FACET_LEVELS
+      ),
+      automation_reliability_pattern = factor(
+        automation_reliability_pattern,
+        levels = RELIABILITY_PATTERN_LEVELS
+      ),
+      aid_outcome = factor(aid_outcome, levels = AID_OUTCOME_LEVELS),
+      correct_num = if_else(is.na(correct), 0, as.numeric(correct))
+    ) %>%
+    filter(!is.na(facet_condition), !is.na(aid_outcome))
+
+  subj_acc <- outcome_dat %>%
+    group_by(
+      participant_id,
+      facet_condition,
+      automation_reliability_pattern,
+      aid_outcome
+    ) %>%
+    summarise(
+      accuracy = mean(correct_num),
+      n_trials = n(),
+      .groups = "drop"
+    )
+
+  subj_rt <- outcome_dat %>%
+    filter(correct %in% TRUE, !is.na(rt_s)) %>%
+    group_by(
+      participant_id,
+      facet_condition,
+      automation_reliability_pattern,
+      aid_outcome
+    ) %>%
+    summarise(
+      mean_rt = mean(rt_s),
+      n_trials = n(),
+      .groups = "drop"
+    )
+
+  acc_summary <- summarise_aid_outcome_mean(
+    data = subj_acc,
+    value_col = "accuracy",
+    mean_name = "mean_accuracy",
+    se_name = "se_accuracy"
+  )
+  rt_summary <- summarise_aid_outcome_mean(
+    data = subj_rt,
+    value_col = "mean_rt",
+    mean_name = "mean_rt",
+    se_name = "se_rt"
+  )
+
+  if (nrow(acc_summary) == 0) {
+    stop(
+      "No participants have complete aid-correct, manual, and aid-incorrect accuracy summaries.",
+      call. = FALSE
+    )
+  }
+  if (nrow(rt_summary) == 0) {
+    stop(
+      "No participants have correct-response RTs in every aid-outcome category.",
+      call. = FALSE
+    )
+  }
+
+  subtitle <- paste0(
+    "Manual values are deadline-matched participant means;\n",
+    "error bars are Morey-Cousineau within-subject SEs"
+  )
+  pattern_labels <- make_pattern_labels(outcome_dat)
+  group_dodge <- position_dodge(width = GROUP_DODGE_WIDTH)
+  acc_ylim <- get_axis_limits(
+    acc_summary$mean_accuracy,
+    acc_summary$se_accuracy,
+    pad_prop = 0.14,
+    bounds = c(0, 1)
+  )
+  rt_ylim <- get_axis_limits(
+    rt_summary$mean_rt,
+    rt_summary$se_rt,
+    pad_prop = 0.14,
+    bounds = c(0, Inf)
+  )
+
+  p_acc <- ggplot(
+    acc_summary,
+    aes(
+      x = aid_outcome,
+      y = mean_accuracy,
+      colour = automation_reliability_pattern,
+      shape = automation_reliability_pattern,
+      group = automation_reliability_pattern
+    )
+  ) +
+    geom_line(linewidth = 0.8, position = group_dodge) +
+    geom_point(size = 3, position = group_dodge) +
+    geom_errorbar(
+      aes(
+        ymin = mean_accuracy - se_accuracy,
+        ymax = mean_accuracy + se_accuracy
+      ),
+      width = 0.12,
+      position = group_dodge,
+      na.rm = TRUE
+    ) +
+    facet_wrap(~ facet_condition, nrow = 1, drop = FALSE) +
+    scale_y_continuous(labels = function(x) paste0(round(x * 100), "%")) +
+    labs(
+      x = NULL,
+      y = "Mean accuracy",
+      title = paste0(PLOT_LABEL, "\naccuracy by aid correctness"),
+      subtitle = subtitle
+    ) +
+    coord_cartesian(ylim = acc_ylim) +
+    theme_classic() +
+    theme(legend.position = "bottom")
+  p_acc <- add_pattern_scales(p_acc, pattern_labels)
+
+  p_rt <- ggplot(
+    rt_summary,
+    aes(
+      x = aid_outcome,
+      y = mean_rt,
+      colour = automation_reliability_pattern,
+      shape = automation_reliability_pattern,
+      group = automation_reliability_pattern
+    )
+  ) +
+    geom_line(linewidth = 0.8, position = group_dodge) +
+    geom_point(size = 3, position = group_dodge) +
+    geom_errorbar(
+      aes(ymin = mean_rt - se_rt, ymax = mean_rt + se_rt),
+      width = 0.12,
+      position = group_dodge,
+      na.rm = TRUE
+    ) +
+    facet_wrap(~ facet_condition, nrow = 1, drop = FALSE) +
+    labs(
+      x = NULL,
+      y = "Mean correct RT (s)",
+      title = paste0(PLOT_LABEL, "\ncorrect RT by aid correctness"),
+      subtitle = subtitle
+    ) +
+    coord_cartesian(ylim = rt_ylim) +
+    theme_classic() +
+    theme(legend.position = "bottom")
+  p_rt <- add_pattern_scales(p_rt, pattern_labels)
+
+  list(
+    acc_plot = p_acc,
+    rt_plot = p_rt,
+    acc_summary = acc_summary,
+    rt_summary = rt_summary,
+    participant_acc = subj_acc,
+    participant_rt = subj_rt
   )
 }
 
@@ -2152,7 +2448,9 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
       condition_summary$rt_plot + labs(title = NULL)
     ) +
       plot_layout(guides = "collect") +
-      plot_annotation(title = paste0(PLOT_LABEL, " accuracy and RT by block")) &
+      plot_annotation(
+        title = paste0(PLOT_LABEL, " accuracy and correct RT by block")
+      ) &
       theme(legend.position = "bottom", legend.box = "vertical")
 
     written <- c(
@@ -2205,7 +2503,7 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
     message(PLOT_LABEL, " self-rating summary:")
     print(condition_summary$rating_summary %>%
       select(accuracy_measure, condition_deadline_code, mean_rated_accuracy))
-    message(PLOT_LABEL, " RT summary:")
+    message(PLOT_LABEL, " correct RT summary:")
     print(condition_summary$rt_summary %>%
       select(condition_deadline_code, mean_rt))
     if (PLOT_MODE == "cohort") {
@@ -2224,6 +2522,27 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
     slider_dat = slider_dat,
     split_by_pattern = TRUE
   )
+  group_aid_outcome_summary <- make_aid_outcome_summary_plots(dat)
+  group_aid_outcome_combined <- (
+    group_aid_outcome_summary$acc_plot +
+      labs(title = NULL, subtitle = NULL)
+  ) / (
+    group_aid_outcome_summary$rt_plot +
+      labs(title = NULL, subtitle = NULL)
+  ) +
+    plot_layout(guides = "collect") +
+    plot_annotation(
+      title = paste0(
+        "Time Pressure Study: ",
+        PLOT_LABEL,
+        "\naccuracy and correct RT by aid correctness"
+      ),
+      subtitle = paste0(
+        "Manual values are deadline-matched participant means;\n",
+        "error bars are Morey-Cousineau within-subject SEs"
+      )
+    ) &
+    theme(legend.position = "bottom")
   group_timeout_summary <- make_timeout_plot(
     dat,
     split_by_pattern = TRUE
@@ -2249,7 +2568,7 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
       title = paste0(
         "Time Pressure Study:\n",
         PLOT_LABEL,
-        " accuracy, self-ratings, RT, and TIMEOUT responses by block"
+        " accuracy, self-ratings, correct RT, and TIMEOUT responses by block"
       )
     )
 
@@ -2266,6 +2585,12 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
       paste0(OUTPUT_PREFIX, "_block_self_rated_accuracy_means"),
       width = 8.5,
       height = 6
+    ),
+    save_plot_pair(
+      group_aid_outcome_summary$acc_plot,
+      paste0(OUTPUT_PREFIX, "_aid_outcome_accuracy_means"),
+      width = 6,
+      height = 4.5
     ),
     save_plot_pair(
       group_condition_combined,
@@ -2285,6 +2610,18 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
         height = 5
       ),
       save_plot_pair(
+        group_aid_outcome_summary$rt_plot,
+        paste0(OUTPUT_PREFIX, "_aid_outcome_correct_rt_means"),
+        width = 6,
+        height = 4.5
+      ),
+      save_plot_pair(
+        group_aid_outcome_combined,
+        paste0(OUTPUT_PREFIX, "_aid_outcome_accuracy_correct_rt_means"),
+        width = 6,
+        height = 8
+      ),
+      save_plot_pair(
         group_timeout_summary$plot,
         paste0(OUTPUT_PREFIX, "_block_timeout_percent"),
         width = 8.5,
@@ -2302,10 +2639,21 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
     select(automation_reliability_pattern, accuracy_measure,
            condition_deadline_code, mean_rated_accuracy,
            se_rated_accuracy, n_participants))
-  message("Group RT summary:")
+  message("Group correct RT summary:")
   print(group_condition_summary$rt_summary %>%
     select(automation_reliability_pattern, condition_deadline_code,
            mean_rt, se_rt, n_participants))
+  message("Group aid-outcome accuracy summary:")
+  print(group_aid_outcome_summary$acc_summary %>%
+    select(facet_condition, automation_reliability_pattern,
+           aid_outcome, mean_accuracy,
+           se_accuracy, n_participants))
+  if (PLOT_MODE %in% c("cohort", "group")) {
+    message("Group aid-outcome correct RT summary:")
+    print(group_aid_outcome_summary$rt_summary %>%
+      select(facet_condition, automation_reliability_pattern,
+             aid_outcome, mean_rt, se_rt, n_participants))
+  }
   if (PLOT_MODE %in% c("cohort", "group")) {
     message("Group TIMEOUT summary:")
     print(group_timeout_summary$summary %>%
@@ -2432,7 +2780,7 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
   message("Condition accuracy summary:")
   print(condition_summary$acc_summary %>%
     select(condition_deadline_code, condition_label, mean_acc, se_acc, n_participants))
-  message("Condition RT summary:")
+  message("Condition correct RT summary:")
   print(condition_summary$rt_summary %>%
     select(condition_deadline_code, condition_label, mean_rt, se_rt, n_participants))
 }

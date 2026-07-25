@@ -512,7 +512,7 @@ save_plot_pair(block_acc_rt_plot, "block_acc_rt_plot", width = 11, height = 8)
 
 
 # ------------------
-# Accuracy and mean RT by block (not grouped by stimulus)
+# Accuracy and mean correct RT by block (not grouped by stimulus)
 # ------------------
 
 dat_block <- dat %>%
@@ -537,7 +537,7 @@ subj_block_acc_summary <- dat_block_acc %>%
   )
 
 subj_block_rt_summary <- dat_block %>%
-  filter(!is.na(rt_s)) %>%
+  filter(correct %in% TRUE, !is.na(rt_s)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
@@ -735,8 +735,8 @@ p_rt_block <- ggplot(
   ) +
   labs(
     x = "Block",
-    y = "Mean RT (s)",
-    title = "Mean RT by block",
+    y = "Mean correct RT (s)",
+    title = "Mean correct RT by block",
     subtitle = MOREY_SE_SUBTITLE
   ) +
   coord_cartesian(ylim = rt_block_ylim) +
@@ -763,7 +763,7 @@ save_plot_pair(p_acc_block, "block_acc_plot", width = 6, height = 4.5)
 # )
 
 # ------------------
-# Accuracy and mean RT by stimulus and block
+# Accuracy and mean correct RT by stimulus and block
 # ------------------
 
 dat_stim <- dat %>%
@@ -791,7 +791,7 @@ subj_stim_acc_summary <- dat_stim %>%
   )
 
 subj_stim_rt_summary <- dat_stim %>%
-  filter(!is.na(rt_s)) %>%
+  filter(correct %in% TRUE, !is.na(rt_s)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
@@ -888,8 +888,8 @@ p_rt_stim <- ggplot(
   ) +
   labs(
     x = "Block",
-    y = "Mean RT (s)",
-    title = "Mean RT by stimulus and block",
+    y = "Mean correct RT (s)",
+    title = "Mean correct RT by stimulus and block",
     subtitle = MOREY_SE_SUBTITLE,
     colour = "Stimulus"
   ) +
@@ -917,7 +917,7 @@ save_plot_pair(stimulus_plot, "stimulus_plot", width = 8, height = 6)
 
 
 # ------------------
-# Individual differences: participant accuracy and mean RT by block
+# Individual differences: participant accuracy and mean correct RT by block
 # ------------------
 
 dat_id <- dat %>%
@@ -941,7 +941,7 @@ id_acc_summary <- dat_id %>%
   )
 
 id_rt_summary <- dat_id %>%
-  filter(!is.na(rt_s)) %>%
+  filter(correct %in% TRUE, !is.na(rt_s)) %>%
   restrict_calibration_trials(
     participant_col = participant_id,
     block_col = block_simple,
@@ -983,7 +983,7 @@ acc_mean_lines <- id_acc_summary %>%
     .groups = "drop"
   )
 
-# empirical mean RT line per block
+# empirical mean correct RT line per block
 rt_mean_lines <- id_rt_summary %>%
   group_by(block_simple) %>%
   summarise(
@@ -1031,9 +1031,9 @@ p_rt_id <- ggplot(
   geom_point(size = 2.2) +
   facet_wrap(~ block_simple, nrow = 1) +
   labs(
-    x = "Mean RT (s)",
+    x = "Mean correct RT (s)",
     y = "Participant",
-    title = "Individual mean RT by block"
+    title = "Individual mean correct RT by block"
   ) +
   coord_cartesian(xlim = rt_id_xlim) +
   theme_classic()
