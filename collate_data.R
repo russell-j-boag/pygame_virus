@@ -3,11 +3,55 @@ rm(list = ls())
 
 # Load libraries
 library("dplyr")
+library("purrr")
 library("readr")
 library("stringr")
-library("tidyverse")
-library("zoo")
-library("patchwork")
+library("tibble")
+
+# Usage:
+#   Rscript collate_data.R [input_dir] [output_dir]
+
+args <- commandArgs(trailingOnly = TRUE)
+
+INPUT_DIR <- if (length(args) >= 1) args[[1]] else "output"
+OUTPUT_DIR <- if (length(args) >= 2) args[[2]] else "data"
+
+if (!dir.exists(INPUT_DIR)) {
+  stop("Input directory does not exist: ", INPUT_DIR, call. = FALSE)
+}
+
+dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
+
+latest_complete_files <- function(pattern, label) {
+  files <- list.files(
+    INPUT_DIR,
+    pattern = pattern,
+    full.names = TRUE
+  )
+
+  if (!length(files)) {
+    stop("No ", label, " files found in ", INPUT_DIR, call. = FALSE)
+  }
+
+  file_tbl <- tibble(path = files) %>%
+    mutate(
+      file_name = basename(path),
+      participant_id = str_extract(file_name, "(?<=results_)[^_]+"),
+      mtime = file.info(path)$mtime
+    )
+
+  if (any(is.na(file_tbl$participant_id))) {
+    stop("Could not extract participant IDs from all ", label, " filenames.", call. = FALSE)
+  }
+
+  latest <- file_tbl %>%
+    group_by(participant_id) %>%
+    slice_max(order_by = mtime, n = 1, with_ties = FALSE) %>%
+    ungroup()
+
+  print(latest %>% select(participant_id, path, mtime))
+  latest
+}
 
 postblock_single_phase_cols <- c(
   "reliability_phase_idx",
@@ -19,28 +63,10 @@ postblock_single_phase_cols <- c(
 # 1) First collate all choice-RT results files ----------------------------
 
 # Find all complete results files
-files <- list.files(
-  "output",
-  pattern = "^results_.*_b00_ALL\\.csv$",
-  full.names = TRUE
+latest_per_participant <- latest_complete_files(
+  "^results_.*_b00_ALL\\.csv$",
+  "complete trial"
 )
-
-# Make a file table
-file_tbl <- tibble(path = files) %>%
-  mutate(
-    file_name = basename(path),
-    participant_id = str_extract(file_name, "(?<=results_)[^_]+"),
-    mtime = file.info(path)$mtime
-  )
-
-# For each participant, keep only the most recent b00_ALL file
-latest_per_participant <- file_tbl %>%
-  group_by(participant_id) %>%
-  slice_max(order_by = mtime, n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-# Show which files were selected
-print(latest_per_participant %>% select(participant_id, path, mtime))
 nrow(latest_per_participant)
 
 # Read and bind all selected files
@@ -62,7 +88,7 @@ str(dat)
 length(unique(dat$participant_id))
 
 # Save master CSV
-write_csv(dat, "data/data_virus_all.csv")
+write_csv(dat, file.path(OUTPUT_DIR, "data_virus_all.csv"))
 
 # To make the data more manageable, take a subset of relevant columns 
 dat <- latest_per_participant %>%
@@ -113,34 +139,16 @@ str(dat)
 # View(dat)
 
 # Save master CSV
-write_csv(dat, "data/data_virus.csv")
+write_csv(dat, file.path(OUTPUT_DIR, "data_virus.csv"))
 
 
 # 2) Collate post-block questionnaire files -------------------------------
 
 # Find all complete post-block results files
-files <- list.files(
-  "output",
-  pattern = "^results_.*_b00_POSTBLOCK_ALL\\.csv$",
-  full.names = TRUE
+latest_per_participant <- latest_complete_files(
+  "^results_.*_b00_POSTBLOCK_ALL\\.csv$",
+  "complete post-block questionnaire"
 )
-
-# Make a file table
-file_tbl <- tibble(path = files) %>%
-  mutate(
-    file_name = basename(path),
-    participant_id = str_extract(file_name, "(?<=results_)[^_]+"),
-    mtime = file.info(path)$mtime
-  )
-
-# For each participant, keep only the most recent POSTBLOCK_ALL file
-latest_per_participant <- file_tbl %>%
-  group_by(participant_id) %>%
-  slice_max(order_by = mtime, n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-# Show which files were selected
-print(latest_per_participant %>% select(participant_id, path, mtime))
 
 # Read and bind all selected files
 dat <- latest_per_participant %>%
@@ -156,34 +164,16 @@ str(dat)
 # View(dat)
 
 # Save master CSV
-write_csv(dat, "data/data_virus_postblock_all.csv")
+write_csv(dat, file.path(OUTPUT_DIR, "data_virus_postblock_all.csv"))
 
 
 # 3) Collate post-block accuracy slider files -----------------------------
 
 # Find all complete post-block results files
-files <- list.files(
-  "output",
-  pattern = "^results_.*_b00_POSTBLOCK_SLIDERS_ALL\\.csv$",
-  full.names = TRUE
+latest_per_participant <- latest_complete_files(
+  "^results_.*_b00_POSTBLOCK_SLIDERS_ALL\\.csv$",
+  "complete post-block slider"
 )
-
-# Make a file table
-file_tbl <- tibble(path = files) %>%
-  mutate(
-    file_name = basename(path),
-    participant_id = str_extract(file_name, "(?<=results_)[^_]+"),
-    mtime = file.info(path)$mtime
-  )
-
-# For each participant, keep only the most recent POSTBLOCK_SLIDERS_ALL file
-latest_per_participant <- file_tbl %>%
-  group_by(participant_id) %>%
-  slice_max(order_by = mtime, n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-# Show which files were selected
-print(latest_per_participant %>% select(participant_id, path, mtime))
 
 # Read and bind all selected files
 dat <- latest_per_participant %>%
@@ -222,4 +212,4 @@ str(dat)
 # View(dat)
 
 # Save master CSV
-write_csv(dat, "data/data_virus_sliders_all.csv")
+write_csv(dat, file.path(OUTPUT_DIR, "data_virus_sliders_all.csv"))
