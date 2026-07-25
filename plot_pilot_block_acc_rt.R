@@ -1,4 +1,4 @@
-# Plot observed accuracy, self-rated accuracy, and RT by block/drop phase.
+# Plot observed accuracy, self-rated accuracy, and correct RT by block/drop phase.
 #
 # Usage:
 #   Rscript plot_pilot_block_acc_rt.R [input_dir_or_file] [output_dir] \
@@ -43,6 +43,22 @@ ACCURACY_ROLLING_WINDOW <- 25
 DELTA_SD <- 0.01
 GROUP_DODGE_WIDTH <- 0.28
 GROUP_RT_LABEL_OFFSET <- 0.04
+AID_CORRECTNESS_LEVELS <- c("Aid correct", "Manual", "Aid incorrect")
+AID_PHASE_CODES <- c("P1_95", "P2_70", "P3_95")
+AID_PHASE_LABELS <- c(
+  "P1_95" = "P1 95%",
+  "P2_70" = "P2 70%",
+  "P3_95" = "P3 95%"
+)
+AID_CORRECTNESS_CONDITION_LEVELS <- c(
+  "P1_95__AID_CORRECT",
+  "P1_95__AID_INCORRECT",
+  "P2_70__AID_CORRECT",
+  "P2_70__AID_INCORRECT",
+  "P3_95__AID_CORRECT",
+  "P3_95__AID_INCORRECT",
+  "MANUAL_POOLED"
+)
 OBSERVED_LEVELS <- c(
   "Calibration",
   "Manual pre",
@@ -85,6 +101,7 @@ required_trial_cols <- c(
   "reliability_phase_idx",
   "reliability_phase_label",
   "aid_reliability_level",
+  "aid_correct",
   "trial",
   "correct",
   "rt_s",
@@ -218,6 +235,7 @@ prepare_trial_data <- function(dat) {
         as.numeric(calibration_target_accuracy)
       ),
       aid_reliability_level = suppressWarnings(as.numeric(aid_reliability_level)),
+      aid_correct_num = as_binary(aid_correct),
       invalid_nonpositive_rt = !is.na(rt_s) & is.finite(rt_s) & rt_s <= 0
     )
 
@@ -285,6 +303,11 @@ validate_trial_coverage <- function(dat) {
   }
 }
 
+mean_correct_rt <- function(correct_num, rt_valid) {
+  values <- rt_valid[correct_num == 1 & !is.na(correct_num) & !is.na(rt_valid)]
+  if (length(values)) mean(values) else NA_real_
+}
+
 make_participant_observed_summary <- function(dat) {
   dat %>%
     group_by(
@@ -296,9 +319,9 @@ make_participant_observed_summary <- function(dat) {
     ) %>%
     summarise(
       mean_accuracy = mean(correct_num, na.rm = TRUE),
-      mean_rt = mean(rt_valid, na.rm = TRUE),
+      mean_correct_rt = mean_correct_rt(correct_num, rt_valid),
       n_accuracy = n(),
-      n_rt = sum(!is.na(rt_valid)),
+      n_correct_rt = sum(correct_num == 1 & !is.na(rt_valid)),
       aid_target = if (all(is.na(aid_reliability_level))) {
         NA_real_
       } else {
@@ -309,7 +332,62 @@ make_participant_observed_summary <- function(dat) {
     mutate(
       phase_label = factor(phase_label, levels = OBSERVED_LEVELS),
       accuracy_label = sprintf("%.1f%%", mean_accuracy * 100),
-      rt_label = sprintf("%.3f s", mean_rt)
+      rt_label = sprintf("%.3f s", mean_correct_rt)
+    )
+}
+
+make_participant_aid_correctness_summary <- function(dat) {
+  aided <- dat %>%
+    filter(
+      block == "AUTOMATION",
+      reliability_phase_label %in% AID_PHASE_CODES,
+      aid_correct_num %in% c(0, 1)
+    ) %>%
+    mutate(
+      trial_type = if_else(aid_correct_num == 1, "Aid correct", "Aid incorrect"),
+      condition_key = paste0(
+        reliability_phase_label,
+        if_else(aid_correct_num == 1, "__AID_CORRECT", "__AID_INCORRECT")
+      )
+    ) %>%
+    group_by(
+      participant_id,
+      calibration_target_group,
+      reliability_phase_label,
+      trial_type,
+      condition_key
+    ) %>%
+    summarise(
+      mean_accuracy = mean(correct_num),
+      mean_correct_rt = mean_correct_rt(correct_num, rt_valid),
+      n_trials = n(),
+      n_correct_rt = sum(correct_num == 1 & !is.na(rt_valid)),
+      .groups = "drop"
+    )
+
+  manual <- dat %>%
+    filter(block == "MANUAL") %>%
+    group_by(participant_id, calibration_target_group) %>%
+    summarise(
+      mean_accuracy = mean(correct_num),
+      mean_correct_rt = mean_correct_rt(correct_num, rt_valid),
+      n_trials = n(),
+      n_correct_rt = sum(correct_num == 1 & !is.na(rt_valid)),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      reliability_phase_label = NA_character_,
+      trial_type = "Manual",
+      condition_key = "MANUAL_POOLED"
+    )
+
+  bind_rows(aided, manual) %>%
+    mutate(
+      condition_key = factor(
+        condition_key,
+        levels = AID_CORRECTNESS_CONDITION_LEVELS
+      ),
+      trial_type = factor(trial_type, levels = AID_CORRECTNESS_LEVELS)
     )
 }
 
@@ -760,7 +838,11 @@ make_individual_plots <- function(
     bounds = c(0, 1),
     pad = 0.18
   )
-  rt_ylim <- get_axis_limits(observed_summary$mean_rt, bounds = c(0, Inf), pad = 0.20)
+  rt_ylim <- get_axis_limits(
+    observed_summary$mean_correct_rt,
+    bounds = c(0, Inf),
+    pad = 0.20
+  )
 
   p_acc <- ggplot(
     observed_summary,
@@ -827,7 +909,7 @@ make_individual_plots <- function(
     observed_summary,
     aes(
       x = phase_order,
-      y = mean_rt,
+      y = mean_correct_rt,
       colour = calibration_target_group,
       group = 1
     )
@@ -846,8 +928,8 @@ make_individual_plots <- function(
     coord_cartesian(ylim = rt_ylim) +
     labs(
       x = "Block/drop phase",
-      y = "Mean RT (s)",
-      title = paste0(plot_label, " mean RT by block/drop phase"),
+      y = "Mean correct RT (s)",
+      title = paste0(plot_label, " mean correct RT by block/drop phase"),
       subtitle = paste0("Calibration mean uses the final ", CALIB_SUMMARY_LAST_N, " trials")
     ) +
     theme_classic() +
@@ -859,7 +941,9 @@ make_individual_plots <- function(
   p_rating <- NULL
   combined <- (p_acc + theme(legend.position = "none")) /
     (p_rt + theme(legend.position = "none")) +
-    plot_annotation(title = paste0(plot_label, " accuracy and RT by block/drop phase"))
+    plot_annotation(
+      title = paste0(plot_label, " accuracy and correct RT by block/drop phase")
+    )
 
   if (!is.null(rating_summary)) {
     rating_obs <- rating_references$observed %>% filter(participant_id == pid)
@@ -946,7 +1030,7 @@ make_individual_plots <- function(
       p_rt + labs(title = NULL) + theme(legend.position = "none")
     ) +
       plot_annotation(
-        title = paste0(plot_label, " accuracy, self-ratings, and RT")
+        title = paste0(plot_label, " accuracy, self-ratings, and correct RT")
       )
   }
 
@@ -989,7 +1073,7 @@ make_group_plots <- function(
 
   rt_summary <- summarise_repeated(
     participant_observed,
-    "mean_rt",
+    "mean_correct_rt",
     "phase_label",
     use_morey = TRUE
   ) %>%
@@ -1198,8 +1282,8 @@ make_group_plots <- function(
     coord_cartesian(ylim = rt_ylim) +
     labs(
       x = "Block/drop phase",
-      y = "Mean RT (s)",
-      title = paste0(plot_label, " group mean RT by block/drop phase"),
+      y = "Mean correct RT (s)",
+      title = paste0(plot_label, " group mean correct RT by block/drop phase"),
       subtitle = paste0(
         "Within-group Morey-Cousineau SEs across 6 phases; ",
         "CAL90 n = 1 (no SE); calibration = final ",
@@ -1298,7 +1382,7 @@ make_group_plots <- function(
       title = paste0(
         "Dynamic Reliability Study: ",
         plot_label,
-        " group accuracy, self-ratings, and RT"
+        " group accuracy, self-ratings, and correct RT"
       )
     )
 
@@ -1309,6 +1393,199 @@ make_group_plots <- function(
     combined = combined,
     acc_summary = acc_summary,
     rating_summary = rating_summary,
+    rt_summary = rt_summary
+  )
+}
+
+validate_aid_correctness_coverage <- function(participant_summary) {
+  coverage <- participant_summary %>%
+    distinct(participant_id, condition_key) %>%
+    count(participant_id, name = "n_conditions")
+
+  incomplete <- coverage %>%
+    filter(n_conditions != length(AID_CORRECTNESS_CONDITION_LEVELS))
+  if (nrow(coverage) == 0 || nrow(incomplete)) {
+    stop(
+      "Each participant must have all six phase-by-aid-correctness cells ",
+      "plus pooled manual trials. Incomplete participants: ",
+      paste(incomplete$participant_id, collapse = ", "),
+      call. = FALSE
+    )
+  }
+}
+
+make_aid_correctness_display_summary <- function(participant_summary, value_col) {
+  unique_summary <- summarise_repeated(
+    participant_summary,
+    value_col,
+    "condition_key",
+    use_morey = TRUE
+  ) %>%
+    mutate(condition_key = as.character(condition_key))
+
+  condition_lookup <- participant_summary %>%
+    filter(as.character(condition_key) != "MANUAL_POOLED") %>%
+    transmute(
+      condition_key = as.character(condition_key),
+      reliability_phase_label,
+      trial_type = as.character(trial_type)
+    ) %>%
+    distinct()
+
+  aided <- unique_summary %>%
+    filter(condition_key != "MANUAL_POOLED") %>%
+    left_join(condition_lookup, by = "condition_key")
+
+  manual <- unique_summary %>%
+    filter(condition_key == "MANUAL_POOLED") %>%
+    select(-condition_key) %>%
+    crossing(reliability_phase_label = AID_PHASE_CODES) %>%
+    mutate(
+      condition_key = "MANUAL_POOLED",
+      trial_type = "Manual"
+    )
+
+  bind_rows(aided, manual) %>%
+    mutate(
+      reliability_phase_label = factor(
+        reliability_phase_label,
+        levels = AID_PHASE_CODES,
+        labels = unname(AID_PHASE_LABELS[AID_PHASE_CODES])
+      ),
+      trial_type = factor(trial_type, levels = AID_CORRECTNESS_LEVELS),
+      trial_type_order = as.integer(trial_type)
+    ) %>%
+    arrange(reliability_phase_label, trial_type, calibration_target_group)
+}
+
+make_aid_correctness_group_plots <- function(participant_summary, plot_label) {
+  group_labels <- make_group_labels(participant_summary)
+
+  accuracy_summary <- make_aid_correctness_display_summary(
+    participant_summary,
+    "mean_accuracy"
+  )
+
+  rt_summary <- make_aid_correctness_display_summary(
+    participant_summary,
+    "mean_correct_rt"
+  )
+
+  accuracy_ylim <- get_axis_limits(
+    accuracy_summary$mean,
+    accuracy_summary$se,
+    bounds = c(0, 1),
+    pad = 0.12
+  )
+  rt_ylim <- get_axis_limits(
+    rt_summary$mean,
+    rt_summary$se,
+    bounds = c(0, Inf),
+    pad = 0.18
+  )
+  dodge <- position_dodge(width = GROUP_DODGE_WIDTH)
+
+  p_accuracy <- ggplot(
+    accuracy_summary,
+    aes(
+      x = trial_type,
+      y = mean,
+      colour = calibration_target_group,
+      shape = calibration_target_group,
+      group = calibration_target_group
+    )
+  ) +
+    geom_line(position = dodge, linewidth = 0.9) +
+    geom_point(position = dodge, size = 3) +
+    geom_errorbar(
+      aes(ymin = mean - se, ymax = mean + se),
+      position = dodge,
+      width = 0.12,
+      na.rm = TRUE
+    ) +
+    facet_wrap(~reliability_phase_label, nrow = 1) +
+    scale_x_discrete(drop = FALSE) +
+    scale_y_continuous(labels = function(x) paste0(round(x * 100), "%")) +
+    target_colour_scale(group_labels) +
+    target_shape_scale(group_labels) +
+    coord_cartesian(ylim = accuracy_ylim) +
+    labs(
+      x = NULL,
+      y = "Mean accuracy",
+      title = paste0(plot_label, " group accuracy by aid correctness"),
+      subtitle = paste0(
+        "Within-group Morey-Cousineau SEs across 7 unique conditions; ",
+        "manual pools pre- and post-automation trials"
+      ),
+      caption = "Pooled manual means are repeated across facets for comparison."
+    ) +
+    theme_classic() +
+    theme(
+      strip.background = element_rect(fill = "grey95", colour = "grey75"),
+      legend.position = "bottom"
+    )
+
+  p_rt <- ggplot(
+    rt_summary,
+    aes(
+      x = trial_type,
+      y = mean,
+      colour = calibration_target_group,
+      shape = calibration_target_group,
+      group = calibration_target_group
+    )
+  ) +
+    geom_line(position = dodge, linewidth = 0.9) +
+    geom_point(position = dodge, size = 3) +
+    geom_errorbar(
+      aes(ymin = mean - se, ymax = mean + se),
+      position = dodge,
+      width = 0.12,
+      na.rm = TRUE
+    ) +
+    facet_wrap(~reliability_phase_label, nrow = 1) +
+    scale_x_discrete(drop = FALSE) +
+    target_colour_scale(group_labels) +
+    target_shape_scale(group_labels) +
+    coord_cartesian(ylim = rt_ylim) +
+    labs(
+      x = "Trial type",
+      y = "Mean correct RT (s)",
+      title = paste0(plot_label, " group correct RT by aid correctness"),
+      subtitle = paste0(
+        "Correct-response trials only; within-group Morey-Cousineau SEs across ",
+        "7 unique conditions"
+      ),
+      caption = "Pooled manual means are repeated across facets for comparison."
+    ) +
+    theme_classic() +
+    theme(
+      strip.background = element_rect(fill = "grey95", colour = "grey75"),
+      legend.position = "bottom"
+    )
+
+  combined <- (
+    p_accuracy +
+      labs(title = NULL, caption = NULL) +
+      theme(legend.position = "none")
+  ) / (
+    p_rt +
+      labs(title = NULL) +
+      theme(legend.position = "bottom")
+  ) +
+    plot_annotation(
+      title = paste0(
+        "Dynamic Reliability Study: ",
+        plot_label,
+        " group accuracy and correct RT by aid correctness"
+      )
+    )
+
+  list(
+    accuracy = p_accuracy,
+    rt = p_rt,
+    combined = combined,
+    accuracy_summary = accuracy_summary,
     rt_summary = rt_summary
   )
 }
@@ -1345,6 +1622,8 @@ trial_dat <- prepare_trial_data(trial_dat_raw)
 validate_trial_coverage(trial_dat)
 observed_dat <- restrict_calibration_trials(trial_dat)
 participant_observed <- make_participant_observed_summary(observed_dat)
+participant_aid_correctness <- make_participant_aid_correctness_summary(trial_dat)
+validate_aid_correctness_coverage(participant_aid_correctness)
 
 slider_required <- PLOT_MODE %in% c("cohort", "group")
 slider_explicit <- !is.na(SLIDER_INPUT_PATH) && nzchar(SLIDER_INPUT_PATH)
@@ -1449,7 +1728,16 @@ if (PLOT_MODE %in% c("single", "cohort")) {
     }
 
     message(participant_label, " observed summary:")
-    print(observed_pid %>% select(phase_label, mean_accuracy, mean_rt, n_accuracy, n_rt))
+    print(
+      observed_pid %>%
+        select(
+          phase_label,
+          mean_accuracy,
+          mean_correct_rt,
+          n_accuracy,
+          n_correct_rt
+        )
+    )
     if (!is.null(ratings_pid)) {
       message(participant_label, " rating summary:")
       print(ratings_pid %>% select(rating_measure, rating_label, rated_accuracy))
@@ -1464,6 +1752,10 @@ if (PLOT_MODE %in% c("cohort", "group")) {
     participant_observed,
     participant_ratings,
     rating_references,
+    PLOT_LABEL
+  )
+  aid_correctness_plots <- make_aid_correctness_group_plots(
+    participant_aid_correctness,
     PLOT_LABEL
   )
 
@@ -1496,6 +1788,27 @@ if (PLOT_MODE %in% c("cohort", "group")) {
       paste0(group_prefix, "_block_accuracy_rt_means"),
       width = 8.5,
       height = 11
+    ),
+    save_plot_pair(
+      aid_correctness_plots$accuracy,
+      group_dir,
+      paste0(group_prefix, "_aid_correctness_accuracy_means"),
+      width = 11,
+      height = 5.5
+    ),
+    save_plot_pair(
+      aid_correctness_plots$rt,
+      group_dir,
+      paste0(group_prefix, "_aid_correctness_correct_rt_means"),
+      width = 11,
+      height = 6
+    ),
+    save_plot_pair(
+      aid_correctness_plots$combined,
+      group_dir,
+      paste0(group_prefix, "_aid_correctness_accuracy_correct_rt_means"),
+      width = 11,
+      height = 10
     )
   )
 
@@ -1503,8 +1816,12 @@ if (PLOT_MODE %in% c("cohort", "group")) {
   print(group_plots$acc_summary)
   message("Group rating summary:")
   print(group_plots$rating_summary)
-  message("Group RT summary:")
+  message("Group correct RT summary:")
   print(group_plots$rt_summary)
+  message("Group aid-correctness accuracy summary:")
+  print(aid_correctness_plots$accuracy_summary)
+  message("Group aid-correctness correct RT summary:")
+  print(aid_correctness_plots$rt_summary)
 }
 
 cat("Wrote:\n")
