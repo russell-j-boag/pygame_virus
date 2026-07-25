@@ -37,6 +37,11 @@ BURN_IN_TRIALS <- 50
 CALIB_SUMMARY_LAST_N <- 150
 DELTA_SD <- 0.01
 GROUP_DODGE_WIDTH <- 0.24
+OBSERVED_ACCURACY_LOWER_LIMIT <- 0.50
+ACCURACY_GROUP_LABEL_OFFSET <- 0.05
+GROUP_LABEL_OFFSET_PROPORTION <- ACCURACY_GROUP_LABEL_OFFSET /
+  (1 - OBSERVED_ACCURACY_LOWER_LIMIT)
+OBSERVED_INDIVIDUAL_LABEL_VJUST <- -1.3
 POST_CONDITION_CODES <- c("M_HP", "A_HP", "A_LP", "M_LP")
 ALL_CONDITION_CODES <- c("CAL_LP", POST_CONDITION_CODES)
 RELIABILITY_PATTERN_LEVELS <- c("HP95_LP65", "HP65_LP95")
@@ -582,8 +587,8 @@ add_self_rating_scales <- function(plot, pattern_labels) {
       name = "Self-rating"
     ) +
     guides(
-      colour = guide_legend(order = 1, nrow = 1),
-      shape = guide_legend(order = 2, nrow = 1)
+      shape = guide_legend(order = 1, nrow = 1),
+      colour = guide_legend(order = 2, nrow = 1)
     )
 }
 
@@ -802,6 +807,26 @@ make_condition_summary_plots <- function(
       )
     )
 
+  if (split_by_pattern) {
+    acc_summary <- acc_summary %>%
+      group_by(condition_deadline_code) %>%
+      mutate(
+        accuracy_label = sprintf("%.1f%%", mean_acc * 100),
+        accuracy_label_y = if_else(
+          n() > 1 & rank(mean_acc, ties.method = "first") == n(),
+          mean_acc + ACCURACY_GROUP_LABEL_OFFSET,
+          mean_acc - ACCURACY_GROUP_LABEL_OFFSET
+        )
+      ) %>%
+      ungroup()
+  } else {
+    acc_summary <- acc_summary %>%
+      mutate(
+        accuracy_label = sprintf("%.1f%%", mean_acc * 100),
+        accuracy_label_y = mean_acc
+      )
+  }
+
   rt_summary <- summarise_morey_condition_mean(
     data = subj_rt,
     value_col = "mean_rt",
@@ -821,6 +846,12 @@ make_condition_summary_plots <- function(
         condition_label,
         levels = unique(condition_meta$condition_label)
       )
+    )
+
+  rt_summary <- rt_summary %>%
+    mutate(
+      rt_label = sprintf("%.3f s", mean_rt),
+      rt_label_y = mean_rt
     )
 
   rating <- if (is.null(slider_dat)) {
@@ -869,12 +900,14 @@ make_condition_summary_plots <- function(
   acc_ylim <- get_axis_limits(
     c(
       acc_summary$mean_acc,
+      acc_summary$accuracy_label_y,
       if (!is.null(rating_summary)) rating_summary$mean_rated_accuracy,
       TARGET_ACC,
       aid_reference$aid_accuracy_setting
     ),
     c(
       acc_summary$se_acc,
+      rep(0, nrow(acc_summary)),
       if (!is.null(rating_summary)) rating_summary$se_rated_accuracy,
       0,
       rep(0, nrow(aid_reference))
@@ -882,8 +915,57 @@ make_condition_summary_plots <- function(
     pad_prop = 0.14,
     bounds = c(0, 1)
   )
+  if (split_by_pattern && !is.null(rating_summary)) {
+    rating_label_offset <- diff(acc_ylim) * GROUP_LABEL_OFFSET_PROPORTION
+    rating_summary <- rating_summary %>%
+      group_by(condition_deadline_code) %>%
+      mutate(
+        rating_label = sprintf("%.1f%%", mean_rated_accuracy * 100),
+        rating_label_y = if_else(
+          n() > 1 & rank(mean_rated_accuracy, ties.method = "first") == n(),
+          mean_rated_accuracy + rating_label_offset,
+          mean_rated_accuracy - rating_label_offset
+        )
+      ) %>%
+      ungroup()
+  }
+  observed_acc_ylim <- get_axis_limits(
+    c(
+      acc_summary$mean_acc,
+      acc_summary$accuracy_label_y,
+      TARGET_ACC,
+      aid_reference$aid_accuracy_setting
+    ),
+    c(
+      acc_summary$se_acc,
+      rep(0, nrow(acc_summary)),
+      0,
+      rep(0, nrow(aid_reference))
+    ),
+    pad_prop = 0.14,
+    bounds = c(OBSERVED_ACCURACY_LOWER_LIMIT, 1)
+  )
+  observed_acc_ylim[[1]] <- OBSERVED_ACCURACY_LOWER_LIMIT
 
-  rt_ylim <- get_axis_limits(rt_summary$mean_rt, rt_summary$se_rt, pad_prop = 0.18)
+  rt_ylim <- get_axis_limits(
+    rt_summary$mean_rt,
+    rt_summary$se_rt,
+    pad_prop = 0.20,
+    bounds = c(0, Inf)
+  )
+  if (split_by_pattern) {
+    rt_label_offset <- diff(rt_ylim) * GROUP_LABEL_OFFSET_PROPORTION
+    rt_summary <- rt_summary %>%
+      group_by(condition_deadline_code) %>%
+      mutate(
+        rt_label_y = if_else(
+          n() > 1 & rank(mean_rt, ties.method = "first") == n(),
+          mean_rt + rt_label_offset,
+          mean_rt - rt_label_offset
+        )
+      ) %>%
+      ungroup()
+  }
   n_subjects <- n_distinct(summary_dat$participant_id)
   rt_subtitle <- if (split_by_pattern) {
     paste0(
@@ -1025,20 +1107,21 @@ make_condition_summary_plots <- function(
           show.legend = FALSE
         ) +
         geom_hline(yintercept = TARGET_ACC, linetype = "dashed") +
-        geom_label(
+        geom_text(
           aes(
-            label = sprintf("%.1f%%", mean_acc * 100)
+            y = accuracy_label_y,
+            label = accuracy_label
           ),
-          vjust = -0.80,
-          size = 3.2,
+          vjust = 0.5,
+          size = 3.3,
           fontface = "bold",
-          fill = "white",
-          linewidth = 0,
-          label.padding = grid::unit(0.08, "lines"),
           show.legend = FALSE,
           position = group_dodge
         ) +
-        scale_y_continuous(labels = function(x) paste0(round(x * 100), "%")) +
+        scale_y_continuous(
+          breaks = seq(OBSERVED_ACCURACY_LOWER_LIMIT, 1, by = 0.10),
+          labels = function(x) paste0(round(x * 100), "%")
+        ) +
         labs(
           x = NULL,
           y = "Mean accuracy",
@@ -1046,7 +1129,7 @@ make_condition_summary_plots <- function(
           subtitle = rt_subtitle,
           caption = "Short dashed segments at automation blocks show assigned aid accuracy"
         ) +
-        coord_cartesian(ylim = acc_ylim, clip = "off") +
+        coord_cartesian(ylim = observed_acc_ylim, clip = "off") +
         theme_classic() +
         theme(
           legend.position = "bottom",
@@ -1106,6 +1189,17 @@ make_condition_summary_plots <- function(
           show.legend = FALSE
         ) +
         geom_hline(yintercept = TARGET_ACC, linetype = "dashed") +
+        geom_text(
+          aes(
+            y = rating_label_y,
+            label = rating_label
+          ),
+          vjust = 0.5,
+          size = 3.3,
+          fontface = "bold",
+          show.legend = FALSE,
+          position = group_dodge
+        ) +
         scale_y_continuous(labels = function(x) paste0(round(x * 100), "%")) +
         labs(
           x = NULL,
@@ -1169,20 +1263,21 @@ make_condition_summary_plots <- function(
           show.legend = FALSE
         ) +
         geom_hline(yintercept = TARGET_ACC, linetype = "dashed") +
-        geom_label(
+        geom_text(
           aes(
-            label = sprintf("%.1f%%", mean_acc * 100)
+            y = accuracy_label_y,
+            label = accuracy_label
           ),
-          vjust = -0.80,
-          size = 3.2,
+          vjust = 0.5,
+          size = 3.3,
           fontface = "bold",
-          fill = "white",
-          linewidth = 0,
-          label.padding = grid::unit(0.08, "lines"),
           show.legend = FALSE,
           position = group_dodge
         ) +
-        scale_y_continuous(labels = function(x) paste0(round(x * 100), "%")) +
+        scale_y_continuous(
+          breaks = seq(OBSERVED_ACCURACY_LOWER_LIMIT, 1, by = 0.10),
+          labels = function(x) paste0(round(x * 100), "%")
+        ) +
         labs(
           x = NULL,
           y = "Mean accuracy",
@@ -1190,7 +1285,7 @@ make_condition_summary_plots <- function(
           subtitle = accuracy_subtitle,
           caption = "Colored dashed segments show assigned aid accuracy in automation blocks"
         ) +
-        coord_cartesian(ylim = acc_ylim, clip = "off") +
+        coord_cartesian(ylim = observed_acc_ylim, clip = "off") +
         theme_classic() +
         theme(
           legend.position = "bottom",
@@ -1224,16 +1319,14 @@ make_condition_summary_plots <- function(
         na.rm = TRUE,
         position = group_dodge
       ) +
-      geom_label(
+      geom_text(
         aes(
-          label = sprintf("%.3f s", mean_rt)
+          y = rt_label_y,
+          label = rt_label
         ),
-        vjust = -0.80,
-        size = 3.2,
+        vjust = 0.5,
+        size = 3.3,
         fontface = "bold",
-        fill = "white",
-        linewidth = 0,
-        label.padding = grid::unit(0.08, "lines"),
         show.legend = FALSE,
         position = group_dodge
       ) +
@@ -1253,6 +1346,19 @@ make_condition_summary_plots <- function(
   } else {
     if (!is.null(rating_summary)) {
       pattern_labels <- make_pattern_labels(summary_dat)
+      individual_rating_labels <- rating_summary %>%
+        left_join(
+          acc_summary %>%
+            select(condition_deadline_code, mean_acc),
+          by = "condition_deadline_code"
+        ) %>%
+        mutate(
+          label_vjust = case_when(
+            mean_rated_accuracy >= 0.94 ~ 1.6,
+            mean_rated_accuracy > mean_acc + 0.025 ~ -0.80,
+            TRUE ~ 1.80
+          )
+        )
       p_acc <- ggplot() +
         geom_line(
           data = acc_summary,
@@ -1299,19 +1405,28 @@ make_condition_summary_plots <- function(
           show.legend = FALSE
         ) +
         geom_hline(yintercept = TARGET_ACC, linetype = "dashed") +
-        geom_label(
+        geom_text(
           data = acc_summary,
           aes(
             x = condition_label,
             y = mean_acc,
-            label = sprintf("%.1f%%", mean_acc * 100)
+            label = accuracy_label
           ),
-          vjust = -0.80,
+          vjust = OBSERVED_INDIVIDUAL_LABEL_VJUST,
           size = 3.4,
           fontface = "bold",
-          fill = "white",
-          linewidth = 0,
-          label.padding = grid::unit(0.10, "lines"),
+          show.legend = FALSE
+        ) +
+        geom_text(
+          data = individual_rating_labels,
+          aes(
+            x = condition_label,
+            y = mean_rated_accuracy,
+            label = sprintf("%.1f%%", mean_rated_accuracy * 100),
+            vjust = label_vjust
+          ),
+          size = 3.4,
+          fontface = "bold",
           show.legend = FALSE
         ) +
         scale_y_continuous(labels = function(x) paste0(round(x * 100), "%")) +
@@ -1353,23 +1468,23 @@ make_condition_summary_plots <- function(
           colour = "forestgreen"
         ) +
         geom_hline(yintercept = TARGET_ACC, linetype = "dashed") +
-        geom_label(
-          aes(label = sprintf("%.1f%%", mean_acc * 100)),
-          vjust = -0.80,
+        geom_text(
+          aes(label = accuracy_label),
+          vjust = OBSERVED_INDIVIDUAL_LABEL_VJUST,
           size = 3.4,
-          fontface = "bold",
-          fill = "white",
-          linewidth = 0,
-          label.padding = grid::unit(0.10, "lines")
+          fontface = "bold"
         ) +
-        scale_y_continuous(labels = function(x) paste0(round(x * 100), "%")) +
+        scale_y_continuous(
+          breaks = seq(OBSERVED_ACCURACY_LOWER_LIMIT, 1, by = 0.10),
+          labels = function(x) paste0(round(x * 100), "%")
+        ) +
         labs(
           x = NULL,
           y = "Mean accuracy",
           title = paste0(PLOT_LABEL, " accuracy by block"),
           subtitle = accuracy_subtitle
         ) +
-        coord_cartesian(ylim = acc_ylim, clip = "off") +
+        coord_cartesian(ylim = observed_acc_ylim, clip = "off") +
         theme_classic() +
         theme(plot.margin = margin(5.5, 12, 5.5, 5.5))
     }
@@ -1382,14 +1497,11 @@ make_condition_summary_plots <- function(
         width = 0.12,
         na.rm = TRUE
       ) +
-      geom_label(
-        aes(label = sprintf("%.3f s", mean_rt)),
-        vjust = -0.80,
+      geom_text(
+        aes(label = rt_label),
+        vjust = OBSERVED_INDIVIDUAL_LABEL_VJUST,
         size = 3.4,
-        fontface = "bold",
-        fill = "white",
-        linewidth = 0,
-        label.padding = grid::unit(0.10, "lines")
+        fontface = "bold"
       ) +
       labs(
         x = NULL,
@@ -1496,6 +1608,23 @@ make_timeout_plot <- function(dat, split_by_pattern = FALSE) {
       )
     )
 
+  if (split_by_pattern) {
+    timeout_summary <- timeout_summary %>%
+      mutate(
+        automation_reliability_pattern = factor(
+          automation_reliability_pattern,
+          levels = RELIABILITY_PATTERN_LEVELS
+        ),
+        timeout_label = sprintf("%.2f%%", mean_timeout_pct)
+      )
+  } else {
+    timeout_summary <- timeout_summary %>%
+      mutate(
+        timeout_label = sprintf("%.2f%%", mean_timeout_pct),
+        timeout_label_y = mean_timeout_pct
+      )
+  }
+
   n_subjects <- n_distinct(subj_timeout$participant_id)
   timeout_subtitle <- if (split_by_pattern) {
     "Within-pattern Morey-Cousineau SEs across five blocks; HP65_LP95 n = 1 (no SE)"
@@ -1510,22 +1639,37 @@ make_timeout_plot <- function(dat, split_by_pattern = FALSE) {
     pad_prop = 0.30,
     bounds = c(0, 100)
   )
+  if (split_by_pattern) {
+    timeout_label_offset <- diff(timeout_ylim) * GROUP_LABEL_OFFSET_PROPORTION
+    timeout_summary <- timeout_summary %>%
+      group_by(condition_deadline_code) %>%
+      mutate(
+        timeout_label_y = if_else(
+          n() > 1 & rank(mean_timeout_pct, ties.method = "first") == n(),
+          mean_timeout_pct + timeout_label_offset,
+          mean_timeout_pct - timeout_label_offset
+        )
+      ) %>%
+      ungroup()
+  }
+  timeout_ylim[[1]] <- min(
+    -0.10,
+    timeout_summary$timeout_label_y - 0.05,
+    timeout_summary$mean_timeout_pct - timeout_summary$se_timeout_pct - 0.05,
+    na.rm = TRUE
+  )
+  timeout_ylim[[2]] <- min(
+    100,
+    max(timeout_ylim[[2]], timeout_summary$timeout_label_y + 0.05, na.rm = TRUE)
+  )
+  timeout_breaks <- function(limits) {
+    breaks <- pretty(c(0, max(limits[[2]], 0)))
+    breaks[breaks >= 0 & breaks <= 100]
+  }
 
   if (split_by_pattern) {
     group_dodge <- position_dodge(width = GROUP_DODGE_WIDTH)
     pattern_labels <- make_pattern_labels(subj_timeout)
-    timeout_summary <- timeout_summary %>%
-      mutate(
-        automation_reliability_pattern = factor(
-          automation_reliability_pattern,
-          levels = RELIABILITY_PATTERN_LEVELS
-        ),
-        label_vjust = case_when(
-          automation_reliability_pattern == RELIABILITY_PATTERN_LEVELS[[1]] ~ -0.85,
-          mean_timeout_pct <= 0.30 ~ -2.20,
-          TRUE ~ 1.65
-        )
-      )
 
     p_timeout <- ggplot(
       timeout_summary,
@@ -1551,20 +1695,21 @@ make_timeout_plot <- function(dat, split_by_pattern = FALSE) {
         na.rm = TRUE,
         position = group_dodge
       ) +
-      geom_label(
+      geom_text(
         aes(
-          label = sprintf("%.2f%%", mean_timeout_pct),
-          vjust = label_vjust
+          y = timeout_label_y,
+          label = timeout_label
         ),
-        size = 3.2,
+        vjust = 0.5,
+        size = 3.3,
         fontface = "bold",
-        fill = "white",
-        linewidth = 0,
-        label.padding = grid::unit(0.08, "lines"),
         show.legend = FALSE,
         position = group_dodge
       ) +
-      scale_y_continuous(labels = function(x) paste0(format(x, trim = TRUE), "%")) +
+      scale_y_continuous(
+        breaks = timeout_breaks,
+        labels = function(x) paste0(format(x, trim = TRUE), "%")
+      ) +
       labs(
         x = NULL,
         y = "TIMEOUT responses (%)",
@@ -1572,7 +1717,7 @@ make_timeout_plot <- function(dat, split_by_pattern = FALSE) {
         subtitle = timeout_subtitle
       ) +
       coord_cartesian(
-        ylim = c(min(-0.10, timeout_ylim[[1]]), timeout_ylim[[2]]),
+        ylim = timeout_ylim,
         clip = "off"
       ) +
       theme_classic() +
@@ -1596,16 +1741,16 @@ make_timeout_plot <- function(dat, split_by_pattern = FALSE) {
         width = 0.12,
         na.rm = TRUE
       ) +
-      geom_label(
-        aes(label = sprintf("%.2f%%", mean_timeout_pct)),
-        vjust = -0.80,
+      geom_text(
+        aes(label = timeout_label),
+        vjust = OBSERVED_INDIVIDUAL_LABEL_VJUST,
         size = 3.4,
-        fontface = "bold",
-        fill = "white",
-        linewidth = 0,
-        label.padding = grid::unit(0.10, "lines")
+        fontface = "bold"
       ) +
-      scale_y_continuous(labels = function(x) paste0(format(x, trim = TRUE), "%")) +
+      scale_y_continuous(
+        breaks = timeout_breaks,
+        labels = function(x) paste0(format(x, trim = TRUE), "%")
+      ) +
       labs(
         x = NULL,
         y = "TIMEOUT responses (%)",
@@ -1640,6 +1785,7 @@ make_calibration_plot <- function(dat) {
   dat_calib_last_n <- dat_calib_post %>%
     slice_tail(n = n_last)
 
+  acc_mean_all <- mean(dat_calib$correct_num, na.rm = TRUE)
   acc_mean_last_n <- mean(dat_calib_last_n$correct_num, na.rm = TRUE)
   delta_mean_calib <- mean(dat_calib_last_n$delta_stair_realised, na.rm = TRUE)
   delta_sd_calib <- sd(dat_calib_last_n$delta_stair_realised, na.rm = TRUE)
@@ -1754,10 +1900,20 @@ make_calibration_plot <- function(dat) {
       x = Inf,
       y = -Inf,
       hjust = 1.05,
-      vjust = -5.0,
+      vjust = -7.0,
       size = 3.5,
       colour = "black",
       label = sprintf("Target acc = %.2f", TARGET_ACC)
+    ) +
+    annotate(
+      "text",
+      x = Inf,
+      y = -Inf,
+      hjust = 1.05,
+      vjust = -5.0,
+      size = 3.5,
+      colour = "black",
+      label = sprintf("Whole-block acc = %.2f", acc_mean_all)
     ) +
     annotate(
       "text",
@@ -2068,31 +2224,34 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
     slider_dat = slider_dat,
     split_by_pattern = TRUE
   )
+  group_timeout_summary <- make_timeout_plot(
+    dat,
+    split_by_pattern = TRUE
+  )
   group_condition_combined <- (
     group_condition_summary$acc_plot +
       labs(title = NULL, caption = NULL) +
-      theme(
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank()
-      ) +
-      guides(colour = "none", shape = "none")
+      theme(legend.position = "none")
   ) / (
     group_condition_summary$rating_plot +
       labs(title = NULL) +
-      theme(
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank()
-      )
+      theme(legend.position = "bottom", legend.box = "vertical")
   ) / (
     group_condition_summary$rt_plot +
       labs(title = NULL) +
-      guides(colour = "none", shape = "none")
+      theme(legend.position = "none")
+  ) / (
+    group_timeout_summary$plot +
+      labs(title = NULL) +
+      theme(legend.position = "none")
   ) +
-    plot_layout(guides = "collect") +
     plot_annotation(
-      title = paste0(PLOT_LABEL, " accuracy, self-ratings, and RT by block")
-    ) &
-    theme(legend.position = "bottom", legend.box = "vertical")
+      title = paste0(
+        "Time Pressure Study:\n",
+        PLOT_LABEL,
+        " accuracy, self-ratings, RT, and TIMEOUT responses by block"
+      )
+    )
 
   written <- c(
     written,
@@ -2112,15 +2271,11 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
       group_condition_combined,
       paste0(OUTPUT_PREFIX, "_block_accuracy_rt_means"),
       width = 8.5,
-      height = 11
+      height = 14.5
     )
   )
 
   if (PLOT_MODE %in% c("cohort", "group")) {
-    group_timeout_summary <- make_timeout_plot(
-      dat,
-      split_by_pattern = TRUE
-    )
     written <- c(
       written,
       save_plot_pair(
@@ -2212,7 +2367,9 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
     wrap_elements(full = p_auto),
     ncol = 1
   ) +
-    plot_annotation(title = "Calibration and post-calibration performance dynamics")
+    plot_annotation(
+      title = "Time Pressure Study: Calibration and post-calibration performance dynamics"
+    )
 
   condition_summary <- make_condition_summary_plots(dat, slider_dat = slider_dat)
   condition_summary_combined <- (
