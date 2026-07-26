@@ -2547,6 +2547,34 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
     dat,
     split_by_pattern = TRUE
   )
+  group_performance_combined <- (
+    group_condition_summary$acc_plot +
+      labs(title = NULL, subtitle = NULL, caption = NULL) +
+      theme(legend.position = "none")
+  ) / (
+    group_timeout_summary$plot +
+      labs(title = NULL, subtitle = NULL) +
+      theme(legend.position = "none")
+  ) / (
+    group_condition_summary$rt_plot +
+      labs(title = NULL, subtitle = NULL)
+  ) +
+    plot_annotation(
+      title = paste0(PLOT_LABEL, " summary by block"),
+      subtitle = paste0(
+        "Within-pattern Morey-Cousineau SEs across five blocks; ",
+        "HP65_LP95 n = 1 (no SE).\n",
+        "Accuracy and correct-RT calibration means use the final ",
+        CALIB_SUMMARY_LAST_N,
+        " trials."
+      ),
+      caption = "Dashed segments in the accuracy panel show assigned aid accuracy in automation blocks.",
+      theme = theme(
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 9.5, lineheight = 1.1),
+        plot.caption = element_text(size = 9)
+      )
+    )
   group_condition_combined <- (
     group_condition_summary$acc_plot +
       labs(title = NULL, caption = NULL) +
@@ -2585,6 +2613,12 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
       paste0(OUTPUT_PREFIX, "_block_self_rated_accuracy_means"),
       width = 8.5,
       height = 6
+    ),
+    save_plot_pair(
+      group_performance_combined,
+      paste0(OUTPUT_PREFIX, "_block_accuracy_timeout_rt_means"),
+      width = 8.5,
+      height = 12.5
     ),
     save_plot_pair(
       group_aid_outcome_summary$acc_plot,
