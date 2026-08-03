@@ -17,12 +17,12 @@ args <- commandArgs(trailingOnly = TRUE)
 INPUT_FILE <- if (length(args) >= 1) {
   args[[1]]
 } else {
-  "data/semester2_2026_data/data_virus_all.csv"
+  "data/semester2_2026_data_pilot/data_virus_all.csv"
 }
 OUTPUT_DIR <- if (length(args) >= 2) {
   args[[2]]
 } else {
-  "plots/semester2_2026_data"
+  "plots/semester2_2026_data_pilot"
 }
 OUTPUT_STEM <- if (length(args) >= 3) {
   args[[3]]

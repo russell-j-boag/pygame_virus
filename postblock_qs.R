@@ -13,9 +13,9 @@ BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION")
 BLOCK_LABELS <- c("Calibration", "Manual", "Automation")
 BLOCK_DEADLINE_LEVELS <- c(
   "Calibration 3s",
-  "Manual 1.5s",
+  "Manual 1s",
   "Manual 3s",
-  "Automation 1.5s",
+  "Automation 1s",
   "Automation 3s"
 )
 RELIABILITY_LEVELS <- c("high", "low", "none")

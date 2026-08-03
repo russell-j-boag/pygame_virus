@@ -15,7 +15,7 @@ CALIB_SUMMARY_LAST_N <- 150
 PLOT_DIR <- "plots"
 BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION")
 BLOCK_LEVELS <- c("Calibration", "Manual", "Automation")
-DEADLINE_LEVELS <- c("1.5s", "3s")
+DEADLINE_LEVELS <- c("1s", "3s")
 AUTO_BLOCK_LABELS <- c(
   "AUTOMATION" = "Automation"
 )

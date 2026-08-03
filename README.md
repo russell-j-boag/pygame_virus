@@ -30,15 +30,15 @@ The deck builder requires `pandoc` and Pillow.
 
 ## Current task design
 
-The task uses a two-level time-pressure design. High pressure (`HP`) uses a 1.5 s response deadline and low pressure (`LP`) uses a 3 s response deadline.
+The task uses a two-level time-pressure design. High pressure (`HP`) uses a 1 s response deadline and low pressure (`LP`) uses a 3 s response deadline.
 
 Each participant completes one calibration block only. All participants are calibrated to 80% accuracy under the LP deadline. The resulting participant-specific stimulus difficulty is then reused for every post-calibration manual and automation block, regardless of that block's pressure deadline.
 
 | Code | Mode | Deadline | Trials |
 | --- | --- | ---: | ---: |
 | `CAL_LP` | Calibration | 3 s | 300 |
-| `M_HP` | Manual | 1.5 s | 400 |
-| `A_HP` | Automation | 1.5 s | 400 |
+| `M_HP` | Manual | 1 s | 400 |
+| `A_HP` | Automation | 1 s | 400 |
 | `M_LP` | Manual | 3 s | 400 |
 | `A_LP` | Automation | 3 s | 400 |
 
@@ -118,12 +118,12 @@ The main trial and post-block output files include fields that identify the desi
 
 Seconds are the canonical exported timing unit for deadlines and response times. The fixed LP calibration metadata (`CAL_LP`, 3 s) is part of the task design and is not repeated as separate calibration columns in every row.
 
-Single-block calibration runs must use the 3 s LP calibration deadline. The task will stop with an error if a 1.5 s HP calibration deadline is requested. Single-block automation runs require an explicit reliability group, for example:
+Single-block calibration runs must use the 3 s LP calibration deadline. The task will stop with an error if a 1 s HP calibration deadline is requested. Single-block automation runs require an explicit reliability group, for example:
 
 ```r
 run_task(block = "CALIBRATION", deadline_s = 3)
-run_task(block = "MANUAL", deadline_s = 1.5)
-run_task(block = "AUTOMATION", deadline_s = 1.5, reliability_group = "high")
+run_task(block = "MANUAL", deadline_s = 1)
+run_task(block = "AUTOMATION", deadline_s = 1, reliability_group = "high")
 run_task(block = "AUTOMATION", deadline_s = 3, reliability_group = "low")
 ```
 

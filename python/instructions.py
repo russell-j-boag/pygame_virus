@@ -112,7 +112,7 @@ SLIDES = [
     },
     {
         "kind": "example_task_display",
-        "callout": "deadline_1_5s",
+        "callout": "deadline_1s",
     },
     {
         "kind": "example_task_display",
@@ -154,7 +154,7 @@ SLIDES = [
             "We will keep an ongoing tally of your performance. "
             "At the end of the experiment you will receive a point-based bonus, up to $25, based on your performance score.\n\n"
             "Response deadlines vary by block, and you will be told the deadline before each block. "
-            "The deadline will be either 1.5 or 3 seconds, depending on the block. "
+            "The deadline will be either 1 or 3 seconds, depending on the block. "
             "Incorrect responses and responses not made before the deadline will reduce your performance score, so try "
             "to respond as quickly and accurately as possible.\n\n"
             "You may take short breaks at any time between trials\n\n"
@@ -572,7 +572,7 @@ def draw_example_task_display(
     timer_rect = draw_countdown_timer(
         surface=screen,
         font=font_body,
-        ms_left=1300,
+        ms_left=800,
         x=PB_PAD,
         y=PB_PAD,
         color=WHITE,
@@ -652,7 +652,7 @@ def draw_example_task_slide(
     callout_body_font = font_small
     AID_ARROW_PAD = S(12)
     
-    if callout in ("timer", "deadline_3s", "deadline_1_5s"):
+    if callout in ("timer", "deadline_3s", "deadline_1s"):
         timer_callouts = {
             "timer": (
                 "Timer",
@@ -662,9 +662,9 @@ def draw_example_task_slide(
                 "3 second deadline",
                 "In some blocks, the deadline will be 3 seconds. This means you should make your response within 3 seconds.",
             ),
-            "deadline_1_5s": (
-                "1.5 second deadline",
-                "In other blocks, the deadline will be 1.5 seconds. This means you should make your response within 1.5 seconds.",
+            "deadline_1s": (
+                "1 second deadline",
+                "In other blocks, the deadline will be 1 second. This means you should make your response within 1 second.",
             ),
         }
         timer_title, timer_body = timer_callouts[callout]

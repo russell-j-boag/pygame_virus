@@ -31,7 +31,7 @@ run_ts = datetime.fromtimestamp(run_ts).strftime("%Y%m%d_%H%M%S")
 POST_CALIBRATION_N_TRIALS = 400
 CALIBRATION_N_TRIALS = 300
 TIME_PRESSURE_DEADLINES_MS = {
-    "HP": 1500,
+    "HP": 1000,
     "LP": 3000,
 }
 TIME_PRESSURE_LABELS = {
@@ -292,11 +292,18 @@ def format_deadline_s(deadline_s) -> str:
     return f"{deadline_s:g}"
 
 
+def format_deadline_duration(deadline_s) -> str:
+    if deadline_s is None:
+        return "no deadline"
+    unit = "second" if float(deadline_s) == 1 else "seconds"
+    return f"{format_deadline_s(deadline_s)} {unit}"
+
+
 def time_pressure_instruction_slide(block_cfg) -> str:
     deadline_s = trial_deadline_s_for_block(block_cfg)
-    deadline_text = format_deadline_s(deadline_s)
+    deadline_text = format_deadline_duration(deadline_s)
     return (
-        f"In this block, each trial has a response deadline of {deadline_text} seconds. "
+        f"In this block, each trial has a response deadline of {deadline_text}. "
         "If you do not respond before the deadline, the trial will be recorded as incorrect. "
         "Please respond as accurately as possible while staying within the deadline."
     )
@@ -3036,7 +3043,7 @@ def parse_cli_args():
         "--deadline-s",
         type=float,
         default=None,
-        help="Select the 1.5s or 3s pressure variant when --block has multiple deadlines.",
+        help="Select the 1s or 3s pressure variant when --block has multiple deadlines.",
     )
     parser.add_argument(
         "--reliability-group",

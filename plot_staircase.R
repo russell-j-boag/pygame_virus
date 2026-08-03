@@ -4,7 +4,7 @@
 #   Rscript plot_staircase.R [input_dir_or_file] [output_dir] [output_prefix] [plot_label] [mode] [slider_file]
 #
 # Defaults are set for the Harry pilot data. Deadline labels are read from the
-# CSV, so older 2/4 s pilot runs and current 1.5/3 s runs are both labelled as
+# CSV, so older pilot runs and current 1/3 s runs are both labelled as
 # collected. Set mode to "cohort" for participant-specific and group plots from
 # a collated, multi-participant data_virus_all.csv file, or "group" to regenerate
 # only the cohort group plots. Set mode to "accuracy" to regenerate only the
