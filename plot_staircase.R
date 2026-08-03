@@ -511,6 +511,22 @@ make_pattern_labels <- function(data) {
   setNames(labels, as.character(pattern_counts$automation_reliability_pattern))
 }
 
+make_singleton_pattern_notes <- function(data) {
+  data %>%
+    distinct(participant_id, automation_reliability_pattern) %>%
+    count(automation_reliability_pattern, name = "n_participants") %>%
+    filter(n_participants < 2) %>%
+    transmute(
+      note = paste0(
+        automation_reliability_pattern,
+        " n = ",
+        n_participants,
+        " (no SE)"
+      )
+    ) %>%
+    pull(note)
+}
+
 add_pattern_scales <- function(plot, pattern_labels) {
   pattern_breaks <- intersect(
     RELIABILITY_PATTERN_LEVELS,
@@ -969,11 +985,18 @@ make_condition_summary_plots <- function(
       ungroup()
   }
   n_subjects <- n_distinct(summary_dat$participant_id)
+  singleton_text <- make_singleton_pattern_notes(summary_dat)
   rt_subtitle <- if (split_by_pattern) {
     paste0(
       "Within-pattern Morey-Cousineau SEs across ",
       length(SUMMARY_CONDITION_CODES),
-      " blocks; HP65_LP95 n = 1 (no SE); calibration = final ",
+      " blocks",
+      if (length(singleton_text) > 0) {
+        paste0("; ", paste(singleton_text, collapse = ", "))
+      } else {
+        ""
+      },
+      "; calibration = final ",
       CALIB_SUMMARY_LAST_N,
       " trials"
     )
@@ -992,13 +1015,6 @@ make_condition_summary_plots <- function(
   accuracy_subtitle <- rt_subtitle
   rating_subtitle <- NULL
   if (!is.null(rating_summary) && split_by_pattern) {
-    pattern_counts <- summary_dat %>%
-      distinct(participant_id, automation_reliability_pattern) %>%
-      count(automation_reliability_pattern, name = "n_participants")
-    singleton_text <- pattern_counts %>%
-      filter(n_participants < 2) %>%
-      transmute(note = paste0(automation_reliability_pattern, " n = 1 (no SE)")) %>%
-      pull(note)
     accuracy_subtitle <- paste0(
       "Within-pattern Morey-Cousineau SEs: observed = 5 blocks, own rating = 3, aid rating = 2",
       "\n",
@@ -1922,8 +1938,16 @@ make_timeout_plot <- function(dat, split_by_pattern = FALSE) {
   }
 
   n_subjects <- n_distinct(subj_timeout$participant_id)
+  singleton_text <- make_singleton_pattern_notes(subj_timeout)
   timeout_subtitle <- if (split_by_pattern) {
-    "Within-pattern Morey-Cousineau SEs across five blocks; HP65_LP95 n = 1 (no SE)"
+    paste0(
+      "Within-pattern Morey-Cousineau SEs across five blocks",
+      if (length(singleton_text) > 0) {
+        paste0("; ", paste(singleton_text, collapse = ", "))
+      } else {
+        ""
+      }
+    )
   } else if (n_subjects >= 2) {
     "Error bars are Morey-Cousineau within-subject SEs across five blocks"
   } else {
@@ -2547,6 +2571,7 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
     dat,
     split_by_pattern = TRUE
   )
+  group_singleton_text <- make_singleton_pattern_notes(dat)
   group_performance_combined <- (
     group_condition_summary$acc_plot +
       labs(title = NULL, subtitle = NULL, caption = NULL) +
@@ -2562,8 +2587,13 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
     plot_annotation(
       title = paste0(PLOT_LABEL, " summary by block"),
       subtitle = paste0(
-        "Within-pattern Morey-Cousineau SEs across five blocks; ",
-        "HP65_LP95 n = 1 (no SE).\n",
+        "Within-pattern Morey-Cousineau SEs across five blocks",
+        if (length(group_singleton_text) > 0) {
+          paste0("; ", paste(group_singleton_text, collapse = ", "))
+        } else {
+          ""
+        },
+        ".\n",
         "Accuracy and correct-RT calibration means use the final ",
         CALIB_SUMMARY_LAST_N,
         " trials."
