@@ -32,7 +32,7 @@ The deck builder requires `pandoc` and Pillow.
 
 The task uses a two-level time-pressure design. High pressure (`HP`) uses a 1 s response deadline and low pressure (`LP`) uses a 3 s response deadline.
 
-Each participant completes one calibration block only. All participants are calibrated to 80% accuracy under the LP deadline. The resulting participant-specific stimulus difficulty is then reused for every post-calibration manual and automation block, regardless of that block's pressure deadline.
+Each participant completes one calibration block only. All participants are calibrated to 77% accuracy under the LP deadline. The resulting participant-specific stimulus difficulty is then reused for every post-calibration manual and automation block, regardless of that block's pressure deadline.
 
 | Code | Mode | Deadline | Trials |
 | --- | --- | ---: | ---: |

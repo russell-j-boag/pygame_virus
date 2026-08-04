@@ -16,7 +16,7 @@ str(dat)
 
 # Calibration settings
 WINDOW <- 25
-TARGET_ACC <- 0.80
+TARGET_ACC <- 0.77
 BURN_IN_TRIALS <- 50
 CALIB_SUMMARY_LAST_N <- 150
 DELTA_SD <- 0.01

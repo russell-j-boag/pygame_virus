@@ -12,6 +12,7 @@ library("ggplot2")
 # Settings
 # ------------------
 CALIB_SUMMARY_LAST_N <- 150
+CALIBRATION_TARGET_ACCURACY <- 0.77
 PLOT_DIR <- "plots"
 BLOCK_RAW_LEVELS <- c("CALIBRATION", "MANUAL", "AUTOMATION")
 BLOCK_LEVELS <- c("Calibration", "Manual", "Automation")
@@ -435,7 +436,7 @@ acc_hlines <- tibble(
     c("Unaided", "Automation high", "Automation low"),
     levels = levels(acc_summary$facet_group)
   ),
-  yint = c(0.80, 0.95, 0.65)
+  yint = c(CALIBRATION_TARGET_ACCURACY, 0.95, 0.65)
 )
 
 p_acc <- ggplot(acc_summary, aes(x = x_group, y = mean_acc, group = 1)) +
@@ -607,7 +608,7 @@ acc_block_ylim <- get_axis_limits(
   c(
     acc_block_summary$mean_acc,
     slider_block_summary$mean_rated_acc,
-    0.80
+    CALIBRATION_TARGET_ACCURACY
   ),
   c(
     acc_block_summary$se_acc,
@@ -683,7 +684,14 @@ p_acc_block <- ggplot() +
     width = 0.12,
     na.rm = TRUE
   ) +
-  annotate("segment", x = 0.5, xend = 3.5, y = 0.80, yend = 0.80, linetype = "dashed") +
+  annotate(
+    "segment",
+    x = 0.5,
+    xend = 3.5,
+    y = CALIBRATION_TARGET_ACCURACY,
+    yend = CALIBRATION_TARGET_ACCURACY,
+    linetype = "dashed"
+  ) +
   scale_colour_manual(
     values = c(
       "Observed accuracy" = "black",
@@ -969,10 +977,10 @@ id_rt_summary <- id_rt_summary %>%
     participant_id = factor(participant_id, levels = participant_order)
   )
 
-# orange 0.80 line in all panels
+# orange calibration-target line in all panels
 acc_base_lines <- tibble(
   block_simple = factor_block_simple(BLOCK_LEVELS),
-  xint = 0.80
+  xint = CALIBRATION_TARGET_ACCURACY
 )
 
 # empirical mean accuracy line per block
@@ -1114,12 +1122,12 @@ calib_manual_test <- t.test(
 
 calibration_vs_target_test <- t.test(
   calib_manual_acc$accuracy_Calibration,
-  mu = 0.80
+  mu = CALIBRATION_TARGET_ACCURACY
 )
 
 manual_vs_target_test <- t.test(
   calib_manual_acc$accuracy_Manual,
-  mu = 0.80
+  mu = CALIBRATION_TARGET_ACCURACY
 )
 
 calib_manual_long <- calib_manual_acc %>%
@@ -1147,7 +1155,7 @@ participant_palette <- setNames(
 )
 
 calib_manual_ref_lines <- tibble(
-  yint = c(0.95, 0.80, 0.65),
+  yint = c(0.95, CALIBRATION_TARGET_ACCURACY, 0.65),
   label = c("Aid high", "Calib. target", "Aid low")
 )
 
@@ -1306,12 +1314,13 @@ test_summary <- bind_rows(
     conf_high = calib_manual_test$conf.int[2]
   ),
   tibble(
-    test = "one_sample_t_test_calibration_vs_0.80",
+    test = "one_sample_t_test_calibration_vs_0.77",
     n_participants = length(calib_manual_acc$participant_id),
-    reference_value = 0.80,
+    reference_value = CALIBRATION_TARGET_ACCURACY,
     mean_calibration = mean(calib_manual_acc$accuracy_Calibration, na.rm = TRUE),
     mean_manual = NA_real_,
-    mean_difference = mean(calib_manual_acc$accuracy_Calibration, na.rm = TRUE) - 0.80,
+    mean_difference = mean(calib_manual_acc$accuracy_Calibration, na.rm = TRUE) -
+      CALIBRATION_TARGET_ACCURACY,
     t_statistic = unname(calibration_vs_target_test$statistic),
     df = unname(calibration_vs_target_test$parameter),
     p_value = calibration_vs_target_test$p.value,
@@ -1319,12 +1328,13 @@ test_summary <- bind_rows(
     conf_high = calibration_vs_target_test$conf.int[2]
   ),
   tibble(
-    test = "one_sample_t_test_manual_vs_0.80",
+    test = "one_sample_t_test_manual_vs_0.77",
     n_participants = length(calib_manual_acc$participant_id),
-    reference_value = 0.80,
+    reference_value = CALIBRATION_TARGET_ACCURACY,
     mean_calibration = NA_real_,
     mean_manual = mean(calib_manual_acc$accuracy_Manual, na.rm = TRUE),
-    mean_difference = mean(calib_manual_acc$accuracy_Manual, na.rm = TRUE) - 0.80,
+    mean_difference = mean(calib_manual_acc$accuracy_Manual, na.rm = TRUE) -
+      CALIBRATION_TARGET_ACCURACY,
     t_statistic = unname(manual_vs_target_test$statistic),
     df = unname(manual_vs_target_test$parameter),
     p_value = manual_vs_target_test$p.value,

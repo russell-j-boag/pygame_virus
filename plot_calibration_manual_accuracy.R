@@ -36,6 +36,7 @@ PLOT_TITLE <- if (length(args) >= 4) {
 }
 
 CALIB_SUMMARY_LAST_N <- 150
+CALIBRATION_TARGET_ACCURACY <- 0.77
 CONDITION_CODES <- c("CAL_LP", "M_HP", "M_LP")
 CONDITION_LABELS <- c(
   "CAL_LP" = "Calibration",
@@ -200,7 +201,7 @@ participant_palette <- setNames(
 )
 
 reference_lines <- tibble(
-  yint = c(0.95, 0.80, 0.65),
+  yint = c(0.95, CALIBRATION_TARGET_ACCURACY, 0.65),
   label = c("Aid high", "Calib. target", "Aid low")
 )
 

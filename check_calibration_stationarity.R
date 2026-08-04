@@ -6,6 +6,8 @@ library("broom")
 library("zoo")
 library("readr")
 
+TARGET_ACC <- 0.77
+
 files <- list.files(
   "output",
   pattern = "^results_.*_b00_ALL\\.csv$",
@@ -55,7 +57,7 @@ cal <- cal %>%
 
 ggplot(cal, aes(stair_trial, acc_roll_10)) +
   geom_line() +
-  geom_hline(yintercept = 0.80, linetype = "dashed") +
+  geom_hline(yintercept = TARGET_ACC, linetype = "dashed") +
   geom_vline(xintercept = burn_in, linetype = "dashed") +
   labs(
     x = "Staircase trial",
@@ -98,11 +100,11 @@ acc_mean <- cal_post %>%
 
 acc_mean
 
-# Compare mean accuracy to target accuracy 0.80
+# Compare mean accuracy to the calibration target
 acc_test <- binom.test(
   x = sum(cal_post$correct_num),
   n = nrow(cal_post),
-  p = 0.80
+  p = TARGET_ACC
 )
 
 acc_test
@@ -111,7 +113,7 @@ acc_test
 prop.test(
   x = sum(cal_post$correct_num),
   n = nrow(cal_post),
-  p = 0.80,
+  p = TARGET_ACC,
   correct = FALSE
 )
 
@@ -127,5 +129,5 @@ binom.test(
 # showed no reliable remaining trend in staircase difficulty over 
 # trial number. A logistic regression likewise showed no remaining 
 # trend in correctness over trial number. Mean post-burn-in accuracy 
-# was 0.78, which was consistent with the 0.80 target under an exact 
+# was 0.78, which was consistent with the 0.77 target under an exact
 # binomial test.
