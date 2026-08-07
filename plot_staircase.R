@@ -1938,7 +1938,11 @@ make_timeout_plot <- function(dat, split_by_pattern = FALSE) {
   }
 
   n_subjects <- n_distinct(subj_timeout$participant_id)
-  singleton_text <- make_singleton_pattern_notes(subj_timeout)
+  singleton_text <- if (split_by_pattern) {
+    make_singleton_pattern_notes(subj_timeout)
+  } else {
+    character(0)
+  }
   timeout_subtitle <- if (split_by_pattern) {
     paste0(
       "Within-pattern Morey-Cousineau SEs across five blocks",
