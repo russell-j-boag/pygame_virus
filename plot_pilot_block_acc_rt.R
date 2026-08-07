@@ -46,9 +46,9 @@ GROUP_RT_LABEL_OFFSET <- 0.04
 AID_CORRECTNESS_LEVELS <- c("Aid correct", "Manual", "Aid incorrect")
 AID_PHASE_CODES <- c("P1_95", "P2_70", "P3_95")
 AID_PHASE_LABELS <- c(
-  "P1_95" = "P1 95%",
-  "P2_70" = "P2 70%",
-  "P3_95" = "P3 95%"
+  "P1_95" = "Phase 1: 95% reliability",
+  "P2_70" = "Phase 2: 70% reliability",
+  "P3_95" = "Phase 3: 95% reliability"
 )
 AID_CORRECTNESS_CONDITION_LEVELS <- c(
   "P1_95__AID_CORRECT",
@@ -1053,6 +1053,17 @@ make_group_plots <- function(
   plot_label
 ) {
   group_labels <- make_group_labels(participant_observed)
+  single_participant_groups <- participant_observed %>%
+    distinct(participant_id, calibration_target_group) %>%
+    count(calibration_target_group, name = "n") %>%
+    filter(n == 1) %>%
+    transmute(label = paste0(calibration_target_group, " n = 1 (no SE)")) %>%
+    pull(label)
+  single_participant_note <- if (length(single_participant_groups)) {
+    paste0("; ", paste(single_participant_groups, collapse = ", "))
+  } else {
+    ""
+  }
 
   acc_summary <- summarise_repeated(
     participant_observed,
@@ -1237,8 +1248,9 @@ make_group_plots <- function(
       y = "Mean accuracy",
       title = paste0(plot_label, " group observed accuracy by block/drop phase"),
       subtitle = paste0(
-        "Within-group Morey-Cousineau SEs across 6 phases; ",
-        "CAL90 n = 1 (no SE); calibration = final ",
+        "Within-group Morey-Cousineau SEs across 6 phases",
+        single_participant_note,
+        "; calibration = final ",
         CALIB_SUMMARY_LAST_N,
         " trials"
       ),
@@ -1285,8 +1297,9 @@ make_group_plots <- function(
       y = "Mean correct RT (s)",
       title = paste0(plot_label, " group mean correct RT by block/drop phase"),
       subtitle = paste0(
-        "Within-group Morey-Cousineau SEs across 6 phases; ",
-        "CAL90 n = 1 (no SE); calibration = final ",
+        "Within-group Morey-Cousineau SEs across 6 phases",
+        single_participant_note,
+        "; calibration = final ",
         CALIB_SUMMARY_LAST_N,
         " trials"
       )
@@ -1357,7 +1370,8 @@ make_group_plots <- function(
       title = paste0(plot_label, " group self-rated accuracy by block"),
       subtitle = paste0(
         "Own ratings: within-group Morey-Cousineau SEs across 3 occasions\n",
-        "aid rating: between-participant SE; CAL90 n = 1 (no SE)"
+        "aid rating: between-participant SE",
+        single_participant_note
       ),
       caption = paste0(
         "Automation rating refers to the full 1,200-trial aided block. ",
