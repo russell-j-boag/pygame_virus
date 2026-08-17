@@ -54,6 +54,13 @@ CONDITION_NAMES <- c(
 )
 TARGET_GROUPS <- c("CAL65", "CAL90")
 TARGET_ACCURACIES <- c("CAL65" = 0.65, "CAL90" = 0.90)
+ANNOTATION_TARGET_BAND <- 0.10
+PARTICIPANT_LABEL_SIZE <- 2
+PARTICIPANT_LABEL_NUDGE_X <- 0.05
+GROUP_MEAN_LABEL_SIZE <- 3
+GROUP_MEAN_LABEL_NUDGE_Y <- 0.008
+PLOT_WIDTH_IN <- 10
+PLOT_HEIGHT_IN <- 7.875
 TARGET_GROUP_COLOURS <- c(
   "CAL65" = "#0072B2",
   "CAL90" = "#D55E00"
@@ -315,13 +322,30 @@ group_labels <- participant_condition_means %>%
   { setNames(.$label, as.character(.$calibration_target_group)) }
 group_breaks <- intersect(TARGET_GROUPS, names(group_labels))
 
+group_mean_labels <- participant_condition_means %>%
+  group_by(calibration_target_group, condition_label) %>%
+  summarise(mean_accuracy = mean(accuracy), .groups = "drop") %>%
+  mutate(mean_label = sprintf("%.1f%%", mean_accuracy * 100))
+
 reference_lines <- tibble(
   yint = unname(TARGET_ACCURACIES),
   label = c("CAL65 target", "CAL90 target")
 )
 
 participant_labels <- participant_condition_means %>%
-  filter(condition_code == "MAN_POST")
+  filter(condition_code %in% c("MAN_PRE", "MAN_POST")) %>%
+  mutate(
+    target_deviation = abs(accuracy - calibration_target_accuracy)
+  ) %>%
+  filter(target_deviation > ANNOTATION_TARGET_BAND + 1e-10) %>%
+  group_by(condition_code, condition_label, accuracy) %>%
+  summarise(
+    participant_label = paste(
+      sort(as.integer(as.character(participant_id))),
+      collapse = ", "
+    ),
+    .groups = "drop"
+  )
 
 accuracy_plot <- ggplot(
   participant_condition_means,
@@ -359,10 +383,15 @@ accuracy_plot <- ggplot(
   ) +
   geom_text(
     data = participant_labels,
-    aes(label = participant_id),
-    hjust = 1,
-    nudge_x = -0.07,
-    size = 3,
+    aes(
+      x = condition_label,
+      y = accuracy,
+      label = participant_label
+    ),
+    inherit.aes = FALSE,
+    hjust = 0,
+    nudge_x = PARTICIPANT_LABEL_NUDGE_X,
+    size = PARTICIPANT_LABEL_SIZE,
     show.legend = FALSE
   ) +
   scale_fill_manual(values = participant_palette) +
@@ -384,6 +413,24 @@ accuracy_plot <- ggplot(
     fun = mean,
     geom = "point",
     size = 3.4
+  ) +
+  geom_label(
+    data = group_mean_labels,
+    aes(
+      x = condition_label,
+      y = mean_accuracy,
+      label = mean_label,
+      colour = calibration_target_group
+    ),
+    inherit.aes = FALSE,
+    nudge_y = GROUP_MEAN_LABEL_NUDGE_Y,
+    vjust = 0,
+    size = GROUP_MEAN_LABEL_SIZE,
+    fontface = "bold",
+    fill = "white",
+    linewidth = 0,
+    label.padding = grid::unit(0.08, "lines"),
+    show.legend = FALSE
   ) +
   scale_colour_manual(
     values = TARGET_GROUP_COLOURS,
@@ -427,15 +474,15 @@ ggsave(
   filename = pdf_path,
   plot = accuracy_plot,
   device = cairo_pdf,
-  width = 10,
-  height = 5.5,
+  width = PLOT_WIDTH_IN,
+  height = PLOT_HEIGHT_IN,
   units = "in"
 )
 ggsave(
   filename = png_path,
   plot = accuracy_plot,
-  width = 10,
-  height = 5.5,
+  width = PLOT_WIDTH_IN,
+  height = PLOT_HEIGHT_IN,
   units = "in",
   dpi = 300
 )
