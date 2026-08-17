@@ -44,6 +44,26 @@ GROUP_LABEL_OFFSET_PROPORTION <- ACCURACY_GROUP_LABEL_OFFSET /
 OBSERVED_INDIVIDUAL_LABEL_VJUST <- -1.3
 POST_CONDITION_CODES <- c("M_HP", "A_HP", "A_LP", "M_LP")
 ALL_CONDITION_CODES <- c("CAL_LP", POST_CONDITION_CODES)
+PRESSURE_CONDITION_CODES <- c("M_HP", "A_HP", "M_LP", "A_LP")
+PRESSURE_LEVELS <- c("HP", "LP")
+PRESSURE_LABELS <- c(
+  "HP" = "1 s\n(HP)",
+  "LP" = "3 s\n(LP)"
+)
+CONDITION_TYPE_LEVELS <- c("Manual", "Automation")
+CONDITION_TYPE_COLORS <- c(
+  "Manual" = "#4D4D4D",
+  "Automation" = "#0072B2"
+)
+CONDITION_TYPE_SHAPES <- c(
+  "Manual" = 16,
+  "Automation" = 17
+)
+LOW_RELIABILITY_GROUP_LEVELS <- c("HP65", "LP65")
+LOW_RELIABILITY_GROUP_MAP <- c(
+  "HP65_LP95" = "HP65",
+  "HP95_LP65" = "LP65"
+)
 RELIABILITY_PATTERN_LEVELS <- c("HP95_LP65", "HP65_LP95")
 RELIABILITY_PATTERN_COLORS <- c(
   "HP95_LP65" = "#0072B2",
@@ -1545,6 +1565,589 @@ make_condition_summary_plots <- function(
   )
 }
 
+make_pressure_condition_summary_plots <- function(dat) {
+  pressure_dat <- dat %>%
+    filter(condition_deadline_code %in% PRESSURE_CONDITION_CODES) %>%
+    mutate(
+      condition_deadline_code = factor(
+        condition_deadline_code,
+        levels = PRESSURE_CONDITION_CODES
+      ),
+      pressure = factor(
+        time_pressure_condition,
+        levels = PRESSURE_LEVELS
+      ),
+      condition_type = factor(
+        if_else(
+          as.character(condition_deadline_code) %in% c("M_HP", "M_LP"),
+          "Manual",
+          "Automation"
+        ),
+        levels = CONDITION_TYPE_LEVELS
+      ),
+      reliability_group = factor(
+        unname(
+          LOW_RELIABILITY_GROUP_MAP[
+            as.character(automation_reliability_pattern)
+          ]
+        ),
+        levels = LOW_RELIABILITY_GROUP_LEVELS
+      ),
+      correct_num = if_else(is.na(correct), 0, as.numeric(correct))
+    )
+
+  if (nrow(pressure_dat) == 0) {
+    stop(
+      "No post-calibration Manual/Automation HP/LP trials were found.",
+      call. = FALSE
+    )
+  }
+
+  invalid_patterns <- pressure_dat %>%
+    filter(is.na(reliability_group)) %>%
+    distinct(automation_reliability_pattern) %>%
+    pull(automation_reliability_pattern)
+  if (length(invalid_patterns) > 0) {
+    stop(
+      "Unsupported automation reliability pattern(s): ",
+      paste(invalid_patterns, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  unstable_patterns <- pressure_dat %>%
+    distinct(participant_id, reliability_group) %>%
+    count(participant_id, name = "n_groups") %>%
+    filter(n_groups != 1)
+  if (nrow(unstable_patterns) > 0) {
+    stop(
+      "Participants must have one stable reliability group. IDs: ",
+      paste(unstable_patterns$participant_id, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  missing_groups <- setdiff(
+    LOW_RELIABILITY_GROUP_LEVELS,
+    unique(as.character(pressure_dat$reliability_group))
+  )
+  if (length(missing_groups) > 0) {
+    stop(
+      "Missing reliability group(s): ",
+      paste(missing_groups, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  expected_cells <- tidyr::crossing(
+    participant_id = sort(unique(pressure_dat$participant_id)),
+    condition_deadline_code = PRESSURE_CONDITION_CODES
+  )
+  observed_cells <- pressure_dat %>%
+    transmute(
+      participant_id,
+      condition_deadline_code = as.character(condition_deadline_code)
+    ) %>%
+    distinct()
+  missing_cells <- expected_cells %>%
+    anti_join(
+      observed_cells,
+      by = c("participant_id", "condition_deadline_code")
+    )
+  if (nrow(missing_cells) > 0) {
+    missing_text <- paste0(
+      missing_cells$participant_id,
+      ":",
+      missing_cells$condition_deadline_code
+    )
+    stop(
+      "Every participant must have all four post-calibration cells. Missing: ",
+      paste(missing_text, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  invalid_pressure <- pressure_dat %>%
+    transmute(
+      participant_id,
+      condition_deadline_code = as.character(condition_deadline_code),
+      pressure = as.character(pressure),
+      expected_pressure = if_else(
+        condition_deadline_code %in% c("M_HP", "A_HP"),
+        "HP",
+        "LP"
+      )
+    ) %>%
+    filter(is.na(pressure) | pressure != expected_pressure) %>%
+    distinct()
+  if (nrow(invalid_pressure) > 0) {
+    stop(
+      "Condition codes and time-pressure labels are inconsistent.",
+      call. = FALSE
+    )
+  }
+
+  participant_group_cols <- c(
+    "participant_id",
+    "reliability_group",
+    "condition_deadline_code"
+  )
+  participant_acc <- pressure_dat %>%
+    group_by(across(all_of(participant_group_cols))) %>%
+    summarise(
+      accuracy = mean(correct_num),
+      .groups = "drop"
+    )
+
+  participant_timeout <- pressure_dat %>%
+    group_by(across(all_of(participant_group_cols))) %>%
+    summarise(
+      n_trials = n(),
+      n_timeout = sum(response == "TIMEOUT", na.rm = TRUE),
+      timeout_pct = 100 * n_timeout / n_trials,
+      .groups = "drop"
+    )
+
+  correct_rt_dat <- pressure_dat %>%
+    filter(correct %in% TRUE, is.finite(rt_s))
+  observed_rt_cells <- correct_rt_dat %>%
+    transmute(
+      participant_id,
+      condition_deadline_code = as.character(condition_deadline_code)
+    ) %>%
+    distinct()
+  missing_rt_cells <- expected_cells %>%
+    anti_join(
+      observed_rt_cells,
+      by = c("participant_id", "condition_deadline_code")
+    )
+  if (nrow(missing_rt_cells) > 0) {
+    missing_text <- paste0(
+      missing_rt_cells$participant_id,
+      ":",
+      missing_rt_cells$condition_deadline_code
+    )
+    stop(
+      "Every participant must have a finite correct RT in all four cells. Missing: ",
+      paste(missing_text, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  participant_rt <- correct_rt_dat %>%
+    group_by(across(all_of(participant_group_cols))) %>%
+    summarise(
+      mean_rt = mean(rt_s),
+      .groups = "drop"
+    )
+
+  add_plot_factors <- function(summary_dat) {
+    summary_dat %>%
+      mutate(
+        reliability_group = factor(
+          reliability_group,
+          levels = LOW_RELIABILITY_GROUP_LEVELS
+        ),
+        pressure = factor(
+          if_else(
+            as.character(condition_deadline_code) %in% c("M_HP", "A_HP"),
+            "HP",
+            "LP"
+          ),
+          levels = PRESSURE_LEVELS
+        ),
+        condition_type = factor(
+          if_else(
+            as.character(condition_deadline_code) %in% c("M_HP", "M_LP"),
+            "Manual",
+            "Automation"
+          ),
+          levels = CONDITION_TYPE_LEVELS
+        )
+      ) %>%
+      arrange(reliability_group, pressure, condition_type)
+  }
+
+  acc_summary <- summarise_morey_condition_mean(
+    data = participant_acc,
+    value_col = "accuracy",
+    mean_name = "mean_accuracy",
+    se_name = "se_accuracy",
+    n_conditions = length(PRESSURE_CONDITION_CODES),
+    between_col = "reliability_group"
+  ) %>%
+    add_plot_factors() %>%
+    mutate(
+      accuracy_label = sprintf("%.1f%%", mean_accuracy * 100),
+      accuracy_label_y = if_else(
+        condition_type == "Manual",
+        mean_accuracy + coalesce(se_accuracy, 0) + 0.018,
+        mean_accuracy - coalesce(se_accuracy, 0) - 0.018
+      )
+    )
+
+  rt_summary <- summarise_morey_condition_mean(
+    data = participant_rt,
+    value_col = "mean_rt",
+    mean_name = "mean_rt",
+    se_name = "se_rt",
+    n_conditions = length(PRESSURE_CONDITION_CODES),
+    between_col = "reliability_group"
+  ) %>%
+    add_plot_factors() %>%
+    mutate(
+      rt_label = sprintf("%.3f s", mean_rt),
+      rt_label_y = if_else(
+        condition_type == "Manual",
+        mean_rt + coalesce(se_rt, 0) + 0.012,
+        mean_rt - coalesce(se_rt, 0) - 0.012
+      )
+    )
+
+  timeout_summary <- summarise_morey_condition_mean(
+    data = participant_timeout,
+    value_col = "timeout_pct",
+    mean_name = "mean_timeout_pct",
+    se_name = "se_timeout_pct",
+    n_conditions = length(PRESSURE_CONDITION_CODES),
+    between_col = "reliability_group"
+  ) %>%
+    add_plot_factors()
+
+  timeout_base_ylim <- get_axis_limits(
+    timeout_summary$mean_timeout_pct,
+    timeout_summary$se_timeout_pct,
+    pad_prop = 0.25,
+    bounds = c(0, 100)
+  )
+  timeout_label_offset <- max(
+    diff(timeout_base_ylim) * GROUP_LABEL_OFFSET_PROPORTION,
+    0.18
+  )
+  timeout_summary <- timeout_summary %>%
+    mutate(
+      timeout_label = sprintf("%.2f%%", mean_timeout_pct),
+      timeout_label_y = if_else(
+        condition_type == "Manual",
+        mean_timeout_pct + coalesce(se_timeout_pct, 0) +
+          timeout_label_offset,
+        mean_timeout_pct - coalesce(se_timeout_pct, 0) -
+          timeout_label_offset
+      )
+    )
+
+  facet_counts <- pressure_dat %>%
+    distinct(participant_id, reliability_group) %>%
+    count(reliability_group, name = "n_participants") %>%
+    arrange(reliability_group)
+  facet_labels <- setNames(
+    paste0(
+      as.character(facet_counts$reliability_group),
+      " (n = ",
+      facet_counts$n_participants,
+      ")"
+    ),
+    as.character(facet_counts$reliability_group)
+  )
+
+  aid_reference <- pressure_dat %>%
+    filter(as.character(condition_type) == "Automation") %>%
+    group_by(reliability_group, pressure) %>%
+    summarise(
+      aid_accuracy_setting = unique_or_missing(aid_accuracy_setting),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      reference_x = as.numeric(pressure) + GROUP_DODGE_WIDTH / 4
+    )
+  if (any(is.na(aid_reference$aid_accuracy_setting))) {
+    stop(
+      "Automation cells must each contain one assigned aid accuracy.",
+      call. = FALSE
+    )
+  }
+
+  subtitle <- paste0(
+    "Error bars are Morey-Cousineau within-subject SEs across four ",
+    "post-calibration conditions"
+  )
+  caption <- paste0(
+    "Short dashed segments show assigned aid accuracy; ",
+    "the long dashed line shows the 77% calibration target."
+  )
+  condition_dodge <- position_dodge(width = GROUP_DODGE_WIDTH)
+  rt_ylim <- get_axis_limits(
+    c(rt_summary$mean_rt, rt_summary$rt_label_y),
+    c(rt_summary$se_rt, rep(0, nrow(rt_summary))),
+    pad_prop = 0.16,
+    bounds = c(0, Inf)
+  )
+  timeout_ylim <- get_axis_limits(
+    c(timeout_summary$mean_timeout_pct, timeout_summary$timeout_label_y),
+    c(timeout_summary$se_timeout_pct, rep(0, nrow(timeout_summary))),
+    pad_prop = 0.16,
+    bounds = c(-Inf, 100)
+  )
+  timeout_ylim[[1]] <- min(-0.10, timeout_ylim[[1]])
+  timeout_breaks <- function(limits) {
+    breaks <- pretty(c(0, max(limits[[2]], 0)))
+    breaks[breaks >= 0 & breaks <= 100]
+  }
+
+  add_condition_scales <- function(plot) {
+    plot +
+      scale_colour_manual(
+        values = CONDITION_TYPE_COLORS,
+        breaks = CONDITION_TYPE_LEVELS,
+        name = "Condition"
+      ) +
+      scale_shape_manual(
+        values = CONDITION_TYPE_SHAPES,
+        breaks = CONDITION_TYPE_LEVELS,
+        name = "Condition"
+      ) +
+      guides(
+        colour = guide_legend(order = 1),
+        shape = guide_legend(order = 1)
+      )
+  }
+
+  p_acc <- ggplot(
+    acc_summary,
+    aes(
+      x = pressure,
+      y = mean_accuracy,
+      colour = condition_type,
+      shape = condition_type,
+      group = condition_type
+    )
+  ) +
+    geom_hline(yintercept = TARGET_ACC, linetype = "dashed") +
+    geom_segment(
+      data = aid_reference,
+      aes(
+        x = reference_x - 0.10,
+        xend = reference_x + 0.10,
+        y = aid_accuracy_setting,
+        yend = aid_accuracy_setting
+      ),
+      inherit.aes = FALSE,
+      colour = CONDITION_TYPE_COLORS[["Automation"]],
+      linetype = "dashed",
+      linewidth = 0.8
+    ) +
+    geom_line(linewidth = 0.9, position = condition_dodge) +
+    geom_errorbar(
+      aes(
+        ymin = mean_accuracy - se_accuracy,
+        ymax = mean_accuracy + se_accuracy
+      ),
+      width = 0.10,
+      position = condition_dodge,
+      na.rm = TRUE
+    ) +
+    geom_point(size = 3.2, position = condition_dodge) +
+    geom_label(
+      aes(y = accuracy_label_y, label = accuracy_label),
+      fill = "white",
+      linewidth = 0,
+      label.padding = grid::unit(0.10, "lines"),
+      size = 3.2,
+      fontface = "bold",
+      show.legend = FALSE,
+      position = condition_dodge
+    ) +
+    facet_wrap(
+      ~ reliability_group,
+      nrow = 1,
+      drop = FALSE,
+      labeller = as_labeller(facet_labels)
+    ) +
+    scale_x_discrete(labels = PRESSURE_LABELS) +
+    scale_y_continuous(
+      breaks = seq(OBSERVED_ACCURACY_LOWER_LIMIT, 1, by = 0.10),
+      labels = function(x) paste0(round(x * 100), "%")
+    ) +
+    labs(
+      x = NULL,
+      y = "Mean accuracy",
+      title = paste0(
+        PLOT_LABEL,
+        " accuracy by time pressure and condition"
+      ),
+      subtitle = subtitle,
+      caption = caption
+    ) +
+    coord_cartesian(
+      ylim = c(OBSERVED_ACCURACY_LOWER_LIMIT, 1),
+      clip = "off"
+    ) +
+    theme_classic() +
+    theme(
+      legend.position = "bottom",
+      strip.background = element_rect(fill = "white", colour = "black"),
+      strip.text = element_text(face = "bold"),
+      panel.spacing = grid::unit(1, "lines"),
+      plot.margin = margin(5.5, 12, 5.5, 5.5)
+    )
+  p_acc <- add_condition_scales(p_acc)
+
+  p_rt <- ggplot(
+    rt_summary,
+    aes(
+      x = pressure,
+      y = mean_rt,
+      colour = condition_type,
+      shape = condition_type,
+      group = condition_type
+    )
+  ) +
+    geom_line(linewidth = 0.9, position = condition_dodge) +
+    geom_errorbar(
+      aes(
+        ymin = mean_rt - se_rt,
+        ymax = mean_rt + se_rt
+      ),
+      width = 0.10,
+      position = condition_dodge,
+      na.rm = TRUE
+    ) +
+    geom_point(size = 3.2, position = condition_dodge) +
+    geom_label(
+      aes(y = rt_label_y, label = rt_label),
+      fill = "white",
+      linewidth = 0,
+      label.padding = grid::unit(0.10, "lines"),
+      size = 3.2,
+      fontface = "bold",
+      show.legend = FALSE,
+      position = condition_dodge
+    ) +
+    facet_wrap(
+      ~ reliability_group,
+      nrow = 1,
+      drop = FALSE,
+      labeller = as_labeller(facet_labels)
+    ) +
+    scale_x_discrete(labels = PRESSURE_LABELS) +
+    labs(
+      x = NULL,
+      y = "Mean correct RT (s)",
+      title = paste0(
+        PLOT_LABEL,
+        " mean correct RT by time pressure and condition"
+      ),
+      subtitle = subtitle
+    ) +
+    coord_cartesian(ylim = rt_ylim, clip = "off") +
+    theme_classic() +
+    theme(
+      legend.position = "bottom",
+      strip.background = element_rect(fill = "white", colour = "black"),
+      strip.text = element_text(face = "bold"),
+      panel.spacing = grid::unit(1, "lines"),
+      plot.margin = margin(5.5, 12, 5.5, 5.5)
+    )
+  p_rt <- add_condition_scales(p_rt)
+
+  p_timeout <- ggplot(
+    timeout_summary,
+    aes(
+      x = pressure,
+      y = mean_timeout_pct,
+      colour = condition_type,
+      shape = condition_type,
+      group = condition_type
+    )
+  ) +
+    geom_line(linewidth = 0.9, position = condition_dodge) +
+    geom_errorbar(
+      aes(
+        ymin = mean_timeout_pct - se_timeout_pct,
+        ymax = mean_timeout_pct + se_timeout_pct
+      ),
+      width = 0.10,
+      position = condition_dodge,
+      na.rm = TRUE
+    ) +
+    geom_point(size = 3.2, position = condition_dodge) +
+    geom_label(
+      aes(y = timeout_label_y, label = timeout_label),
+      fill = "white",
+      linewidth = 0,
+      label.padding = grid::unit(0.10, "lines"),
+      size = 3.2,
+      fontface = "bold",
+      show.legend = FALSE,
+      position = condition_dodge
+    ) +
+    facet_wrap(
+      ~ reliability_group,
+      nrow = 1,
+      drop = FALSE,
+      labeller = as_labeller(facet_labels)
+    ) +
+    scale_x_discrete(labels = PRESSURE_LABELS) +
+    scale_y_continuous(
+      breaks = timeout_breaks,
+      labels = function(x) paste0(format(x, trim = TRUE), "%")
+    ) +
+    labs(
+      x = NULL,
+      y = "TIMEOUT responses (%)",
+      title = paste0(
+        PLOT_LABEL,
+        " TIMEOUT percentage by time pressure and condition"
+      ),
+      subtitle = subtitle
+    ) +
+    coord_cartesian(ylim = timeout_ylim, clip = "off") +
+    theme_classic() +
+    theme(
+      legend.position = "bottom",
+      strip.background = element_rect(fill = "white", colour = "black"),
+      strip.text = element_text(face = "bold"),
+      panel.spacing = grid::unit(1, "lines"),
+      plot.margin = margin(5.5, 12, 5.5, 5.5)
+    )
+  p_timeout <- add_condition_scales(p_timeout)
+
+  combined_plot <- (
+    p_acc + labs(title = NULL, subtitle = NULL, caption = NULL)
+  ) / (
+    p_rt + labs(title = NULL, subtitle = NULL)
+  ) / (
+    p_timeout + labs(title = NULL, subtitle = NULL)
+  ) +
+    plot_layout(guides = "collect") +
+    plot_annotation(
+      title = paste0(
+        "Time Pressure Study: ",
+        PLOT_LABEL,
+        paste0(
+          "\naccuracy, correct RT, and TIMEOUT percentage ",
+          "by time pressure and condition"
+        )
+      ),
+      subtitle = subtitle,
+      caption = caption
+    ) &
+    theme(legend.position = "bottom")
+
+  list(
+    acc_plot = p_acc,
+    rt_plot = p_rt,
+    timeout_plot = p_timeout,
+    combined_plot = combined_plot,
+    acc_summary = acc_summary,
+    rt_summary = rt_summary,
+    timeout_summary = timeout_summary,
+    participant_acc = participant_acc,
+    participant_rt = participant_rt,
+    participant_timeout = participant_timeout
+  )
+}
+
 summarise_aid_outcome_mean <- function(
   data,
   value_col,
@@ -2550,6 +3153,8 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
     slider_dat = slider_dat,
     split_by_pattern = TRUE
   )
+  group_pressure_condition_summary <-
+    make_pressure_condition_summary_plots(dat)
   group_aid_outcome_summary <- make_aid_outcome_summary_plots(dat)
   group_aid_outcome_combined <- (
     group_aid_outcome_summary$acc_plot +
@@ -2649,6 +3254,12 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
       height = 6
     ),
     save_plot_pair(
+      group_pressure_condition_summary$acc_plot,
+      paste0(OUTPUT_PREFIX, "_pressure_condition_accuracy_means"),
+      width = 8.5,
+      height = 5.5
+    ),
+    save_plot_pair(
       group_performance_combined,
       paste0(OUTPUT_PREFIX, "_block_accuracy_timeout_rt_means"),
       width = 8.5,
@@ -2690,6 +3301,33 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
         height = 8
       ),
       save_plot_pair(
+        group_pressure_condition_summary$rt_plot,
+        paste0(
+          OUTPUT_PREFIX,
+          "_pressure_condition_correct_rt_means"
+        ),
+        width = 8.5,
+        height = 5.5
+      ),
+      save_plot_pair(
+        group_pressure_condition_summary$timeout_plot,
+        paste0(
+          OUTPUT_PREFIX,
+          "_pressure_condition_timeout_percent"
+        ),
+        width = 8.5,
+        height = 5.5
+      ),
+      save_plot_pair(
+        group_pressure_condition_summary$combined_plot,
+        paste0(
+          OUTPUT_PREFIX,
+          "_pressure_condition_accuracy_correct_rt_means"
+        ),
+        width = 8.5,
+        height = 11.625
+      ),
+      save_plot_pair(
         group_timeout_summary$plot,
         paste0(OUTPUT_PREFIX, "_block_timeout_percent"),
         width = 8.5,
@@ -2711,6 +3349,20 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
   print(group_condition_summary$rt_summary %>%
     select(automation_reliability_pattern, condition_deadline_code,
            mean_rt, se_rt, n_participants))
+  message("Group pressure-by-condition accuracy summary:")
+  print(group_pressure_condition_summary$acc_summary %>%
+    select(reliability_group, pressure, condition_type,
+           mean_accuracy, se_accuracy, n_participants))
+  if (PLOT_MODE %in% c("cohort", "group")) {
+    message("Group pressure-by-condition correct RT summary:")
+    print(group_pressure_condition_summary$rt_summary %>%
+      select(reliability_group, pressure, condition_type,
+             mean_rt, se_rt, n_participants))
+    message("Group pressure-by-condition TIMEOUT summary:")
+    print(group_pressure_condition_summary$timeout_summary %>%
+      select(reliability_group, pressure, condition_type,
+             mean_timeout_pct, se_timeout_pct, n_participants))
+  }
   message("Group aid-outcome accuracy summary:")
   print(group_aid_outcome_summary$acc_summary %>%
     select(facet_condition, automation_reliability_pattern,

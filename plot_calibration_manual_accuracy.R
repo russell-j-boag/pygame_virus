@@ -208,6 +208,14 @@ reference_lines <- tibble(
 point_labels <- participant_condition_means %>%
   filter(accuracy < 0.65 | accuracy > 0.95)
 
+group_condition_means <- participant_condition_means %>%
+  group_by(condition_label) %>%
+  summarise(
+    accuracy = mean(accuracy),
+    accuracy_label = sprintf("%.1f%%", 100 * accuracy),
+    .groups = "drop"
+  )
+
 accuracy_plot <- ggplot(
   participant_condition_means,
   aes(
@@ -274,6 +282,17 @@ accuracy_plot <- ggplot(
     geom = "point",
     size = 3.2,
     colour = "black"
+  ) +
+  geom_label(
+    data = group_condition_means,
+    aes(x = condition_label, y = accuracy, label = accuracy_label),
+    inherit.aes = FALSE,
+    nudge_y = 0.018,
+    fill = "white",
+    colour = "black",
+    linewidth = 0,
+    label.padding = grid::unit(0.12, "lines"),
+    size = 3.2
   ) +
   labs(
     x = NULL,
