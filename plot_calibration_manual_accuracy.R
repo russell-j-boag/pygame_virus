@@ -44,6 +44,7 @@ PLOT_TITLE <- if (length(args) >= 4) {
 }
 
 PRACTICE_KEEP_N <- 40
+MANUAL_TRIAL_N <- 260
 PRACTICE_TARGET <- 0.75
 GLOBAL_AID_ACCURACY <- 0.85
 CONDITION_CODES <- c("PRACTICE", "MANUAL")
@@ -364,20 +365,80 @@ reference_lines <- tibble(
   label = c("Calibration target (75%)", "Aid accuracy (85%)")
 )
 
-point_labels <- participant_condition_means %>%
-  filter(accuracy < PRACTICE_TARGET | accuracy > GLOBAL_AID_ACCURACY) %>%
-  group_by(condition_code) %>%
-  arrange(accuracy, participant_id, .by_group = TRUE) %>%
-  group_modify(function(.x, .y) {
-    label_y <- .x$accuracy
-    if (length(label_y) > 1) {
-      for (i in 2:length(label_y)) {
-        label_y[[i]] <- max(label_y[[i]], label_y[[i - 1]] + 0.014)
-      }
-    }
-    .x %>% mutate(label_y = label_y)
-  }) %>%
-  ungroup()
+group_means <- participant_condition_means %>%
+  group_by(condition_code, condition_label) %>%
+  summarise(accuracy = mean(accuracy), .groups = "drop") %>%
+  mutate(
+    label = paste0(
+      "Group mean: ",
+      scales::percent(accuracy, accuracy = 0.1)
+    )
+  )
+
+aid_exceedance <- participant_condition_means %>%
+  group_by(condition_code, condition_label) %>%
+  summarise(
+    n_above_aid = sum(accuracy > GLOBAL_AID_ACCURACY),
+    n_participants = n(),
+    .groups = "drop"
+  )
+
+aid_exceedance_total <- participant_condition_means %>%
+  group_by(participant_id) %>%
+  summarise(
+    above_aid_in_either_condition = any(accuracy > GLOBAL_AID_ACCURACY),
+    .groups = "drop"
+  ) %>%
+  summarise(
+    n_above_aid = sum(above_aid_in_either_condition),
+    n_participants = n()
+  )
+
+aid_exceedance_annotation <- aid_exceedance %>%
+  arrange(condition_code) %>%
+  summarise(
+    label = paste(
+      c(
+        " ",
+        paste0(
+          condition_label,
+          ": ",
+          n_above_aid,
+          "/",
+          n_participants
+        ),
+        paste0(
+          "Cal OR Man: ",
+          aid_exceedance_total[["n_above_aid"]],
+          "/",
+          aid_exceedance_total[["n_participants"]]
+        )
+      ),
+      collapse = "\n"
+    )
+  ) %>%
+  mutate(
+    header_label = paste("N accuracy > aid", " ", " ", " ", sep = "\n")
+  )
+
+accuracy_extrema <- participant_condition_means %>%
+  group_by(condition_code, condition_label) %>%
+  summarise(
+    min_accuracy = min(accuracy),
+    max_accuracy = max(accuracy),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(
+    cols = c(min_accuracy, max_accuracy),
+    names_to = "extremum",
+    values_to = "accuracy"
+  ) %>%
+  mutate(
+    label = paste0(
+      if_else(extremum == "min_accuracy", "Min: ", "Max: "),
+      scales::percent(accuracy, accuracy = 0.1)
+    )
+  )
 
 accuracy_plot <- ggplot(
   participant_condition_means,
@@ -387,6 +448,11 @@ accuracy_plot <- ggplot(
     group = participant_id
   )
 ) +
+  geom_hline(
+    yintercept = seq(0.50, 1.00, by = 0.05),
+    colour = "grey90",
+    linewidth = 0.3
+  ) +
   geom_hline(
     data = reference_lines,
     aes(yintercept = yint),
@@ -400,7 +466,7 @@ accuracy_plot <- ggplot(
     inherit.aes = FALSE,
     hjust = -0.08,
     vjust = -0.25,
-    size = 3.2
+    size = 3.84
   ) +
   geom_line(colour = "grey70", linewidth = 0.7) +
   geom_point(
@@ -409,19 +475,23 @@ accuracy_plot <- ggplot(
     show.legend = FALSE
   ) +
   geom_text(
-    data = filter(point_labels, condition_code == "PRACTICE"),
-    aes(y = label_y, label = participant_id),
+    data = filter(accuracy_extrema, condition_code == "PRACTICE"),
+    aes(x = condition_label, y = accuracy, label = label),
+    inherit.aes = FALSE,
     hjust = 1,
     nudge_x = -0.03,
-    size = 3,
+    size = 3.6,
+    fontface = "bold",
     show.legend = FALSE
   ) +
   geom_text(
-    data = filter(point_labels, condition_code == "MANUAL"),
-    aes(y = label_y, label = participant_id),
-    hjust = 0,
-    nudge_x = 0.03,
-    size = 3,
+    data = filter(accuracy_extrema, condition_code == "MANUAL"),
+    aes(x = condition_label, y = accuracy, label = label),
+    inherit.aes = FALSE,
+    hjust = 1,
+    nudge_x = -0.03,
+    size = 3.6,
+    fontface = "bold",
     show.legend = FALSE
   ) +
   scale_colour_manual(values = participant_palette) +
@@ -439,8 +509,38 @@ accuracy_plot <- ggplot(
     size = 3.2,
     colour = "black"
   ) +
+  geom_label(
+    data = group_means,
+    aes(x = condition_label, y = accuracy, label = label),
+    inherit.aes = FALSE,
+    nudge_y = 0.025,
+    size = 3.6,
+    fontface = "bold",
+    fill = "white",
+    linewidth = 0.2
+  ) +
+  geom_label(
+    data = aid_exceedance_annotation,
+    aes(x = Inf, y = Inf, label = label),
+    inherit.aes = FALSE,
+    hjust = 1.05,
+    vjust = 1.15,
+    size = 3.6,
+    fontface = "plain",
+    fill = "white",
+    linewidth = 0
+  ) +
+  geom_text(
+    data = aid_exceedance_annotation,
+    aes(x = Inf, y = 1.023, label = header_label),
+    inherit.aes = FALSE,
+    hjust = 1.05,
+    vjust = 1.15,
+    size = 3.6,
+    fontface = "bold"
+  ) +
   scale_y_continuous(
-    breaks = seq(0.50, 1.00, by = 0.10),
+    breaks = seq(0.50, 1.00, by = 0.05),
     labels = scales::label_percent(accuracy = 1)
   ) +
   labs(
@@ -450,12 +550,18 @@ accuracy_plot <- ggplot(
     subtitle = paste0(
       "Calibration mean uses the final ",
       PRACTICE_KEEP_N,
-      " Practice trials; Manual mean uses all trials"
+      " Practice trials; Manual mean uses all ",
+      MANUAL_TRIAL_N,
+      " manual-block trials."
     )
   ) +
   coord_cartesian(ylim = c(0.50, 1.00), clip = "off") +
   theme_classic(base_size = 11) +
   theme(
+    axis.title.x = element_text(size = 13.2),
+    axis.text.x = element_text(size = 10.56),
+    plot.title = element_text(size = 15.84),
+    plot.subtitle = element_text(size = 13.2),
     plot.margin = margin(5.5, 130, 5.5, 5.5)
   )
 
