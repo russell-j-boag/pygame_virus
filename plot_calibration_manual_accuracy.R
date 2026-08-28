@@ -37,6 +37,13 @@ PLOT_TITLE <- if (length(args) >= 4) {
 
 CALIB_SUMMARY_LAST_N <- 150
 CALIBRATION_TARGET_ACCURACY <- 0.77
+AID_HIGH_ACCURACY <- 0.95
+AID_LOW_ACCURACY <- 0.65
+TEXT_SCALE <- 1.2
+BASE_TEXT_SIZE <- 11 * TEXT_SCALE
+PLOT_LABEL_TEXT_SIZE <- 3.2 * TEXT_SCALE
+PARTICIPANT_TEXT_SIZE <- 3 * TEXT_SCALE
+ANNOTATION_TEXT_SIZE <- 9.5 * TEXT_SCALE
 CONDITION_CODES <- c("CAL_LP", "M_HP", "M_LP")
 CONDITION_LABELS <- c(
   "CAL_LP" = "Calibration",
@@ -195,18 +202,100 @@ participant_means_wide <- participant_condition_means %>%
     n_trials_manual_lp
   )
 
+manual_trial_counts <- participant_condition_means %>%
+  filter(condition_deadline_code %in% c("M_HP", "M_LP")) %>%
+  distinct(n_trials) %>%
+  pull(n_trials)
+
+if (length(manual_trial_counts) != 1) {
+  stop(
+    "Manual HP and LP trial counts must be consistent across participants.",
+    call. = FALSE
+  )
+}
+
+manual_trial_count <- manual_trial_counts[[1]]
+
 participant_palette <- setNames(
   scales::hue_pal()(length(participant_order)),
   participant_order
 )
 
 reference_lines <- tibble(
-  yint = c(0.95, CALIBRATION_TARGET_ACCURACY, 0.65),
-  label = c("Aid high", "Calib. target", "Aid low")
+  yint = c(
+    AID_HIGH_ACCURACY,
+    CALIBRATION_TARGET_ACCURACY,
+    AID_LOW_ACCURACY
+  ),
+  label = c(
+    sprintf("Aid high (%.0f%%)", 100 * AID_HIGH_ACCURACY),
+    sprintf("Calib. target (%.0f%%)", 100 * CALIBRATION_TARGET_ACCURACY),
+    sprintf("Aid low (%.0f%%)", 100 * AID_LOW_ACCURACY)
+  )
 )
 
 point_labels <- participant_condition_means %>%
-  filter(accuracy < 0.65 | accuracy > 0.95)
+  filter(accuracy < AID_LOW_ACCURACY | accuracy > AID_HIGH_ACCURACY)
+
+below_aid_low_summary <- participant_condition_means %>%
+  group_by(condition_label) %>%
+  summarise(
+    n_below = sum(accuracy < AID_LOW_ACCURACY),
+    total = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    annotation_line = sprintf(
+      "%s: %d/%d",
+      as.character(condition_label),
+      n_below,
+      total
+    )
+  )
+
+below_aid_low_title <- sprintf(
+  "Accuracy < aid low (%.0f%%)",
+  100 * AID_LOW_ACCURACY
+)
+below_aid_low_body <- paste(
+  below_aid_low_summary$annotation_line,
+  collapse = "\n"
+)
+
+below_aid_low_body_grob <- grid::textGrob(
+  below_aid_low_body,
+  x = grid::unit(2, "mm"),
+  y = grid::unit(2, "mm"),
+  just = c("left", "bottom"),
+  gp = grid::gpar(fontsize = ANNOTATION_TEXT_SIZE, lineheight = 1.2)
+)
+below_aid_low_title_grob <- grid::textGrob(
+  below_aid_low_title,
+  x = grid::unit(2, "mm"),
+  y = grid::unit(3, "mm") + grid::grobHeight(below_aid_low_body_grob),
+  just = c("left", "bottom"),
+  gp = grid::gpar(
+    fontsize = ANNOTATION_TEXT_SIZE,
+    fontface = "bold"
+  )
+)
+below_aid_low_grob <- grid::grobTree(
+  grid::rectGrob(
+    x = grid::unit(0, "npc"),
+    y = grid::unit(0, "npc"),
+    width = grid::unit.pmax(
+      grid::grobWidth(below_aid_low_title_grob),
+      grid::grobWidth(below_aid_low_body_grob)
+    ) + grid::unit(4, "mm"),
+    height = grid::grobHeight(below_aid_low_title_grob) +
+      grid::grobHeight(below_aid_low_body_grob) +
+      grid::unit(6, "mm"),
+    just = c("left", "bottom"),
+    gp = grid::gpar(fill = "white", col = NA)
+  ),
+  below_aid_low_title_grob,
+  below_aid_low_body_grob
+)
 
 group_condition_means <- participant_condition_means %>%
   group_by(condition_label) %>%
@@ -236,8 +325,8 @@ accuracy_plot <- ggplot(
     inherit.aes = FALSE,
     hjust = 1,
     vjust = -0.25,
-    nudge_x = 0.48,
-    size = 3.2
+    nudge_x = 0.54,
+    size = PLOT_LABEL_TEXT_SIZE
   ) +
   geom_line(colour = "grey70", linewidth = 0.7) +
   geom_point(
@@ -250,14 +339,15 @@ accuracy_plot <- ggplot(
     aes(label = participant_id),
     hjust = 1,
     nudge_x = -0.03,
-    size = 3,
+    size = PARTICIPANT_TEXT_SIZE,
     show.legend = FALSE
   ) +
   geom_text(
     data = filter(point_labels, condition_deadline_code == "M_HP"),
     aes(label = participant_id),
-    vjust = -0.75,
-    size = 3,
+    hjust = 1,
+    nudge_x = -0.03,
+    size = PARTICIPANT_TEXT_SIZE,
     show.legend = FALSE
   ) +
   geom_text(
@@ -265,7 +355,7 @@ accuracy_plot <- ggplot(
     aes(label = participant_id),
     hjust = 0,
     nudge_x = 0.03,
-    size = 3,
+    size = PARTICIPANT_TEXT_SIZE,
     show.legend = FALSE
   ) +
   scale_colour_manual(values = participant_palette) +
@@ -292,7 +382,14 @@ accuracy_plot <- ggplot(
     colour = "black",
     linewidth = 0,
     label.padding = grid::unit(0.12, "lines"),
-    size = 3.2
+    size = PLOT_LABEL_TEXT_SIZE
+  ) +
+  annotation_custom(
+    grob = below_aid_low_grob,
+    xmin = -Inf,
+    xmax = Inf,
+    ymin = -Inf,
+    ymax = Inf
   ) +
   labs(
     x = NULL,
@@ -301,13 +398,18 @@ accuracy_plot <- ggplot(
     subtitle = paste0(
       "Calibration mean uses the final ",
       CALIB_SUMMARY_LAST_N,
-      " trials; manual means use all trials"
+      " trials; manual means use all ",
+      manual_trial_count,
+      " trials"
     )
   ) +
+  scale_y_continuous(
+    labels = scales::label_percent(accuracy = 1)
+  ) +
   coord_cartesian(ylim = c(0.50, 1.00), clip = "off") +
-  theme_classic() +
+  theme_classic(base_size = BASE_TEXT_SIZE) +
   theme(
-    plot.margin = margin(5.5, 45, 5.5, 5.5)
+    plot.margin = margin(5.5, 45 * TEXT_SCALE, 5.5, 5.5)
   )
 
 dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
