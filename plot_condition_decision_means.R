@@ -1970,6 +1970,79 @@ make_participant_aid_outcome_summaries <- function(trial_dat) {
   )
 }
 
+make_participant_aid_outcome_change_summary <- function(
+  trial_dat,
+  decision_number
+) {
+  if (!decision_number %in% c(1, 2)) {
+    stop("decision_number must be 1 or 2.", call. = FALSE)
+  }
+
+  correct_col <- rlang::sym(
+    paste0("decision", decision_number, "_correct_num")
+  )
+
+  decision_trials <- trial_dat %>%
+    filter(
+      changed_response_num %in% c(0, 1),
+      is.finite(!!correct_col)
+    ) %>%
+    mutate(
+      change_status = if_else(
+        changed_response_num == 1,
+        "Change of mind",
+        "No change of mind"
+      ),
+      change_status = factor(change_status, levels = CHANGE_STATUS_LEVELS)
+    )
+
+  aided_accuracy <- decision_trials %>%
+    filter(
+      as.character(condition) %in% AID_OUTCOME_FACET_LEVELS,
+      aid_correct_num %in% c(0, 1)
+    ) %>%
+    mutate(
+      facet_condition = as.character(condition),
+      aid_outcome = if_else(
+        aid_correct_num == 1,
+        "Aid correct",
+        "Aid incorrect"
+      )
+    ) %>%
+    group_by(
+      participant_id,
+      facet_condition,
+      change_status,
+      aid_outcome
+    ) %>%
+    summarise(
+      mean_accuracy = mean(!!correct_col),
+      n_trials = n(),
+      .groups = "drop"
+    )
+
+  manual_accuracy <- decision_trials %>%
+    filter(as.character(condition) == "Manual") %>%
+    group_by(participant_id, change_status) %>%
+    summarise(
+      mean_accuracy = mean(!!correct_col),
+      n_trials = n(),
+      .groups = "drop"
+    ) %>%
+    crossing(facet_condition = AID_OUTCOME_FACET_LEVELS) %>%
+    mutate(aid_outcome = "Manual")
+
+  bind_rows(aided_accuracy, manual_accuracy) %>%
+    mutate(
+      facet_condition = factor(
+        facet_condition,
+        levels = AID_OUTCOME_FACET_LEVELS
+      ),
+      change_status = factor(change_status, levels = CHANGE_STATUS_LEVELS),
+      aid_outcome = factor(aid_outcome, levels = AID_OUTCOME_LEVELS)
+    )
+}
+
 format_aid_outcome_complete_n <- function(summary_dat) {
   complete_n <- summary_dat %>%
     distinct(facet_condition, decision, n_participants) %>%
@@ -1992,6 +2065,23 @@ format_aid_outcome_complete_n <- function(summary_dat) {
         " ",
         as.character(decision),
         " n = ",
+        n_participants
+      )
+    ) %>%
+    pull(label) %>%
+    paste(collapse = "; ")
+}
+
+format_aid_outcome_change_complete_n <- function(summary_dat) {
+  summary_dat %>%
+    distinct(facet_condition, change_status, n_participants) %>%
+    arrange(facet_condition, change_status) %>%
+    transmute(
+      label = paste0(
+        as.character(facet_condition),
+        ", ",
+        tolower(as.character(change_status)),
+        ": n = ",
         n_participants
       )
     ) %>%
@@ -2172,6 +2262,111 @@ make_group_aid_outcome_plots <- function(trial_dat, plot_label) {
   )
 }
 
+make_group_aid_outcome_change_plot <- function(
+  trial_dat,
+  plot_label,
+  decision_number
+) {
+  decision_label <- paste("Decision", decision_number)
+  participant <- make_participant_aid_outcome_change_summary(
+    trial_dat,
+    decision_number
+  )
+
+  summary <- summarise_repeated_complete(
+    participant,
+    "mean_accuracy",
+    "aid_outcome",
+    c("facet_condition", "change_status"),
+    expected_conditions = AID_OUTCOME_LEVELS
+  ) %>%
+    mutate(
+      facet_condition = factor(
+        facet_condition,
+        levels = AID_OUTCOME_FACET_LEVELS
+      ),
+      change_status = factor(change_status, levels = CHANGE_STATUS_LEVELS),
+      aid_outcome = factor(aid_outcome, levels = AID_OUTCOME_LEVELS),
+      mean_accuracy = mean
+    )
+
+  accuracy_limits <- get_axis_limits(
+    summary$mean_accuracy,
+    summary$se,
+    bounds = c(0, 1),
+    pad = 0.18
+  )
+
+  plot <- ggplot(
+    summary,
+    aes(
+      x = aid_outcome,
+      y = mean_accuracy,
+      colour = change_status,
+      shape = change_status,
+      group = change_status
+    )
+  ) +
+    geom_errorbar(
+      aes(
+        ymin = pmax(0, mean_accuracy - se),
+        ymax = pmin(1, mean_accuracy + se)
+      ),
+      width = 0.08,
+      linewidth = 0.55,
+      show.legend = FALSE
+    ) +
+    geom_line(linewidth = 0.85) +
+    geom_point(size = 3.2) +
+    facet_wrap(~facet_condition, nrow = 1, drop = FALSE) +
+    scale_y_continuous(labels = scales::label_percent(accuracy = 1)) +
+    coord_cartesian(ylim = accuracy_limits) +
+    labs(
+      x = "Aid outcome",
+      y = paste(decision_label, "mean accuracy"),
+      title = paste0(
+        plot_label,
+        " group ",
+        decision_label,
+        " accuracy by aid correctness and change-of-mind status"
+      ),
+      subtitle = str_wrap(
+        paste0(
+          "Participant means with Morey-Cousineau SEs across three aid-outcome ",
+          "categories within each facet; ",
+          format_aid_outcome_change_complete_n(summary)
+        ),
+        width = 95
+      ),
+      caption = paste0(
+        "Manual participant means are repeated in both aid-onset columns ",
+        "for comparison."
+      )
+    ) +
+    theme_classic(base_size = 11) +
+    theme(
+      axis.text.x = element_text(angle = 15, hjust = 1),
+      legend.position = "bottom",
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold"),
+      plot.caption = element_text(hjust = 0)
+    ) +
+    scale_colour_manual(
+      values = c(
+        "No change of mind" = "#0072B2",
+        "Change of mind" = "#D55E00"
+      ),
+      name = NULL
+    ) +
+    scale_shape_manual(values = CHANGE_STATUS_SHAPES, name = NULL)
+
+  list(
+    plot = plot,
+    summary = summary,
+    participant = participant
+  )
+}
+
 save_plot_pair <- function(plot, output_dir, stem, width, height, dpi = 300) {
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   pdf_file <- file.path(output_dir, paste0(stem, ".pdf"))
@@ -2333,6 +2528,16 @@ if (PLOT_MODE %in% c("cohort", "group")) {
     PLOT_LABEL
   )
   aid_outcome_plots <- make_group_aid_outcome_plots(trial_dat, PLOT_LABEL)
+  decision1_aid_outcome_change <- make_group_aid_outcome_change_plot(
+    trial_dat,
+    PLOT_LABEL,
+    decision_number = 1
+  )
+  decision2_aid_outcome_change <- make_group_aid_outcome_change_plot(
+    trial_dat,
+    PLOT_LABEL,
+    decision_number = 2
+  )
 
   written <- c(
     written,
@@ -2386,6 +2591,26 @@ if (PLOT_MODE %in% c("cohort", "group")) {
       height = 4.35
     ),
     save_plot_pair(
+      decision1_aid_outcome_change$plot,
+      group_dir,
+      paste0(
+        group_prefix,
+        "_aid_outcome_decision1_accuracy_by_change_of_mind"
+      ),
+      width = 8.5,
+      height = 5.2
+    ),
+    save_plot_pair(
+      decision2_aid_outcome_change$plot,
+      group_dir,
+      paste0(
+        group_prefix,
+        "_aid_outcome_decision2_accuracy_by_change_of_mind"
+      ),
+      width = 8.5,
+      height = 5.2
+    ),
+    save_plot_pair(
       aid_outcome_plots$rt,
       group_dir,
       paste0(group_prefix, "_aid_outcome_correct_rt_means"),
@@ -2417,6 +2642,10 @@ if (PLOT_MODE %in% c("cohort", "group")) {
   print(group_plots$change_accuracy_difference_summary)
   message("Group decision accuracy by aid outcome summary:")
   print(aid_outcome_plots$accuracy_summary)
+  message("Group Decision 1 accuracy by aid outcome and change-of-mind summary:")
+  print(decision1_aid_outcome_change$summary)
+  message("Group Decision 2 accuracy by aid outcome and change-of-mind summary:")
+  print(decision2_aid_outcome_change$summary)
   message("Group correct RT by aid outcome summary:")
   print(aid_outcome_plots$rt_summary)
 }
