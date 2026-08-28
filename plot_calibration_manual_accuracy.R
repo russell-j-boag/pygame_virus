@@ -41,6 +41,8 @@ PLOT_TITLE <- if (length(args) >= 4) {
 }
 
 CALIB_SUMMARY_LAST_N <- 150
+FONT_SCALE <- 1.5
+BASE_FONT_SIZE <- 11 * FONT_SCALE
 CONDITION_CODES <- c("CAL", "MAN_PRE", "MAN_POST")
 CONDITION_LABELS <- c(
   "CAL" = "Calibration",
@@ -55,9 +57,9 @@ CONDITION_NAMES <- c(
 TARGET_GROUPS <- c("CAL65", "CAL90")
 TARGET_ACCURACIES <- c("CAL65" = 0.65, "CAL90" = 0.90)
 ANNOTATION_TARGET_BAND <- 0.10
-PARTICIPANT_LABEL_SIZE <- 2
+PARTICIPANT_LABEL_SIZE <- 2 * FONT_SCALE
 PARTICIPANT_LABEL_NUDGE_X <- 0.05
-GROUP_MEAN_LABEL_SIZE <- 3
+GROUP_MEAN_LABEL_SIZE <- 3 * FONT_SCALE
 GROUP_MEAN_LABEL_NUDGE_Y <- 0.008
 PLOT_WIDTH_IN <- 10
 PLOT_HEIGHT_IN <- 7.875
@@ -367,7 +369,7 @@ accuracy_plot <- ggplot(
     inherit.aes = FALSE,
     hjust = 1,
     nudge_x = 0.48,
-    size = 3.2,
+    size = 3.2 * FONT_SCALE,
     fill = "white",
     linewidth = 0,
     label.padding = grid::unit(0.08, "lines")
@@ -455,7 +457,7 @@ accuracy_plot <- ggplot(
     )
   ) +
   coord_cartesian(ylim = c(0.50, 1.00), clip = "off") +
-  theme_classic() +
+  theme_classic(base_size = BASE_FONT_SIZE) +
   theme(
     plot.margin = margin(5.5, 45, 5.5, 5.5),
     legend.position = "bottom"
