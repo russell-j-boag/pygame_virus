@@ -1,8 +1,12 @@
-# Plot participant mean correct RT from Practice calibration to Manual.
+# Plot participant mean correct RT across selected task conditions.
 #
 # Usage:
 #   Rscript plot_calibration_manual_correct_rt.R [input_dir] [output_dir] \
-#     [output_stem] [plot_title]
+#     [output_stem] [plot_title] [plot_variant]
+#
+# Plot variants:
+#   calibration_manual - final 40 Practice trials and all Manual trials
+#   main_conditions    - Manual, Aid first, and Stimulus first
 
 rm(list = ls())
 
@@ -33,28 +37,76 @@ OUTPUT_DIR <- if (length(args) >= 2) {
 } else {
   "plots/semester2_2026_data/group"
 }
+PLOT_VARIANT <- if (length(args) >= 5) {
+  args[[5]]
+} else {
+  "calibration_manual"
+}
+
+if (!PLOT_VARIANT %in% c("calibration_manual", "main_conditions")) {
+  stop(
+    "plot_variant must be 'calibration_manual' or 'main_conditions'.",
+    call. = FALSE
+  )
+}
+
+PRACTICE_KEEP_N <- 40
+MAIN_CONDITION_TRIAL_N <- 260
+
+if (PLOT_VARIANT == "calibration_manual") {
+  default_output_stem <- "semester2_2026_group_calibration_manual_correct_rt"
+  default_plot_title <- "Calibration vs Manual mean correct RT (Aid Onset Study)"
+  plot_subtitle <- paste0(
+    "Calibration means use correct responses from the final ",
+    PRACTICE_KEEP_N,
+    " Practice trials; Manual means use correct responses from all ",
+    MAIN_CONDITION_TRIAL_N,
+    " manual-block trials."
+  )
+  CONDITION_CODES <- c("PRACTICE", "MANUAL")
+  CONDITION_LABELS <- c(
+    "PRACTICE" = "Calibration",
+    "MANUAL" = "Manual"
+  )
+  CONDITION_NAMES <- c(
+    "PRACTICE" = "calibration",
+    "MANUAL" = "manual"
+  )
+} else {
+  default_output_stem <- "semester2_2026_group_main_conditions_correct_rt"
+  default_plot_title <- paste0(
+    "Manual, Aid first, and Stimulus first mean correct RT ",
+    "(Aid Onset Study)"
+  )
+  plot_subtitle <- paste0(
+    "Means use correct responses from all ",
+    MAIN_CONDITION_TRIAL_N,
+    " trials in each main condition."
+  )
+  CONDITION_CODES <- c("MANUAL", "AIDFIRST", "STIMFIRST")
+  CONDITION_LABELS <- c(
+    "MANUAL" = "Manual",
+    "AIDFIRST" = "Aid first",
+    "STIMFIRST" = "Stimulus first"
+  )
+  CONDITION_NAMES <- c(
+    "MANUAL" = "manual",
+    "AIDFIRST" = "aid_first",
+    "STIMFIRST" = "stimulus_first"
+  )
+}
+
 OUTPUT_STEM <- if (length(args) >= 3) {
   args[[3]]
 } else {
-  "semester2_2026_group_calibration_manual_correct_rt"
+  default_output_stem
 }
 PLOT_TITLE <- if (length(args) >= 4) {
   args[[4]]
 } else {
-  "Calibration vs Manual mean correct RT (Aid Onset Study)"
+  default_plot_title
 }
 
-PRACTICE_KEEP_N <- 40
-MANUAL_TRIAL_N <- 260
-CONDITION_CODES <- c("PRACTICE", "MANUAL")
-CONDITION_LABELS <- c(
-  "PRACTICE" = "Calibration",
-  "MANUAL" = "Manual"
-)
-CONDITION_NAMES <- c(
-  "PRACTICE" = "calibration",
-  "MANUAL" = "manual"
-)
 DECISION_CODES <- c("decision1", "decision2")
 DECISION_LABELS <- c(
   "decision1" = "Decision 1",
@@ -216,86 +268,41 @@ format_quality_cells <- function(dat, count_column) {
     paste(collapse = ", ")
 }
 
-practice_files <- latest_participant_files(
-  "^results_.*_b00_PRACTICE[.]csv$",
-  "Practice"
-)
 main_files <- latest_participant_files(
   "^results_.*_b00_ALL[.]csv$",
   "complete trial"
 )
+main_condition_codes <- setdiff(CONDITION_CODES, "PRACTICE")
 
-file_coverage <- full_join(
-  practice_files %>% transmute(participant_id, has_practice = TRUE),
-  main_files %>% transmute(participant_id, has_main = TRUE),
-  by = "participant_id"
-) %>%
-  mutate(
-    has_practice = replace_na(has_practice, FALSE),
-    has_main = replace_na(has_main, FALSE)
-  )
-
-incomplete_files <- file_coverage %>% filter(!has_practice | !has_main)
-if (nrow(incomplete_files)) {
-  incomplete_text <- incomplete_files %>%
-    transmute(
-      missing = paste0(
-        participant_id,
-        ":",
-        case_when(
-          !has_practice & !has_main ~ "PRACTICE+ALL",
-          !has_practice ~ "PRACTICE",
-          TRUE ~ "ALL"
-        )
-      )
-    ) %>%
-    pull(missing) %>%
-    paste(collapse = ", ")
-
-  stop(
-    "Every participant must have both Practice and complete trial files. Missing: ",
-    incomplete_text,
-    call. = FALSE
-  )
-}
-
-practice_dat <- read_selected_files(practice_files, "Practice") %>%
-  filter(condition_code == "PRACTICE")
 main_dat <- read_selected_files(main_files, "complete trial") %>%
-  filter(condition_code == "MANUAL")
-
-practice_dat <- practice_dat %>%
-  mutate(trial_num = suppressWarnings(as.integer(trial)))
-main_dat <- main_dat %>%
+  filter(condition_code %in% main_condition_codes) %>%
   mutate(trial_num = suppressWarnings(as.integer(trial)))
 
-if (any(is.na(practice_dat$trial_num)) || any(is.na(main_dat$trial_num))) {
-  stop("Practice or Manual trials contain non-numeric trial values.", call. = FALSE)
+if (any(is.na(main_dat$trial_num))) {
+  stop("Main-condition trials contain non-numeric trial values.", call. = FALSE)
 }
 
-practice_counts <- practice_dat %>% count(participant_id, name = "n_practice")
-incomplete_practice <- practice_counts %>% filter(n_practice < PRACTICE_KEEP_N)
-if (nrow(incomplete_practice)) {
+main_counts <- main_dat %>%
+  count(participant_id, condition_code, name = "n_main")
+expected_main_counts <- expand_grid(
+  participant_id = sort(unique(main_dat$participant_id)),
+  condition_code = main_condition_codes
+) %>%
+  left_join(main_counts, by = c("participant_id", "condition_code")) %>%
+  mutate(n_main = replace_na(n_main, 0L))
+invalid_main_counts <- expected_main_counts %>%
+  filter(n_main != MAIN_CONDITION_TRIAL_N)
+if (nrow(invalid_main_counts)) {
   stop(
-    "Practice files have fewer than ",
-    PRACTICE_KEEP_N,
-    " trials for participant(s): ",
-    paste(incomplete_practice$participant_id, collapse = ", "),
-    call. = FALSE
-  )
-}
-
-manual_counts <- main_dat %>% count(participant_id, name = "n_manual")
-incomplete_manual <- manual_counts %>% filter(n_manual != MANUAL_TRIAL_N)
-if (nrow(incomplete_manual)) {
-  stop(
-    "Manual trial counts must equal ",
-    MANUAL_TRIAL_N,
-    ". Invalid participant counts: ",
+    "Main-condition trial counts must equal ",
+    MAIN_CONDITION_TRIAL_N,
+    ". Invalid participant-condition counts: ",
     paste0(
-      incomplete_manual$participant_id,
+      invalid_main_counts$participant_id,
+      ":",
+      CONDITION_LABELS[invalid_main_counts$condition_code],
       " (n = ",
-      incomplete_manual$n_manual,
+      invalid_main_counts$n_main,
       ")",
       collapse = ", "
     ),
@@ -303,11 +310,75 @@ if (nrow(incomplete_manual)) {
   )
 }
 
-practice_dat <- practice_dat %>%
-  group_by(participant_id) %>%
-  arrange(trial_num, .by_group = TRUE) %>%
-  slice_tail(n = PRACTICE_KEEP_N) %>%
-  ungroup()
+practice_dat <- NULL
+if ("PRACTICE" %in% CONDITION_CODES) {
+  practice_files <- latest_participant_files(
+    "^results_.*_b00_PRACTICE[.]csv$",
+    "Practice"
+  )
+
+  file_coverage <- full_join(
+    practice_files %>% transmute(participant_id, has_practice = TRUE),
+    main_files %>% transmute(participant_id, has_main = TRUE),
+    by = "participant_id"
+  ) %>%
+    mutate(
+      has_practice = replace_na(has_practice, FALSE),
+      has_main = replace_na(has_main, FALSE)
+    )
+
+  incomplete_files <- file_coverage %>% filter(!has_practice | !has_main)
+  if (nrow(incomplete_files)) {
+    incomplete_text <- incomplete_files %>%
+      transmute(
+        missing = paste0(
+          participant_id,
+          ":",
+          case_when(
+            !has_practice & !has_main ~ "PRACTICE+ALL",
+            !has_practice ~ "PRACTICE",
+            TRUE ~ "ALL"
+          )
+        )
+      ) %>%
+      pull(missing) %>%
+      paste(collapse = ", ")
+
+    stop(
+      "Every participant must have both Practice and complete trial files. Missing: ",
+      incomplete_text,
+      call. = FALSE
+    )
+  }
+
+  practice_dat <- read_selected_files(practice_files, "Practice") %>%
+    filter(condition_code == "PRACTICE") %>%
+    mutate(trial_num = suppressWarnings(as.integer(trial)))
+
+  if (any(is.na(practice_dat$trial_num))) {
+    stop("Practice trials contain non-numeric trial values.", call. = FALSE)
+  }
+
+  practice_counts <- practice_dat %>%
+    count(participant_id, name = "n_practice")
+  incomplete_practice <- practice_counts %>%
+    filter(n_practice < PRACTICE_KEEP_N)
+  if (nrow(incomplete_practice)) {
+    stop(
+      "Practice files have fewer than ",
+      PRACTICE_KEEP_N,
+      " trials for participant(s): ",
+      paste(incomplete_practice$participant_id, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  practice_dat <- practice_dat %>%
+    group_by(participant_id) %>%
+    arrange(trial_num, .by_group = TRUE) %>%
+    slice_tail(n = PRACTICE_KEEP_N) %>%
+    ungroup()
+}
 
 rt_dat <- bind_rows(practice_dat, main_dat) %>%
   transmute(
@@ -335,7 +406,7 @@ rt_dat <- bind_rows(practice_dat, main_dat) %>%
   )
 
 if (!nrow(rt_dat)) {
-  stop("No Practice or Manual trials were found in: ", INPUT_DIR, call. = FALSE)
+  stop("No requested condition trials were found in: ", INPUT_DIR, call. = FALSE)
 }
 
 condition_coverage <- expand_grid(
@@ -358,7 +429,7 @@ if (nrow(missing_cells)) {
     paste(collapse = ", ")
 
   stop(
-    "Every participant must contain both decisions in Practice and Manual. Missing: ",
+    "Every participant must contain both decisions in every requested condition. Missing: ",
     missing_text,
     call. = FALSE
   )
@@ -448,6 +519,22 @@ participant_condition_means <- participant_condition_means %>%
   ) %>%
   arrange(participant_id, decision_code, condition_code)
 
+participant_output_columns <- "participant_id"
+for (decision in DECISION_CODES) {
+  for (condition in CONDITION_CODES) {
+    participant_output_columns <- c(
+      participant_output_columns,
+      paste0(
+        decision,
+        "_",
+        c("mean_correct_rt", "n_trials", "n_correct", "n_correct_rt"),
+        "_",
+        CONDITION_NAMES[[condition]]
+      )
+    )
+  }
+}
+
 participant_means_wide <- participant_condition_means %>%
   mutate(
     participant_id = as.character(participant_id),
@@ -473,25 +560,7 @@ participant_means_wide <- participant_condition_means %>%
   ) %>%
   arrange(participant_id) %>%
   mutate(participant_id = as.character(participant_id)) %>%
-  select(
-    participant_id,
-    decision1_mean_correct_rt_calibration,
-    decision1_n_trials_calibration,
-    decision1_n_correct_calibration,
-    decision1_n_correct_rt_calibration,
-    decision1_mean_correct_rt_manual,
-    decision1_n_trials_manual,
-    decision1_n_correct_manual,
-    decision1_n_correct_rt_manual,
-    decision2_mean_correct_rt_calibration,
-    decision2_n_trials_calibration,
-    decision2_n_correct_calibration,
-    decision2_n_correct_rt_calibration,
-    decision2_mean_correct_rt_manual,
-    decision2_n_trials_manual,
-    decision2_n_correct_manual,
-    decision2_n_correct_rt_manual
-  )
+  select(all_of(participant_output_columns))
 
 participant_palette <- setNames(
   scales::hue_pal()(length(participant_order)),
@@ -501,6 +570,24 @@ participant_palette <- setNames(
 panel_ranges <- participant_condition_means %>%
   group_by(decision_code) %>%
   summarise(panel_max = max(mean_correct_rt), .groups = "drop")
+
+condition_extrema <- participant_condition_means %>%
+  group_by(decision_code, decision_label, condition_code, condition_label) %>%
+  summarise(
+    min_correct_rt = min(mean_correct_rt),
+    max_correct_rt = max(mean_correct_rt),
+    .groups = "drop"
+  ) %>%
+  left_join(panel_ranges, by = "decision_code") %>%
+  mutate(
+    max_label = sprintf("Max: %.3f s", max_correct_rt),
+    min_label = sprintf("Min: %.3f s", min_correct_rt),
+    max_label_y = max_correct_rt + panel_max * 0.05,
+    min_label_y = min_correct_rt - pmin(
+      panel_max * 0.025,
+      min_correct_rt * 0.35
+    )
+  )
 
 group_means <- participant_condition_means %>%
   group_by(decision_code, decision_label, condition_code, condition_label) %>%
@@ -543,11 +630,14 @@ make_rt_panel <- function(decision) {
     filter(decision_code == decision)
   plot_point_labels <- point_labels %>%
     filter(decision_code == decision)
+  plot_extrema <- condition_extrema %>%
+    filter(decision_code == decision)
 
   upper_limit <- max(
     plot_dat$mean_correct_rt,
     plot_group_means$label_y,
     plot_point_labels$label_y,
+    plot_extrema$max_label_y,
     na.rm = TRUE
   ) * 1.08
 
@@ -566,7 +656,10 @@ make_rt_panel <- function(decision) {
       show.legend = FALSE
     ) +
     geom_text(
-      data = filter(plot_point_labels, condition_code == "PRACTICE"),
+      data = filter(
+        plot_point_labels,
+        as.character(condition_code) == CONDITION_CODES[[1]]
+      ),
       aes(y = label_y, label = participant_id),
       hjust = 1,
       nudge_x = -0.03,
@@ -574,7 +667,10 @@ make_rt_panel <- function(decision) {
       show.legend = FALSE
     ) +
     geom_text(
-      data = filter(plot_point_labels, condition_code == "MANUAL"),
+      data = filter(
+        plot_point_labels,
+        as.character(condition_code) != CONDITION_CODES[[1]]
+      ),
       aes(y = label_y, label = participant_id),
       hjust = 0,
       nudge_x = 0.03,
@@ -605,6 +701,24 @@ make_rt_panel <- function(decision) {
       fill = "white",
       linewidth = 0.2
     ) +
+    geom_label(
+      data = plot_extrema,
+      aes(x = condition_label, y = max_label_y, label = max_label),
+      inherit.aes = FALSE,
+      size = 3,
+      fontface = "bold",
+      fill = "white",
+      linewidth = 0.2
+    ) +
+    geom_label(
+      data = plot_extrema,
+      aes(x = condition_label, y = min_label_y, label = min_label),
+      inherit.aes = FALSE,
+      size = 3,
+      fontface = "bold",
+      fill = "white",
+      linewidth = 0.2
+    ) +
     scale_y_continuous(
       labels = scales::label_number(accuracy = 0.1, suffix = " s")
     ) +
@@ -627,17 +741,7 @@ decision2_plot <- make_rt_panel("decision2")
 rt_plot <- (decision1_plot / decision2_plot) +
   plot_annotation(
     title = PLOT_TITLE,
-    subtitle = paste0(
-      "Calibration means use correct responses from the final ",
-      PRACTICE_KEEP_N,
-      " Practice trials; Manual means use correct responses from all ",
-      MANUAL_TRIAL_N,
-      " manual-block trials."
-    ),
-    caption = paste0(
-      "Separate linear y-axes begin at zero. Participant IDs mark ",
-      "within-decision, within-condition Tukey outliers."
-    )
+    subtitle = plot_subtitle
   )
 
 dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)

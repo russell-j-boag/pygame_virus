@@ -433,10 +433,23 @@ accuracy_extrema <- participant_condition_means %>%
     names_to = "extremum",
     values_to = "accuracy"
   ) %>%
+  inner_join(
+    participant_condition_means %>%
+      select(participant_id, condition_code, condition_label, accuracy),
+    by = c("condition_code", "condition_label", "accuracy")
+  ) %>%
+  group_by(condition_code, condition_label, extremum, accuracy) %>%
+  summarise(
+    participant_ids = paste(as.character(participant_id), collapse = ", "),
+    .groups = "drop"
+  ) %>%
   mutate(
     label = paste0(
       if_else(extremum == "min_accuracy", "Min: ", "Max: "),
-      scales::percent(accuracy, accuracy = 0.1)
+      scales::percent(accuracy, accuracy = 0.1),
+      " (ID ",
+      participant_ids,
+      ")"
     )
   )
 
