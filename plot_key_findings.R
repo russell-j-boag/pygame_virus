@@ -219,7 +219,7 @@ panel_c <- ggplot() +
        y = "Revisions (% of all trials in condition)")
 panel_d <- paired_plot(trust, aided_only = TRUE, limits = c(.85, 5.15), breaks = 1:5,
                        ytitle = "Trust (1-5)", label_digits = 2) +
-  labs(title = "D  Trust was lower after an initial judgment", subtitle = effect_label("Exploratory", "points"))
+  labs(title = "D  Trust was lower in stimulus-first", subtitle = effect_label("Exploratory", "points"))
 
 COMMON_NOTE <- paste0(
   "60 participants, including replacement p59. SF = Stimulus-first; AF = Aid-first. All 95% intervals are pointwise.\n",
