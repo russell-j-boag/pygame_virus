@@ -118,3 +118,164 @@ Legacy aliases `CALIBRATION`, `MANUAL`, and `AUTOMATION` remain accepted for dev
 
 ## Author
 Russell J. Boag
+
+## Behavioural analysis
+
+The frequentist pipeline analyses relative competence, the reliability drop and
+recovery, with exploratory time courses, correct RT, manual pre/post changes and
+subjective evaluations. All hypotheses were specified **after data collection**.
+The legacy `fit_brms.R` uses obsolete aid-onset factors and must not be used for
+this design.
+
+Run from this repository:
+
+```sh
+Rscript analyse_dynamic_reliability.R
+Rscript plot_dynamic_reliability_results.R
+Rscript tests/test_dynamic_reliability_analysis.R
+Rscript tests/validate_dynamic_reliability_outputs.R
+```
+
+Required packages: `dplyr`, `tidyr`, `readr`, `lme4`, `lmerTest`, `emmeans`,
+`ggplot2`, `patchwork`, and `sandwich`. PDF structural validation uses `pdfinfo`;
+rendered review uses `pdftoppm`. The analysis does not install packages or launch
+the participant task.
+
+The analysis accepts `[input_dir] [output_dir]`, defaulting to
+`output/semester2_2026_data` and `analysis_outputs/semester2_2026_behavioural`.
+The plotting script accepts `[analysis_dir] [plot_dir]`, defaulting to the same
+analysis directory and `plots/semester2_2026_behavioural`. Paths supplied on the
+command line are relative to the calling directory. Generated outputs are ignored
+by Git; task exports and existing descriptive plots are not modified.
+
+### Questions and estimands
+
+| Label | Question | Central comparison |
+| --- | --- | --- |
+| H1 | Does CAL90 reduce agreement with incorrect advice more than CAL65 at the drop? | Group difference in P2 minus P1 agreement; a negative CAL90-minus-CAL65 interaction matches this prediction. |
+| H2 | Does the degraded aid benefit CAL65 more than CAL90? | P2 minus manual-pre accuracy within each group and the difference in those gains. |
+| H3 | Does behaviour change when reliability recovers, and does it differ from its initial level? | P3 minus P2 and P3 minus P1 accuracy and agreement. |
+| E1 | Does behaviour adapt within phases? | Phase-specific first-to-last-trial model contrasts and participant linear probability slopes. |
+| E2 | What changes in response speed and manual performance accompany the sequence? | Log-RT contrasts and manual-post minus manual-pre accuracy/RT. |
+| E3 | How do final evaluations relate to group and degraded-phase behaviour? | Trust and perceived aid accuracy error: group differences and group-adjusted associations with P2 incorrect-advice agreement. |
+
+The core accuracy registry has 18 contrasts: P1/P2/P3 minus manual-pre and the
+three pairwise phase differences, each within CAL65, within CAL90 and as
+CAL90-minus-CAL65 differences in change. Core agreement has 18: the three phase
+differences, each within/between groups, separately for correct and incorrect
+advice. Manual-post baseline sensitivity has nine accuracy contrasts. Correct RT
+uses the same 18 contrasts as accuracy. Manual pre/post families have three
+contrasts per outcome. Adaptation has nine accuracy and 18 agreement contrasts.
+
+### Cohort, outcomes and models
+
+The current cohort contains 67 complete participants (34 CAL65, 33 CAL90), but
+sample size is discovered from exports. Every retained run must have 300
+calibration trials, 200 manual-pre trials, three 400-trial aided phases, and 200
+manual-post trials. The pipeline validates allocation, key mapping, sequence,
+trial identities, response correctness, advice correctness and rating scopes.
+Duplicate complete runs are rejected. Missing or invalid questionnaire items are
+reported as input errors rather than silently excluding participants; resolve
+such inputs explicitly before rerunning.
+
+Questionnaires and sliders are loaded from the **exact same-run filenames** as
+the trial export. Legacy trust exports do not contain a timestamp column, so
+their provenance relies on the filename and participant/design checks. Input
+hashes and source hashes are recorded. Calibration's final 150 trials are a
+descriptive manipulation check; calibration and manual accuracy thresholds do
+not exclude otherwise valid participants.
+
+- **Accuracy:** all 1,600 experimental trials per participant; timeouts count as
+  incorrect. Answered trials with invalid RT remain in accuracy and agreement.
+- **Correct RT:** correct responses with finite positive `rt_s`; log RT for
+  modelling. Sub-100-ms and beyond-deadline responses are audited, not trimmed.
+- **Agreement:** `response == aid_label` on answered aided trials, separately by
+  advice correctness. Timeouts are excluded from this denominator.
+- **Trust:** mean of six valid 1–5 items, once after the full aided sequence.
+- **Perceived aid error:** perceived aid accuracy minus the participant's realised
+  whole-block aid accuracy, in percentage points. Manual self-ratings are shown
+  descriptively. These exports contain no automation self-accuracy rating or
+  phase-specific subjective ratings.
+
+Accuracy uses a logistic mixed model and correct RT a linear mixed model of log
+RT, both with `group * stage + (1 | participant)`. Stage distinguishes manual-pre,
+P1, P2, P3 and manual-post. Agreement uses a logistic mixed model with
+`group * phase * advice_correctness + (1 | participant)`. Every mixed model has
+participant random intercepts only. The binary outcomes overlap: among answered
+trials, agreement equals accuracy for correct advice and one minus accuracy for
+incorrect advice; they are not independent evidence streams.
+
+Binary contrasts are percentage-point differences after response-scale
+regridding. Model means condition on a zero participant random effect and are
+not population-averaged probabilities. Correct-RT effects are geometric-mean
+ratios; figures express benefits as `100 * (1 - ratio)`, with interval endpoints
+reversed appropriately. Descriptive RT profiles show arithmetic means.
+Between-group RT interactions exponentiate to ratios of ratios, not differences
+in percentage speed benefits; those comparisons remain in the numerical report,
+while the speed-benefit figure shows the interpretable within-group reductions.
+
+Participant sensitivity analyses use equally weighted individual contrast
+scores: paired one-sample tests within groups, Welch-Satterthwaite comparisons
+between groups. A participant missing a required analysis cell contributes to
+other contrasts but not that contrast. These analyses preserve participant-level
+dependence; their estimands differ from conditional mixed-model estimates.
+
+Time-course models add phase-specific linear progress and its full interactions
+to the aided accuracy/agreement formula. Progress runs from 0 to 1 independently
+within each phase. Curves show predicted probabilities; contrasts compare phase
+end with start. Sensitivities use individual linear probability slopes, which
+are a robustness check rather than an identical nonlinear estimand. Descriptive
+trajectories use fixed nonoverlapping 100-trial bins, equal participant weights,
+and displayed contributor counts. Empty advice cells are missing, not zero.
+No curve crosses a phase boundary, and no precise learning time is estimated.
+
+Subjective outcomes use participant-level linear models with HC3 standard
+errors: a group-only model, and a separate association model with group plus
+grand-mean-centred P2 incorrect-advice agreement (scaled per 10 percentage points).
+The latter estimates a common group-adjusted slope. One rating per participant
+does not warrant a participant random intercept.
+
+All tests are two-sided. Holm correction is separate within outcome, contrast
+family and method; subjective tests form a two-test family per outcome.
+Confidence intervals are pointwise and unadjusted. Do not select whichever
+method produces significance or treat the separate families as study-wide
+multiplicity control.
+
+### Diagnostics, interpretation and deliverables
+
+The pipeline records convergence, singularity, rank deficiency, gradients,
+extreme fitted probabilities, conditional binomial cell discrepancies and RT
+residual diagnostics. Failed fits do not supply inferential intervals or tests.
+Conditional cell simulations hold fitted parameters fixed and do not refit;
+they are descriptive diagnostics, not calibrated goodness-of-fit tests. DHARMa
+availability is reported explicitly, but it is not required or run.
+
+The current fits show extra participant-cell variation despite convergence.
+Interpret small model-only findings cautiously and read all participant
+sensitivities alongside the models. Random-intercept-only fits do not model all
+individual differences in phase responses or serial dependence. Correct RT also
+conditions on correctness, and its residual spread differs across cells.
+
+Everyone receives the same 95% → 70% → 95% order: phase differences include time,
+practice and fatigue. Calibration groups also differ in visual difficulty.
+Agreement is not proof of advice-caused switching or a pure measure of reliance.
+Neither a nonsignificant P3-minus-P1 contrast nor a nonsignificant aided-minus-
+manual contrast establishes equivalence. Manual-post is a sensitivity baseline,
+not an untreated control. Rating associations are not causal effects.
+
+The analysis bundle contains an HTML/text report with central comparisons,
+the hypothesis registry, model objects, diagnostics, participant summaries,
+contrast weights, key results, model-versus-participant comparisons, source
+manifests and session information. `COMPLETE.txt` means computation completed,
+not that every model passed or every hypothesis was supported. Plotting rejects
+changed raw inputs, analysis sources or analysis artifacts.
+
+The figure bundle has nine PDF/300-dpi PNG pairs: sequence accuracy, automation
+benefits, relative competence, recovery, adaptation trajectories, correct RT,
+manual pre/post, subjective evaluation, and descriptive manual self-ratings.
+Every panel has exported source data. The additional manual self-rating figure
+keeps the subjective-evaluation figure legible. Titles are question-based so they
+cannot retain stale conclusions after a future rerun. Structural validation
+does not substitute for rendered visual inspection.
+Open `plots/semester2_2026_behavioural/index.html` to browse all nine figures and
+their PDF/PNG downloads.
