@@ -102,3 +102,46 @@ This writes `instruction_screenshots/`, `virus_task_screenshots/`, and `screensh
 
 ## Author
 Russell J. Boag
+
+## Behavioural research-question analysis
+
+The Semester 2 analysis includes **60 participants**. The earlier p59 run
+`20260903_120309` was excluded for chance performance and replaced by
+`20260924_110831`. Include the later replacement in all analyses; never exclude
+participant number 59 wholesale. Both raw runs remain preserved.
+
+From the repository root, regenerate the data, participant summaries and reports:
+
+```sh
+Rscript collate_data.R output/semester2_2026_data data
+Rscript create_averaged_within_participants.R
+Rscript test_aid_onset_hypotheses.R
+```
+
+Collation selects the latest filename timestamp per participant and requires
+trial, questionnaire and slider exports from that same run. It stops if the
+latest run is incomplete rather than combining exports from different runs.
+`data/collation_manifest.csv` records source paths, run timestamps and MD5
+checksums; questionnaire outputs now also retain `run_timestamp`.
+
+The analysis retains H1–H5, participant-random-intercept logistic models,
+two-sided Holm tests within each H2–H5 family, and paired participant sensitivity
+analyses. H1 compares mean perceived aid reliability with perceived self-reliability
+in Manual. Trust remains the exploratory six-item mean. The timing-by-advice
+correctness interaction is exploratory and does not replace H3 or H4.
+
+The generated `analysis_outputs/semester2_2026_hypotheses/research_questions_report.html`
+leads with the direct timing contrasts and includes the full hypothesis families,
+trust, decision-transition decomposition, provenance and diagnostic limitations.
+`switch_proportion_breakdowns.html` is generated from the same run. All reported
+confidence intervals are pointwise; adjusted p-values are labelled separately.
+Aid-first Decision 1 already follows advice exposure, so between-condition
+comparisons of subsequent switching or net gain are not comparisons from a common
+independent baseline. The prior 59-participant result set is superseded.
+
+Independent source and result checks, including regressions for file-modification
+times and incomplete replacement runs:
+
+```sh
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_behavioural_reanalysis.py
+```

@@ -1,4 +1,4 @@
-# Test the preregistered aid-onset hypotheses using primary trial-level
+# Test the established H1-H5 aid-onset hypotheses using primary trial-level
 # logistic mixed models and participant-level paired-test sensitivity checks.
 #
 # Usage:
@@ -63,8 +63,9 @@ OUTPUT_DIR <- if (length(args) >= 3) {
 
 ALPHA <- 0.05
 EXPECTED_INPUT_PARTICIPANTS <- 60L
-EXCLUDED_SUBJECTS <- 59L
-EXPECTED_PARTICIPANTS <- EXPECTED_INPUT_PARTICIPANTS - length(EXCLUDED_SUBJECTS)
+EXPECTED_PARTICIPANTS <- EXPECTED_INPUT_PARTICIPANTS
+EXCLUDED_P59_RUN <- "20260903_120309"
+REPLACEMENT_P59_RUN <- "20260924_110831"
 EXPECTED_TRIALS_PER_CONDITION <- 260L
 CONDITION_LEVELS <- c("Manual", "Aid first", "Stimulus first")
 TRUST_BOOTSTRAP_REPS <- 10000L
@@ -265,24 +266,40 @@ if (
   )
 }
 
-if (!all(EXCLUDED_SUBJECTS %in% participant_data$subject_no)) {
-  stop("Requested excluded participant(s) are absent from the input data.", call. = FALSE)
+# Exclusions refer to runs, not the reused participant number.
+expected_subjects <- expected_input_subjects
+require_columns(trial_data_raw, "run_timestamp", "Trial-level data")
+p59_runs <- unique(trial_data_raw$run_timestamp[trial_data_raw$participant_id == 59L])
+if (length(p59_runs) != 1L || is.na(p59_runs) || p59_runs != REPLACEMENT_P59_RUN) {
+  stop("The 60-participant analysis requires replacement p59 run 20260924_110831.", call. = FALSE)
 }
-
-participant_data <- participant_data %>%
-  filter(!subject_no %in% EXCLUDED_SUBJECTS)
-expected_subjects <- setdiff(expected_input_subjects, EXCLUDED_SUBJECTS)
-
-if (
-  nrow(participant_data) != EXPECTED_PARTICIPANTS ||
-    !identical(sort(as.integer(participant_data$subject_no)), expected_subjects)
-) {
-  stop("Participant exclusion did not produce the expected analysis sample.", call. = FALSE)
+manifest_file <- file.path(dirname(TRIAL_CSV), "collation_manifest.csv")
+if (!file.exists(manifest_file)) {
+  stop("Run collate_data.R first to create the source-run manifest.", call. = FALSE)
 }
-
+collation_manifest <- read_csv(manifest_file, show_col_types = FALSE)
+require_columns(collation_manifest,
+                c("participant_id", "run_timestamp", "export_type", "source_file", "source_md5"),
+                "Collation manifest")
+manifest_counts <- collation_manifest %>% count(participant_id, export_type)
+manifest_runs <- collation_manifest %>% distinct(participant_id, run_timestamp)
+trial_runs <- trial_data_raw %>% distinct(participant_id, run_timestamp)
+if (nrow(manifest_counts) != 180L || any(manifest_counts$n != 1L) ||
+    !setequal(collation_manifest$export_type, c("trials", "questionnaire", "sliders")) ||
+    nrow(manifest_runs) != 60L || nrow(trial_runs) != 60L ||
+    nrow(anti_join(trial_runs, manifest_runs, by = c("participant_id", "run_timestamp"))) ||
+    !setequal(manifest_runs$participant_id, expected_subjects)) {
+  stop("Source manifest does not establish 60 coherent participant runs.", call. = FALSE)
+}
+if (any(!file.exists(collation_manifest$source_file)) ||
+    any(unname(tools::md5sum(collation_manifest$source_file)) != collation_manifest$source_md5)) {
+  stop("Source exports changed since collation; re-collate before analysis.", call. = FALSE)
+}
 analysis_exclusions <- tibble(
-  excluded_subject_no = EXCLUDED_SUBJECTS,
-  reason = "Excluded at user request",
+  excluded_subject_no = 59L,
+  excluded_run_timestamp = EXCLUDED_P59_RUN,
+  replacement_run_timestamp = REPLACEMENT_P59_RUN,
+  reason = "Earlier run excluded for chance performance; later replacement included",
   input_participants = EXPECTED_INPUT_PARTICIPANTS,
   analysed_participants = EXPECTED_PARTICIPANTS
 )
@@ -304,7 +321,6 @@ trial_data <- trial_data_raw %>%
   mutate(
     subject_no = suppressWarnings(as.integer(participant_id))
   ) %>%
-  filter(!subject_no %in% EXCLUDED_SUBJECTS) %>%
   mutate(
     subject = factor(subject_no, levels = expected_subjects),
     condition = factor(
@@ -1701,9 +1717,12 @@ write_csv(
   file.path(OUTPUT_DIR, "analysis_exclusions.csv")
 )
 
+write_csv(collation_manifest, file.path(OUTPUT_DIR, "source_run_manifest.csv"))
+source("aid_onset_research_questions.R", local = TRUE)
+
 cat("\nAid-onset hypothesis analysis\n")
 cat("Participants:", EXPECTED_PARTICIPANTS, "\n")
-cat("Excluded participant(s):", paste(EXCLUDED_SUBJECTS, collapse = ", "), "\n")
+cat("Excluded run: p59", EXCLUDED_P59_RUN, "; replacement included:", REPLACEMENT_P59_RUN, "\n")
 cat("Trials:", nrow(trial_data), "\n\n")
 
 h1_row <- primary_tests %>% filter(hypothesis == "H1")
