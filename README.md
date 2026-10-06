@@ -134,6 +134,7 @@ Rscript analyse_dynamic_reliability.R
 Rscript plot_dynamic_reliability_results.R
 Rscript tests/test_dynamic_reliability_analysis.R
 Rscript tests/validate_dynamic_reliability_outputs.R
+Rscript tests/validate_dynamic_reliability_slides.R
 ```
 
 Required packages: `dplyr`, `tidyr`, `readr`, `lme4`, `lmerTest`, `emmeans`,
@@ -155,9 +156,13 @@ by Git; task exports and existing descriptive plots are not modified.
 | H1 | Does CAL90 reduce agreement with incorrect advice more than CAL65 at the drop? | Group difference in P2 minus P1 agreement; a negative CAL90-minus-CAL65 interaction matches this prediction. |
 | H2 | Does the degraded aid benefit CAL65 more than CAL90? | P2 minus manual-pre accuracy within each group and the difference in those gains. |
 | H3 | Does behaviour change when reliability recovers, and does it differ from its initial level? | P3 minus P2 and P3 minus P1 accuracy and agreement. |
+| H4 (original E3) | How do final evaluations relate to group and degraded-phase behaviour? | Trust and perceived aid accuracy error: group differences and group-adjusted associations with P2 incorrect-advice agreement. |
 | E1 | Does behaviour adapt within phases? | Phase-specific first-to-last-trial model contrasts and participant linear probability slopes. |
 | E2 | What changes in response speed and manual performance accompany the sequence? | Log-RT contrasts and manual-post minus manual-pre accuracy/RT. |
-| E3 | How do final evaluations relate to group and degraded-phase behaviour? | Trust and perceived aid accuracy error: group differences and group-adjusted associations with P2 incorrect-advice agreement. |
+
+H4 is promoted from exploratory E3 to the primary presentation set. The saved
+analysis registry retains E3 as its source label; the figure catalog records
+both labels. Its estimates and original Holm adjustment family are retained.
 
 The core accuracy registry has 18 contrasts: P1/P2/P3 minus manual-pre and the
 three pairwise phase differences, each within CAL65, within CAL90 and as
@@ -270,12 +275,63 @@ manifests and session information. `COMPLETE.txt` means computation completed,
 not that every model passed or every hypothesis was supported. Plotting rejects
 changed raw inputs, analysis sources or analysis artifacts.
 
-The figure bundle has nine PDF/300-dpi PNG pairs: sequence accuracy, automation
+The presentation bundle in `plots/semester2_2026_behavioural/presentation/` has
+one figure for each registered hypothesis/question, styled to match the current
+`auto_reliability_virus_atc` and `pygame_virus_time_pressure` figures:
+
+| File stem | Focus |
+| --- | --- |
+| `01_h1_relative_competence` | Incorrect-advice agreement at the drop and the group difference in paired changes |
+| `02_h2_degraded_aid_benefit` | P2 versus manual-pre accuracy and the group difference in gains |
+| `03_h3_recovery` | P3 versus P2 and P1, for accuracy and both advice-correctness conditions |
+| `04_h4_subjective_evaluation` | Final rating group differences and group-adjusted behavioural associations (original E3) |
+| `05_e1_within_phase_adaptation` | Observed 100-trial bins and saved full-phase trend tests |
+| `06_e2_speed_and_manual_change` | Manual pre/post accuracy and correct RT across the sequence |
+
+Each figure is **12 x 6.75 inches (16:9)**, exported as a **3600 x 2025 PNG at
+300 dpi** and vector PDF. Open `presentation/index.html` for the gallery,
+`primary_hypotheses.pdf` for H1-H4, or `all_hypotheses.pdf` for all six.
+The primary figures are ordered H1-H4, followed by exploratory E1-E2. The
+catalog records H4's original E3 label and exploratory status; all hypotheses
+were specified after data collection. Main figure filenames follow ATC/virus's
+`01_h1_description` convention.
+
+Points show equally weighted observed participant means. Complete repeated
+condition panels use Cousineau-Morey 95% within-participant CIs, normalized
+separately within calibration group and outcome. H1/H2 normalize over their
+two displayed conditions; H3 over P1-P3; E1 accuracy/correct-advice trajectories
+over four bins within each phase; E2 manual accuracy over pre/post, and RT over
+all five stages on the log scale before back-transformation. The slide RTs are
+geometric means. Incorrect-advice trajectory bins have missing cells and retain
+all available participants with ordinary t intervals and visible sample counts.
+Paired changes and between-group ratings also use ordinary t intervals.
+Morey CIs describe condition patterns; they are not between-group or paired-effect
+CIs. See [Morey (2008)](https://www.tqmp.org/RegularArticles/vol04-2/p061/p061.pdf).
+
+Brackets use saved model contrasts with their **original Holm adjustment
+families**, without refitting or adjusting only the displayed subset:
+`*` means p < .05, `ns` means p >= .05, and a dagger flags disagreement with
+the saved participant sensitivity test. E1 brackets test model phase endpoints,
+not differences between the first and last bin means. H4 uses saved HC3
+linear-model tests; group contrasts get brackets and association slopes get
+title symbols. Model-only findings require caution given extra participant-cell
+variation. CI overlap is not a significance test, and nonsignificance does not
+establish equivalence. Per-figure participant values, CI definitions and exact
+annotation tests are exported under `presentation/data/`.
+
+The main plotting command also builds this presentation bundle. To regenerate
+only the slides from the provenance-checked saved analysis:
+
+```sh
+Rscript plot_dynamic_reliability_slides.R [analysis_dir] [plot_dir]
+```
+
+The supporting figure bundle has nine PDF/300-dpi PNG pairs: sequence accuracy, automation
 benefits, relative competence, recovery, adaptation trajectories, correct RT,
 manual pre/post, subjective evaluation, and descriptive manual self-ratings.
 Every panel has exported source data. The additional manual self-rating figure
 keeps the subjective-evaluation figure legible. Titles are question-based so they
 cannot retain stale conclusions after a future rerun. Structural validation
 does not substitute for rendered visual inspection.
-Open `plots/semester2_2026_behavioural/index.html` to browse all nine figures and
-their PDF/PNG downloads.
+Open `plots/semester2_2026_behavioural/index.html` to browse the nine supporting
+figures and follow the link to the presentation bundle.
