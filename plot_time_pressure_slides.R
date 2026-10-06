@@ -359,7 +359,7 @@ plot_time_pressure_slides <- function(base, plot_base, root) {
     scale_colour_manual(values = colours,labels = reliability_labels) +
     scale_x_discrete(labels = c(Aid = "Aid alone", Human = "Human + aid")) +
     labs(title = title,subtitle = "Observed human accuracy versus the aid's realised accuracy in the same blocks.",x = NULL,y = "Accuracy (%)",
-      caption = paste("Morey 95% CIs compare human and aid within each cell; aid-alone assumes timely responses. Originally exploratory.",test_caption,sep = "\n"))
+      caption = paste("Morey 95% CIs compare human and aid within each cell; aid-alone assumes timely responses.",test_caption,sep = "\n"))
   a <- expand_grid(pressure = c("HP","LP"), reliability = c("65%","95%"))
   a <- bind_cols(a, tests("net_gain",paste(a$pressure,a$reliability,"versus zero"),"H2")) %>%
     mutate(x1 = 1+ifelse(reliability == "65%",-.045,.045), x2 = x1+1,
@@ -389,13 +389,13 @@ plot_time_pressure_slides <- function(base, plot_base, root) {
     scale_x_discrete(labels = reliability_labels) + scale_y_continuous(breaks = seq(-2,14,2)) +
     labs(title = title, subtitle = "Observed aided-minus-manual accuracy, decomposed within each participant at the same deadline.",
       x = NULL, y = "Contribution to accuracy gain (pp)",
-      caption = "Exploratory. Bars: observed mean contributions. Diamonds: mean paired gain + paired-effect 95% t CIs.\nCompletion and choice contributions sum exactly to each participant's gain; this is descriptive accounting.")
+      caption = "Bars: observed mean contributions. Diamonds: mean paired gain + paired-effect 95% t CIs.\nCompletion and choice contributions sum exactly to each participant's gain; this is descriptive accounting.")
   a <- total %>% select(pattern,pressure,reliability,value,hi)
   a <- bind_cols(a,tests("accuracy",paste(a$pattern,a$pressure,"Automation - Manual"))) %>%
     mutate(annotation = "Total gain versus zero",text_y = hi+.6)
   annotations[["08_main_H8_accuracy_components"]] <- a
   p <- p + geom_text(data = a,aes(x = reliability,y = text_y,label = symbol),inherit.aes = FALSE,size = 5) +
-    labs(caption = paste("Bars: observed contributions. Diamonds: paired gain + 95% t CI. Symbols test total gain. Originally exploratory.",
+    labs(caption = paste("Bars: observed contributions. Diamonds: paired gain + 95% t CI. Symbols test total gain.",
       test_caption,sep = "\n"))
   save(p, "08_main_H8_accuracy_components", "Main", "H8", "Do gains arise from completion or more accurate responses?", title,
     "Symmetric empirical decomposition of completion x answered-trial accuracy. Ordinary t CIs of participant difference scores describe paired gains; no Morey normalization over unlike components is appropriate. Component intervals are exported but not displayed. Symbols above the total diamonds use the saved main accuracy gain-versus-zero model tests, flagging disagreement with participant tests; no significance bracket compares the accounting components. This accounting identity is not causal mediation.", decomposition, dec_long, source_set = "Exploratory", source_hypothesis = "H6")
@@ -407,12 +407,12 @@ plot_time_pressure_slides <- function(base, plot_base, root) {
   title <- "H9: Agreement is less selective with 95% advice"
   p <- mean_panel(sel_s, "Correct minus incorrect agreement (pp)", title, c(0,75), seq(0,75,15)) +
     labs(subtitle = "Observed correct-minus-incorrect advice agreement, calculated within each participant.",
-      caption = "Exploratory. Points: mean participant differences. Bars: paired-effect 95% t CIs; pp = percentage points.\nReliability comparisons are between groups. Selectivity is conditional on answering and does not measure verification.") +
+      caption = "Points: mean participant differences. Bars: paired-effect 95% t CIs; pp = percentage points.\nReliability comparisons are between groups. Selectivity is conditional on answering and does not measure verification.") +
     theme(plot.title = element_text(size = 24))
   a <- tests("selectivity", paste(c("HP","LP"),"95% - 65%"), "H1") %>%
     mutate(pressure = c("HP","LP"), x1 = c(1,2)-.0875, x2 = x1+.175) %>% place(sel_s)
   p <- bracket(p, a, "09_main_H9_selectivity") + labs(caption = paste(
-    "Observed paired differences + 95% t CIs. Reliability comparisons are between groups. Originally exploratory.",
+    "Observed paired differences + 95% t CIs. Reliability comparisons are between groups.",
     test_caption, sep = "\n"))
   save(p, "09_main_H9_selectivity", "Main", "H9", "How selectively is advice followed?", title,
     "Empirical selectivity = correct-advice agreement minus incorrect-advice agreement within each participant-block. Ordinary t intervals are applied to these paired difference scores, retaining the correct uncertainty for each mean effect. They are not Morey intervals around condition means. Reliability comparisons at fixed pressure are between groups.", sel_s, sel, source_set = "Exploratory", source_hypothesis = "H1")
