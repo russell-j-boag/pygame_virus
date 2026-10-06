@@ -324,3 +324,5 @@ writeLines(capture.output(sessionInfo()), file.path(out, "data", "session_info.t
 message("Saved ", length(artifacts), " primary figure artifacts to ", out)
 source(file.path(root, "plot_time_pressure_exploratory.R"))
 plot_exploratory(input, out, root)
+source(file.path(root, "plot_time_pressure_slides.R"))
+plot_time_pressure_slides(input, out, root)

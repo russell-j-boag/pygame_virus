@@ -143,6 +143,7 @@ Rscript tests/test_time_pressure_analysis.R
 Rscript tests/validate_time_pressure_outputs.R
 Rscript tests/test_time_pressure_exploratory.R
 Rscript tests/validate_time_pressure_exploratory_outputs.R
+Rscript tests/validate_time_pressure_slides.R
 ```
 
 The analysis defaults to `output/semester2_2026_data` and writes to
@@ -191,6 +192,9 @@ The default analysis and plotting commands also run the six added questions,
 writing to an `exploratory/` subdirectory beneath their respective output folders.
 They are explicitly exploratory because the main results were inspected before
 these questions were specified. The primary analysis outputs remain separate.
+The presentation now includes original exploratory H2, H6 and H1 in the primary
+set as H7, H8 and H9, respectively. The source analyses below retain their original
+identifiers and exploratory provenance.
 The extensions require the additional R package `sandwich`.
 
 1. **Selective agreement:** correct-minus-incorrect advice agreement, and its
@@ -245,8 +249,10 @@ Rscript plot_time_pressure_exploratory.R
 
 See `exploratory/exploratory_report.html`, `exploratory_contrasts.csv`, the
 hypothesis registry, model diagnostics, participant summaries and input hashes.
-The exploratory figure bundle contains seven individual figures and three 16:9
-composites, in PDF and 300-dpi PNG. Every figure exports its plotted values.
+The exploratory supporting bundle contains seven individual figures and three
+older composites, in PDF and 300-dpi PNG. For presentations, use the corresponding
+hypothesis figures in `presentation/` described below. Every figure exports its
+plotted values.
 
 Start with `results_report.html` or `results_report.txt`, then inspect
 `planned_contrasts.csv`, `participant_sensitivity_contrasts.csv`, and
@@ -262,28 +268,119 @@ aid: `100 * (1 - aided/manual geometric-mean RT ratio)`. Pointwise 95% CIs are
 transformed from the log-RT contrast intervals; these are not arithmetic-mean RT
 differences. Plotted estimates are in `data/rt_benefit_estimates.csv`.
 
-The primary figures now follow this presentation order:
+### Presentation figures: one per question
 
-1. `slide_manual_pressure_costs`: manual HP/LP accuracy and RT means, with direct
-   pressure contrasts beside them. Allocation groups retain separate baselines.
-2. `slide_1_performance`: accuracy and RT benefits, arranged by pressure and aid
-   reliability. Each benefit uses the same participants' manual condition.
-3. `slide_2_compensation`: actual manual-LP and aided-HP accuracy, followed by the
-   direct compensation contrast. Numeric contrast labels are participant estimates.
-4. `slide_3_reliance_trust`: correct-advice agreement, incorrect-advice agreement,
-   and trust means above direct reliability contrasts. The two agreement mean
-   panels share a 0-100% scale; their contrast panels also share a common scale.
+Use `plots/semester2_2026_behavioural/presentation/index.html` to browse the
+recommended figures, `presentation/primary_hypotheses.pdf` for primary H1-H9,
+or `presentation/all_hypotheses.pdf` for the complete set of twelve figures.
+The main plotting command builds these automatically. Rebuild just this set
+from the saved analyses without refitting:
 
-Blue denotes 95% advice, orange 65%, and grey manual means. Open diamonds denote
-mixed-model contrasts and filled circles participant sensitivity estimates.
-Headline means are participant summaries; their CIs and the contrast CIs are
-pointwise 95% intervals. Formal tests retain Holm adjustment within outcome.
-No participant lines connect the different groups in the reorganised aided means.
-Full condition means and participant detail remain in `accuracy`, `correct_rt`
-and `timeouts`; participant agreement/trust values are also exported as CSVs.
-`manual_pressure_costs` provides a manuscript-sized counterpart to the new slide.
-All four manuscript captions and estimand details are in
-`data/primary_figure_captions.txt`. Plotting reuses the saved analyses without refitting.
+```sh
+Rscript plot_time_pressure_slides.R
+Rscript tests/validate_time_pressure_slides.R
+```
+
+The standalone script accepts `[analysis_dir] [plot_dir]`. Each of the twelve
+figures is 12 x 6.75 inches (16:9), exported as a 3600 x 2025 PNG at 300 dpi and
+a vector PDF. Insert a PNG at full slide width without cropping. The style
+follows the latest `auto_reliability_virus_atc/R/paper_hypotheses_plots.R`:
+Helvetica, 24-point finding titles, 17-20-point axes/panel labels, light horizontal
+gridlines, and short captions. Plotted values, input hashes, and an artifact
+manifest accompany the figures; `figure_catalog.csv` contains the question,
+message, and interpretation notes for each.
+
+The primary set contains nine hypotheses, each with its own H1-H9 figure:
+
+- **H1 — Time-pressure costs:** Participants would respond faster but less accurately under high pressure than low pressure in the Manual condition.
+- **H2 — Reliability-dependent accuracy benefits:** Accuracy gains over Manual would be larger under high pressure in the 95% HP / 65% LP group, and larger under low pressure in the 65% HP / 95% LP group.
+- **H3 — Compensation for time pressure:** Reliable advice under high pressure would offset the accuracy cost of the shorter deadline, allowing performance to match or exceed Manual performance under low pressure.
+- **H4 — Response speed:** Automation would change correct-response RT relative to Manual, with the size and direction of this effect depending on time pressure and aid reliability.
+- **H5 — Behavioural reliance:** Agreement with automated advice would vary with time pressure and aid reliability, with potentially different effects for correct and incorrect advice.
+- **H6 — Trust:** Reported trust would vary with aid reliability and time pressure, including whether time pressure altered participants' sensitivity to reliability.
+- **H7 — Value beyond following the aid:** Participants' aided accuracy would differ from the realised aid-alone benchmark depending on time pressure and aid reliability.
+- **H8 — Completion versus choice accuracy:** Automation-related accuracy gains would reflect changes in response completion and accuracy among answered trials, with their contributions varying with time pressure and aid reliability.
+- **H9 — Selective reliance:** The difference between agreement with correct and incorrect advice would vary with time pressure and aid reliability.
+
+H7, H8 and H9 were originally exploratory H2, H6 and H1, respectively, specified
+after inspecting the main results. Their inclusion in the primary presentation
+set preserves this history and the existing test adjustment families. The three
+remaining exploratory figures retain their original H3-H5 identifiers. Filenames
+include both the set and hypothesis ID; the catalog records the original set,
+original hypothesis and analysis history alongside the current identifiers.
+
+| File stem | Main comparison |
+| --- | --- |
+| `01_main_H1_manual_pressure` | Observed manual HP/LP accuracy and geometric correct-RT means |
+| `02_main_H2_accuracy_benefits` | Observed manual/aided accuracy and the difference in gains between pressures |
+| `03_main_H3_compensation` | Observed aided-HP and manual-LP accuracy in the same participants |
+| `04_main_H4_response_speed` | Observed geometric correct RT and changes in the aid effect across pressure |
+| `05_main_H5_behavioural_reliance` | Correct/incorrect advice agreement, with reliability, pressure and interaction tests |
+| `06_main_H6_trust` | Six-item trust means, with reliability, pressure and interaction tests |
+| `07_main_H7_aid_benchmark` | Observed human accuracy versus realised aid accuracy |
+| `08_main_H8_accuracy_components` | Completion and conditional-choice contributions to accuracy gains |
+| `09_main_H9_selectivity` | Correct-minus-incorrect advice agreement |
+| `10_exploratory_H3_reliability_awareness` | Perceived versus realised aid accuracy |
+| `11_exploratory_H4_trust_association` | Individual HP-minus-LP changes in trust and advice agreement |
+| `12_exploratory_H5_error_adjustment` | Observed next-trial agreement after wrong versus correct advice |
+
+All plotted points, lines and intervals now describe **observed participant
+data**, with equal participant weighting. The figures contain no fitted means,
+prediction bands or model-versus-participant coefficient overlays. Blue/orange
+identify 95%/65% reliability where colour denotes reliability. In the manual and
+trust-change figures, colour instead identifies the two allocation patterns;
+the legends make this distinction explicit.
+
+**Cousineau-Morey 95% intervals** are computed from complete repeated-measures
+sets, normalising each person's scores and applying `sqrt(k / (k - 1))` to the
+standard error. Normalisation stays within allocation groups and the specified
+comparison set; centres remain the original observed means:
+
+- Manual pressure: HP/LP pairs, separately by allocation group and outcome.
+- Main H2 accuracy and H4 speed: the same four manual/aided x HP/LP cells within
+  each allocation group, separately by outcome and displayed in separate figures.
+- Compensation: manual LP and aided HP pairs within each allocation group.
+- Main H7 / exploratory H3: human-versus-aid or perceived-versus-realised pairs within each
+  participant-block. These intervals do not support between-reliability comparisons.
+- Exploratory H5: the two previous-advice histories within each participant-block.
+
+Correct RTs are geometric means: normalisation and interval construction use
+participant mean log RTs, followed by exponentiation. The reliability/trust
+mean panels retain ordinary t intervals because reliability at fixed pressure
+is a between-group comparison. Main H9 selectivity and H8 total gains retain t
+intervals on the actual paired difference scores, which directly quantify the
+mean observed effect. Morey correction is not applied again to those effects.
+Exploratory H4 shows individual paired changes without a fitted line or interval; pressure
+and reliability change together, so the scatter does not isolate a trust effect.
+
+**Significance brackets** follow the reference project: `*` means model Holm
+`p < .05`, `ns` means `p >= .05`, and a dagger flags disagreement with the matching
+participant test. All saved tests retain their existing adjustment families.
+Main H2 and H4 include upper brackets comparing the two pressure-specific aid
+effects; the endpoints sit at the centres of the corresponding manual/aided
+pairs. Main H5 and H6 show reliability comparisons, pressure comparisons, and
+their interaction. Exploratory H3 brackets the between-group perceived-reliability comparison;
+its significance comes from the saved test, not the Morey bar overlap.
+Exploratory H5 uses new paired t tests matching its unadjusted observed history means,
+Holm-adjusted across the four pressure x reliability cells. These differ from
+the saved covariate-adjusted lag tests. Main H8 symbols test total gain against zero;
+there is no significance bracket between its accounting components. Exploratory H4 scatter
+points have no two-condition comparison bracket. CI overlap is never the formal
+test. Main H7-H9 retain a brief note of their exploratory origin; the three
+remaining exploratory figures remain explicitly labelled exploratory.
+
+Each figure exports its participant inputs and plotted values; each annotation
+exports its current hypothesis ID, original test family, contrast, p-values,
+adjustment source, dagger flag and position.
+The presentation validator independently reconstructs the Morey intervals and
+checks every displayed test against the matching source or raw paired scores.
+
+The earlier detailed figures and multi-question composites remain supporting
+outputs outside `presentation/`. Their own captions define their symbols and
+intervals. They include individual observations, full condition means, absolute
+rating errors, association curves, and the original exploratory H2 benchmark
+component decomposition (now primary H7). All
+plotting commands reuse the saved analyses without refitting.
 
 ## Author
 Russell J. Boag
