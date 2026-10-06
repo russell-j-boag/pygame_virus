@@ -124,7 +124,7 @@ latest run is incomplete rather than combining exports from different runs.
 `data/collation_manifest.csv` records source paths, run timestamps and MD5
 checksums; questionnaire outputs now also retain `run_timestamp`.
 
-The analysis retains H1–H5, participant-random-intercept logistic models,
+The original analysis retains its H1–H5 identifiers, participant-random-intercept logistic models,
 two-sided Holm tests within each H2–H5 family, and paired participant sensitivity
 analyses. H1 compares mean perceived aid reliability with perceived self-reliability
 in Manual. Trust remains the exploratory six-item mean. The timing-by-advice
@@ -138,6 +138,55 @@ confidence intervals are pointwise; adjusted p-values are labelled separately.
 Aid-first Decision 1 already follows advice exposure, so between-condition
 comparisons of subsequent switching or net gain are not comparisons from a common
 independent baseline. The prior 59-participant result set is superseded.
+
+The revised presentation replaces original H5 overall accuracy with three
+follow-ups: **H5 revision quality**, **H6 advice-use errors**, and **H7 selective
+uptake in Stimulus-first**. The original analysis tables retain their original
+IDs for provenance; H5-H7 in the presentation remain exploratory, having been
+selected after inspecting the results. **H8 trust** promotes the original
+exploratory six-item trust comparison into the primary presentation, retaining
+its original two-sided paired test and exploratory origin.
+
+Generate the dedicated follow-up results, then the figures:
+
+```sh
+Rscript analyse_aid_onset_followups.R
+Rscript plot_aid_onset_slides.R
+```
+
+Open `plots/semester2_2026_key_findings/presentation/index.html` for one figure per
+H1-H8, including `08_h8_trust`. Numbered filenames include
+the hypothesis (for example, `03_h3_correct_advice_accuracy`). Each figure is
+16:9, with a 3600 x 2025 PNG at 300 dpi and a vector PDF; `primary_hypotheses.pdf`
+collects all eight main presentation figures. Typography and styling follow the current auto-reliability and
+time-pressure figures.
+
+Observed participant means have Cousineau-Morey within-participant 95% CIs.
+H3/H4 share normalization over five accuracy cells, an identical all-trial Manual
+baseline, and the same axis range. Brackets use saved Holm-adjusted logistic GLMM
+contrasts for H2-H4, and the saved paired tests for H1 and H8 trust.
+H5 uses all-trial beneficial and harmful revision rates, two separate logistic
+GLMMs, and Holm adjustment across six contrasts. Its three-condition Morey
+normalization is separate for each revision type. H6 uses final disagreement
+with correct advice and agreement with incorrect advice: exact error-rate
+counterparts of H3/H4, retaining the original tests and Holm families. H6 CIs
+normalize across the two timings within each advice type. H7 uses only initial
+disagreements in Stimulus-first, with two-advice-type Morey CIs and one exploratory
+GLMM contrast. Correct-advice opportunities begin with an incorrect judgment;
+incorrect-advice opportunities begin with a correct judgment. This conditional
+comparison does not isolate a causal effect of advice correctness.
+
+Follow-up results, models and diagnostics are in
+`analysis_outputs/semester2_2026_presentation_followups/`. All new models retain
+participant random intercepts only. Dagger annotations identify significant
+model contrasts that disagree with paired participant sensitivity tests; this
+affects both H5 harmful-revision comparisons involving Manual. Retired slide
+filenames move to `presentation/archive/retired/` after a successful rebuild.
+These intervals are pointwise; their overlap is not a significance test.
+The generator verifies the analysis input checksums and trial-derived means,
+exports the plotted values and bracket tests, and does not refit models.
+Validate the generated intervals and annotations independently with
+`Rscript tests/validate_aid_onset_slides.R`.
 
 Independent source and result checks, including regressions for file-modification
 times and incomplete replacement runs:
