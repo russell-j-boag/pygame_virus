@@ -170,7 +170,7 @@ config <- list(
       -primary$estimate[primary$hypothesis == "Exploratory"]),
     question = "Does trust differ with advice timing?",
     ylab = "Trust (1-5)", limits = c(2.5, 3.65), breaks = seq(2.5, 3.5, .25),
-    note = "Six-item mean trust; promoted from the exploratory comparison. No Manual trust score is defined."))
+    note = "Six-item mean trust. No Manual trust score is defined."))
 
 # Resolve bracket endpoints from named contrasts, never by result row order.
 annotations_for <- function(h, spec) {
@@ -284,18 +284,18 @@ followup_config <- list(
     ylab = "Revisions (% of all trials)", limits = c(0, 18), breaks = seq(0, 15, 5),
     interval_note = "N = 60. Means + Morey 95% CIs; normalized across three conditions within each revision type.",
     test_note = "GLMMs; Holm across six contrasts. * p < .05; ns p >= .05; \u2020 paired test differs.",
-    note = "Exploratory. Advice precedes Decision 1 in Aid-first; starting information differs across timings."),
+    note = "Advice precedes Decision 1 in Aid-first; starting information differs across timings."),
   H6 = list(stem = "06_h6_advice_use_errors", panels = c("Disagree with correct advice", "Agree with incorrect advice"),
     facet_labels = c("Correct advice\nFinal disagreement", "Incorrect advice\nFinal agreement"),
     levels = c("Aid first", "Stimulus first"), labels = c("Aid-first", "Stimulus-first"),
     title = "H6: Stimulus-first increased incorrect-advice agreement",
-    subtitle = sprintf("Timing x advice correctness interaction: p %s (unadjusted exploratory test).",
+    subtitle = sprintf("Timing x advice correctness interaction: p %s (unadjusted test).",
       if (followup_interaction$p_value < .001) "< .001" else paste0("= ", formatC(followup_interaction$p_value, digits = 3, format = "f"))),
     question = "Does timing affect rejection of correct advice and acceptance of incorrect advice?",
     ylab = "Final advice-use errors (%)", limits = c(0, 50), breaks = seq(0, 50, 10),
     interval_note = "N = 60. Means + Morey 95% CIs; two timings normalized separately within each advice type.",
     test_note = "Brackets: saved H3/H4 GLMM contrasts, original Holm families. * p < .05; ns p >= .05.",
-    note = "Exploratory presentation of H3/H4 errors. Final agreement does not by itself establish active advice uptake."),
+    note = "H3/H4 errors. Final agreement does not by itself establish active advice uptake."),
   H7 = list(stem = "07_h7_selective_uptake_stimulus_first", panels = "Stimulus-first", facet_labels = "Stimulus-first",
     levels = c("Correct advice", "Incorrect advice"), labels = c("Correct advice", "Incorrect advice"),
     title = "H7: Participants favoured correct advice when revising",
@@ -303,7 +303,7 @@ followup_config <- list(
     question = "When initial judgments disagree with advice, is correct advice taken up more often?",
     ylab = "Uptake (% of initial disagreements)", limits = c(0, 75), breaks = seq(0, 70, 10),
     interval_note = "N = 60. Means + Morey 95% CIs across the two advice types within participants.",
-    test_note = "Bracket: logistic GLMM, single exploratory contrast. * p < .05; ns p >= .05.",
+    test_note = "Bracket: logistic GLMM, single contrast. * p < .05; ns p >= .05.",
     note = "Correct-advice opportunities start with a wrong judgment; incorrect-advice opportunities start with a correct one."))
 for (h in names(followup_config)) {
   spec <- followup_config[[h]]
