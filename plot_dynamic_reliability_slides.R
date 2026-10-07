@@ -2,6 +2,9 @@
 # H4 is promoted from original E3; source labels and adjustment families persist.
 # Rscript plot_dynamic_reliability_slides.R [analysis_dir] [plot_dir]
 
+# Expand phase names only for presentation; saved analysis keys remain P1/P2/P3.
+dynamic_phase_text <- function(x) gsub("\\bP([123])\\b", "Phase \\1", x, perl = TRUE)
+
 # Morey (2008), doi:10.20982/tqmp.04.2.p061. Normalize separately within
 # between-participant groups. These are condition-pattern CIs, not effect CIs.
 dynamic_morey <- function(d, groups, levels, log_scale = FALSE) {
@@ -81,7 +84,7 @@ plot_dynamic_reliability_slides <- function(input, plot_base, root) {
   counts <- read("cohort_counts"); N <- sum(counts$n_participants)
   labels <- setNames(paste0(groups," (n = ",counts$n_participants[match(groups,counts$group)],")"),groups)
   colour_scale <- function() scale_colour_manual(values = colours,breaks = groups,labels = labels,drop = FALSE)
-  phase_labels <- c("P1\n95%","P2\n70%","P3\n95%")
+  phase_labels <- c("Phase 1\n95%","Phase 2\n70%","Phase 3\n95%")
   tests <- read("planned_contrasts"); subjective <- read("subjective_contrasts")
   diagnostics <- read("model_diagnostics")
   annotations <- list(); figures <- list(); catalog <- list()
@@ -132,7 +135,8 @@ plot_dynamic_reliability_slides <- function(input, plot_base, root) {
   }
   morey_caption <- "Observed means + Cousineau-Morey within-participant 95% CIs, within each calibration group."
   compose <- function(p,title,subtitle,caption) p + plot_layout(guides = "collect") +
-    plot_annotation(title = title,subtitle = subtitle,caption = caption,theme = slide_theme())
+    plot_annotation(title = dynamic_phase_text(title),subtitle = dynamic_phase_text(subtitle),
+      caption = dynamic_phase_text(caption),theme = slide_theme())
   save <- function(p,stem,hypothesis,question,notes,d,participants,source_hypothesis = hypothesis) {
     stopifnot(!stem %in% names(figures))
     figures[[stem]] <<- p
@@ -144,18 +148,19 @@ plot_dynamic_reliability_slides <- function(input, plot_base, root) {
     catalog[[stem]] <<- tibble(order = length(figures),hypothesis,
       set = if (startsWith(hypothesis,"H")) "Main" else "Exploratory",
       source_hypothesis,source_set = if (startsWith(source_hypothesis,"H")) "Main" else "Exploratory",
-      question,filename = stem,
-      width_in = 12,height_in = 6.75,png_width = 3600,png_height = 2025,notes)
+      question = dynamic_phase_text(question),filename = stem,
+      width_in = 12,height_in = 6.75,png_width = 3600,png_height = 2025,notes = dynamic_phase_text(notes))
   }
   mean_panel <- function(s,levels,xlabels,title,ylab,join = TRUE) {
     s <- s %>% mutate(x = match(level,levels)+ifelse(group == "CAL65",-.045,.045))
     p <- ggplot(s,aes(x,value,colour = group,group = group))
     if (join) p <- p + geom_line(linewidth = .8)
     p + geom_errorbar(aes(ymin = lo,ymax = hi),width = .1,linewidth = 1.05) + geom_point(size = 4.2) +
-      colour_scale() + scale_x_continuous(breaks = seq_along(levels),labels = xlabels,expand = expansion(add = .4)) +
+      colour_scale() + scale_x_continuous(breaks = seq_along(levels),labels = dynamic_phase_text(xlabels),expand = expansion(add = .4)) +
       scale_y_continuous(breaks = if (grepl("(%)",ylab,fixed = TRUE)) probability_breaks else waiver(),
-        expand = expansion(mult = c(.08,.12))) + labs(x = NULL,y = ylab,title = title) +
-      theme(plot.title = element_text(size = 20))
+        expand = expansion(mult = c(.08,.12))) + labs(x = NULL,y = dynamic_phase_text(ylab),title = dynamic_phase_text(title)) +
+      theme(plot.title = element_text(size = 20),
+        axis.text.x = element_text(size = if (identical(levels,phases)) 15 else 17))
   }
   within_tests <- function(outcome,contrast,family = "core",x1 = 1,x2 = 2,lane = 1) {
     bind_rows(lapply(seq_along(groups),function(i) test(outcome,paste0(groups[i],": ",contrast),family) %>%
@@ -220,7 +225,7 @@ plot_dynamic_reliability_slides <- function(input, plot_base, root) {
     bracket(p,place(a,s,gap = .12),"03_h3_recovery",panel_name)
   })
   save(compose(wrap_plots(recovery_panels,nrow = 1),"H3: Does behaviour recover when aid reliability returns?",
-    "P3 versus P2 tests recovery; P3 versus P1 tests the remaining difference from the initial 95% phase.",
+    "Phase 3 vs Phase 2: recovery. Phase 3 vs Phase 1: remaining difference from the initial 95% phase.",
     paste(morey_caption,"Normalised over P1-P3 separately for each outcome; ns does not establish equivalence.",test_caption,sep = "\n")),
     "03_h3_recovery","H3","Does behaviour recover, and does P3 differ from P1?",
     "Three-phase Morey intervals within each calibration group and outcome. Four brackets per panel show P3-P2 and P3-P1 separately in CAL65 and CAL90. Different outcome panels use different y scales. Accuracy and advice agreement overlap mathematically and are not independent evidence. Fixed phase order confounds reliability with time and experience; nonsignificance is not equivalence.",
@@ -244,7 +249,7 @@ plot_dynamic_reliability_slides <- function(input, plot_base, root) {
       scale_x_continuous(breaks = c(200,600,1000),labels = phase_labels,expand = expansion(add = 55)) +
       scale_y_continuous(breaks = probability_breaks,expand = expansion(mult = c(.1,.13))) +
       labs(x = NULL,y = if (panel_name == "Accuracy") "Accuracy (%)" else "Agreement (%)",title = panel_name) +
-      theme(plot.title = element_text(size = 20))
+      theme(plot.title = element_text(size = 20),axis.text.x = element_text(size = 15))
     if (panel_name == "Incorrect advice") {
       # Dedicated count rows keep labels clear of the wide bin intervals.
       count_floor <- min(d$lo)-.08*diff(range(c(d$lo,d$hi)))
@@ -312,7 +317,7 @@ plot_dynamic_reliability_slides <- function(input, plot_base, root) {
     annotations[["04_h4_subjective_evaluation"]] <<- bind_rows(annotations[["04_h4_subjective_evaluation"]],a)
     ggplot(ratings,aes(100*agreement,.data[[value_name]],colour = group)) +
       geom_point(size = 2.1,alpha = .6) + geom_line(data = line,aes(y = value),linewidth = .85) + colour_scale() +
-      labs(x = "P2 incorrect-advice agreement (%)",y = ylab,title = paste0(title," (",a$symbol,")")) +
+      labs(x = "Phase 2 incorrect-advice agreement (%)",y = ylab,title = paste0(title," (",a$symbol,")")) +
       theme(axis.text = element_text(size = 14),axis.title = element_text(size = 15),plot.title = element_text(size = 18))
   }
   p <- rating_panel("trust","Final trust by group","Mean trust (1-5)")

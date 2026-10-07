@@ -326,7 +326,81 @@ only the slides from the provenance-checked saved analysis:
 Rscript plot_dynamic_reliability_slides.R [analysis_dir] [plot_dir]
 ```
 
-The supporting figure bundle has nine PDF/300-dpi PNG pairs: sequence accuracy, automation
+### Alternate H1, H3 and H4 SDT analyses
+
+Generate the five exploratory alternatives from the validated saved participant
+agreement summaries and ratings, without refitting the original models:
+
+```sh
+Rscript analyse_dynamic_reliability_sdt.R [analysis_dir] [plot_dir]
+Rscript tests/validate_dynamic_reliability_sdt.R [analysis_dir] [plot_dir]
+```
+
+The optional arguments use the same default analysis and plot directories as the
+main pipeline. Numerical results, H4 model objects, count diagnostics, correction
+sensitivity, provenance and reports are saved under `sdt_alternates/` in the
+analysis directory. Figures are saved under `presentation/alternates/` in the
+plot directory. Open its `index.html` or `H1_H3_H4_alternate_sdt.pdf` (five pages).
+Existing figures and combined PDFs are preserved. Regenerate these alternatives
+after refreshing the base analysis; changed source inputs or base artifacts are
+rejected by provenance checks.
+
+| Alternate file stem (PNG and PDF) | Focus |
+| --- | --- |
+| `01_main_H1_alternate_sdt_reliance` | P2-P1 change in -c within groups and CAL90-minus-CAL65 difference in changes |
+| `01_main_H1_alternate_sdt_discrimination` | The same drop contrasts for d-prime |
+| `03_main_H3_alternate_sdt_reliance` | P3-P2 and P3-P1 changes in -c within and between groups |
+| `03_main_H3_alternate_sdt_discrimination` | The same recovery and residual-difference contrasts for d-prime |
+| `04_main_H4_alternate_sdt_reliance_associations` | Trust and perceived aid-accuracy error by group, plus group-adjusted associations with Phase 2 -c |
+
+Here H is agreement with correct advice and F is agreement with incorrect advice:
+`-c = (z(H) + z(F))/2` and `d-prime = z(H) - z(F)`. Both rates receive the
+loglinear correction `(agreements + 0.5)/(answered trials + 1)` in every
+participant/phase, following [Hautus (1995)](https://doi.org/10.3758/BF03203619).
+Timeouts are excluded; answered trials are retained regardless of RT. Agreement
+counts are reconstructed from saved denominators/proportions with an integer
+tolerance check. Each participant must have both advice cells in each phase;
+missing cells are not imputed or treated as zero rates. The validator independently
+reconstructs these counts from raw trials. A second analysis replaces only
+zero/one rates by `0.5/n` or `1 - 0.5/n`, matching the time-pressure alternative
+script's correction sensitivity. Small incorrect-advice denominators remain a
+source of uncertainty under either correction.
+
+H1/H3 use equally weighted participant change scores, with paired tests within
+groups and Welch comparisons between groups. Tests are two-sided; Holm adjustment
+covers all nine H1/H3 contrasts per outcome and correction. An additional
+18-contrast adjustment across both outcomes is exported. A negative H1
+CAL90-minus-CAL65 change in -c matches the predicted larger reliance reduction.
+H4 uses separate `rating ~ group + centred_P2_bias` models, HC3 standard errors
+and residual-df t inference. Slopes are per one SDT unit of -c; the two rating
+association tests form one Holm family per correction. Perceived aid-accuracy
+error retains the whole-block perceived-minus-realised definition. The H4 figure
+also includes the original trust and perceived aid-error group plots in its top
+row, with ordinary participant-mean t intervals. Their brackets reuse the saved
+original HC3 group tests and their original outcome-wise two-test Holm families;
+no additional group tests or new adjustment of those tests is introduced.
+
+All five figures are 12 x 6.75 inches, with vector PDFs and 300-dpi PNGs.
+They show loglinear results; means and contrasts use ordinary pointwise 95% t
+intervals. The bottom-row H4 association lines have group-specific intercepts and a common adjusted slope;
+their bands use HC3 pointwise 95% intervals. Plotted values and exact annotation
+tests are exported alongside the figures. `*` means Holm p < .05; `ns` means
+p >= .05. A dagger flags a change in direction or Holm significance under the
+extreme-only correction, with both p-values in the figure caption. Correction
+comparisons are also reported in the gallery and numerical report.
+
+These outcomes were selected after inspecting the original results and remain
+exploratory sensitivities. Higher -c indicates greater acceptance tendency, not
+necessarily excessive reliance. Behavioural d-prime assumes conventional
+equal-variance SDT and also reflects participants' own visual discrimination;
+CAL65/CAL90 have different task difficulty. These indices reuse the same responses
+as accuracy/agreement and are not independent corroborating evidence. Neither
+identifies deliberate verification or advice-caused switching. Phase contrasts
+retain the fixed-order time/practice/fatigue limitation; nonsignificant P3-P1
+contrasts do not establish equivalence. H4 ratings concern the full aided block,
+and associations with P2 behaviour are not causal.
+
+The original supporting figure bundle has nine PDF/300-dpi PNG pairs: sequence accuracy, automation
 benefits, relative competence, recovery, adaptation trajectories, correct RT,
 manual pre/post, subjective evaluation, and descriptive manual self-ratings.
 Every panel has exported source data. The additional manual self-rating figure
