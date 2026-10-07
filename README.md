@@ -290,6 +290,41 @@ gridlines, and short captions. Plotted values, input hashes, and an artifact
 manifest accompany the figures; `figure_catalog.csv` contains the question,
 message, and interpretation notes for each.
 
+**Alternate H5 and H9 SDT figures** supplement the existing twelve figures:
+
+```sh
+Rscript analyse_time_pressure_sdt.R
+Rscript tests/validate_time_pressure_sdt.R
+```
+
+This standalone command accepts `[analysis_dir] [plot_dir]` and uses the saved
+validated participant agreement counts, without refitting the original models.
+Open `presentation/alternates/index.html` or `H5_H9_alternate_sdt.pdf` within that
+directory. Individual 16:9 PNG/PDF headings are labelled `H5` (reliance
+bias, **-c**) and `H9` (discrimination, **d-prime**), with `alternate` retained
+in their filenames; original figures
+and their combined PDFs are preserved. Regenerate these alternates after any
+base analysis refresh.
+
+Here H is agreement with correct advice and F is agreement with incorrect advice:
+`-c = (z(H) + z(F))/2`, and `d-prime = z(H) - z(F)`. Rates use the loglinear
+correction `(agreements + 0.5)/(answered trials + 1)` for every participant/block.
+Timeouts are excluded, as in the original agreement analysis. These outcomes were
+selected after inspection of the results and remain exploratory sensitivities.
+Higher -c indicates greater acceptance tendency, not necessarily overreliance;
+d-prime complements the original H9 probability difference under conventional
+equal-variance SDT and does not establish verification or advice-caused changes.
+
+The plots show equally weighted participant means and ordinary pointwise 95% t
+intervals. New participant contrasts test reliability within pressure, pressure
+within reliability, and their interaction (five tests per outcome, Holm-adjusted
+separately). Welch-Satterthwaite inference allows unequal group variances and
+retains pairing for the interaction; simple contrasts are between allocation
+groups. Original model p-values are not reused. Outputs in
+`analysis_outputs/semester2_2026_behavioural/sdt_alternates/` include scores,
+contrasts, an additional Holm correction across both outcomes, incorrect-advice
+counts, an extreme-rates-only correction sensitivity, provenance and a report.
+
 The primary set contains nine hypotheses, each with its own H1-H9 figure:
 
 - **H1 — Time-pressure costs:** Participants would respond faster but less accurately under high pressure than low pressure in the Manual condition.
