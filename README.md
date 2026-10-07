@@ -188,6 +188,50 @@ exports the plotted values and bracket tests, and does not refit models.
 Validate the generated intervals and annotations independently with
 `Rscript tests/validate_aid_onset_slides.R`.
 
+**Alternate H6 SDT figures** supplement the existing advice-use error figure:
+
+```sh
+Rscript analyse_aid_onset_sdt.R
+Rscript tests/validate_aid_onset_sdt.R
+```
+
+The standalone commands accept optional `[analysis_dir] [plot_dir]` arguments.
+Defaults are `analysis_outputs/semester2_2026_presentation_followups/sdt_alternates/`
+and `plots/semester2_2026_key_findings/presentation/alternates/`. Open the latter's
+`index.html` or two-page `H6_alternate_sdt.pdf`. Individual PNG/vector PDF stems
+follow the sibling repositories' alternate naming convention:
+
+- `06_main_H6_alternate_sdt_reliance`
+- `06_main_H6_alternate_sdt_discrimination`
+
+Both retain H6 titles and the existing 16:9 dimensions (3600 x 2025 PNG, 300 dpi).
+The original eight figures, combined presentation PDF and analyses are preserved.
+Regenerate the alternates after refreshing their source data or H6 follow-ups.
+
+Here H is final agreement given correct advice and F is final agreement given
+incorrect advice: `-c = (z(H) + z(F))/2` and `d-prime = z(H) - z(F)`. Scores use
+all answered aided trials per participant/timing, without initial-disagreement
+or RT filtering. Manual has no SDT score. The validated 60-person cohort includes
+replacement p59 and has complete final responses. The script stops on missing or
+invalid responses, empty advice cells, stale input checksums or run mismatches.
+
+Main rates use `(agreements + 0.5)/(trials + 1)` for both advice types in every
+participant/timing cell. An extreme-only correction is exported as a sensitivity
+check. These are exploratory outcomes specified after inspecting the existing
+results. Fresh two-sided paired tests compare Stimulus-first minus Aid-first;
+Holm adjustment covers the two outcomes separately within each correction.
+Contrast CIs are pointwise paired 95% t intervals. The plots show equally weighted
+participant means and Cousineau-Morey 95% CIs across the two timings, separately
+for each outcome; interval overlap is not a significance test.
+
+Higher -c indicates acceptance tendency, not necessarily inappropriate
+overreliance. Higher d-prime indicates discrimination expressed in final agreement
+under conventional equal-variance SDT; it can reflect perceptual competence and
+does not establish deliberate verification. Final agreement does not establish
+active uptake. These outcomes decompose existing H6 information and do not replace
+H7's selective-uptake analysis. Counts, scores, contrasts, correction sensitivity,
+count diagnostics, plotted data and checksums accompany the figures.
+
 Independent source and result checks, including regressions for file-modification
 times and incomplete replacement runs:
 
