@@ -174,7 +174,7 @@ contrasts per outcome. Adaptation has nine accuracy and 18 agreement contrasts.
 
 ### Cohort, outcomes and models
 
-The current cohort contains 67 complete participants (34 CAL65, 33 CAL90), but
+The current cohort contains 89 complete participants (45 CAL65, 44 CAL90), but
 sample size is discovered from exports. Every retained run must have 300
 calibration trials, 200 manual-pre trials, three 400-trial aided phases, and 200
 manual-post trials. The pipeline validates allocation, key mapping, sequence,
@@ -409,3 +409,86 @@ cannot retain stale conclusions after a future rerun. Structural validation
 does not substitute for rendered visual inspection.
 Open `plots/semester2_2026_behavioural/index.html` to browse the nine supporting
 figures and follow the link to the presentation bundle.
+
+## Participant QC and exclusion review
+
+The dedicated `participant_qc/` pipeline produces review evidence without
+removing participants, rewriting canonical data, or rerunning analyses. Run
+from this repository using the existing `r-pygame` environment:
+
+```sh
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python participant_qc/run_qc.py
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m unittest discover -s tests -p 'test_participant_qc.py'
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_participant_qc.py
+```
+
+Open `analysis_outputs/semester2_2026_qc/index.html`. The runner accepts
+`--input`, `--config`, and `--output-dir`; defaults are `data/data_virus_all.csv`,
+`participant_qc/config.json`, and the report directory above. NumPy and
+Matplotlib are already available in `r-pygame`; validation also uses Pillow and
+the local Poppler `pdfinfo` executable. No packages are installed by the pipeline.
+
+| Screen | Rule | Use |
+| --- | --- | --- |
+| Calibration | Accuracy in trials 151-300 differs from assigned target by more than 10 percentage points. | Exclusion criterion |
+| Manual target | Either full manual segment differs from target by more than 10 points. | Diagnostic summary only |
+| Near-chance or worse | All-trial accuracy <=55% in any whole scope. | Exclusion criterion |
+| Anticipatory responding | Within the same scope, >=20% of all trials have RT <200 ms, at least 20 responses are fast, and fast-response accuracy is <=55%. | Exclusion criterion |
+
+Whole scopes are full calibration, manual pre/post, each 400-trial aided phase,
+all 1,200 aided trials, and all 1,600 experimental trials. Calibration's final
+150 trials form an additional target-check scope. Exactly 200 ms is not fast;
+finite nonpositive RTs remain visible and count as fast. Fast proportions use
+all scope trials, while fast accuracy uses only fast answered trials. Timeouts
+are incorrect for all-trial accuracy and never fast. No trial trimming occurs.
+
+The configured rules are descriptive, retrospective screens. Near-chance flags
+do not establish equivalence to chance. Wilson intervals provide descriptive
+binomial context; they do not model serial dependence or adaptive calibration.
+Manual target deviation stays in summaries and figures but never causes exclusion;
+manual-post deviations may reflect exposure, practice, or fatigue.
+Manual/aid ordering is not an exclusion criterion. The remaining reasons stay
+separate in the report. Invalid or incomplete
+scopes are **not assessable**, never silently marked clear; missing schema,
+ambiguous multiple runs, and duplicate trial identities stop generation.
+
+Reports contain participant and scope metrics, all screening results, a
+flag-only table, integrity findings, 50-trial bins, cohort figures, and PDF/PNG
+diagnostics for every participant. `exclusion_candidates.csv` contains one row
+per participant meeting at least one of the three exclusion criteria;
+`exclusion_summary_table.csv` exports the final criterion counts and unique total,
+and `exclusion_summary.json` records
+the unique total, percentage, participant IDs, remaining sample if applied, and
+overlaps by number of distinct exclusion criteria, plus diagnostic-only cases.
+`n_flagged_rules` and `flagged_any_rule` cover all four screens;
+`n_exclusion_rules`, `exclude_by_rules`, and `exclusion_reasons` cover only the
+three exclusion criteria. Repeated flags across scopes count
+once per exclusion criterion and once in the overall total. Unassessable checks remain
+separate; no actual exclusions are applied. Anticipatory plots adapt
+`hmm_pmdc/scripts/plot_anticipatory_response_audit.py` without importing or
+modifying that repository. They preserve phase shading, RT scatter on a
+linear/log scale, fast-response and accuracy panels, and peer median/IQR bands;
+they additionally show calibration and fast-only accuracy. Open fast-accuracy
+points scale with their fast-response counts; empty subsets remain missing.
+
+Matched-comparison pages cover every anticipatory-flagged participant, with up
+to two flagged participants plus a comparator matching calibration group and
+key mapping. Candidates must have complete assessable data and no anticipatory
+flag. The nearest candidate to the matching subgroup medians of experimental
+accuracy and positive median RT is selected by summed absolute MAD-standardised
+distance; zero-MAD metrics contribute zero, and ties use participant ID. Other
+screening flags do not automatically disqualify a comparator. Peer bands use
+other complete participants in the same calibration group without anticipatory
+flags; comparator choices and all peer identities are exported. Missing
+comparators are reported explicitly. No HMM-specific exclusion decisions are
+imported, and no participant IDs are hard-coded into screening or plotting.
+
+Input, configuration, source, and artifact hashes are recorded in `manifest.json`.
+Generation uses a staging directory and publishes only after completion. A
+previous report is preserved in a sibling `.previous_<timestamp>` directory;
+failed builds remain unpublished for inspection. The independent validator
+checks raw-source values, all flags and bins, Wilson intervals, peer bands,
+comparator ranking, local report links, checksums, and PDF/PNG structure. Rendered
+visual review is still required after plotting changes. Its optional
+`--expect-current-cohort` switch asserts the reviewed 89-person snapshot; normal
+generation and validation discover sample size dynamically.
