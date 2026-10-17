@@ -16,6 +16,11 @@ import math
 import os
 import pygame
 import time
+
+if __package__:
+    from .response_timing import AUDIT_FIELDS, PsychtoolboxKeyboard, TimingError
+else:
+    from response_timing import AUDIT_FIELDS, PsychtoolboxKeyboard, TimingError
 from datetime import datetime
 from typing import Any, Dict
 
@@ -3396,15 +3401,14 @@ def draw_trial_frame(screen, dot_layer, dots, center, aid_payload, ui_payload, m
         )
 
 
-def maybe_run_advanced_aid_phase(screen, clock, aid_payload, ui_payload):
-    if AID_ONSET_MS >= 0:
+def maybe_run_advanced_aid_phase(screen, clock, aid_payload, ui_payload, aid_onset_ms, now):
+    if aid_onset_ms is None or aid_onset_ms >= 0:
         return False, None
 
-    pre_ms = abs(AID_ONSET_MS)
-    pre_start_perf = time.perf_counter()
+    pre_ms = abs(aid_onset_ms)
     pre_aid_onset_perf = None
 
-    while (time.perf_counter() - pre_start_perf) * 1000.0 < pre_ms:
+    while pre_aid_onset_perf is None or (now() - pre_aid_onset_perf) * 1000.0 < pre_ms:
         clock.tick(FPS)
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -3426,10 +3430,9 @@ def maybe_run_advanced_aid_phase(screen, clock, aid_payload, ui_payload):
             evidence_white_pct=aid_payload["evidence_white_pct"],
         )
 
-        if pre_aid_onset_perf is None:
-            pre_aid_onset_perf = time.perf_counter()
-
         pygame.display.flip()
+        if pre_aid_onset_perf is None:
+            pre_aid_onset_perf = now()
 
     return True, pre_aid_onset_perf
 
@@ -3458,7 +3461,6 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
                     global_trial_index, block_cfg, block_state, trial_data, feedback_msg,
                     delta_realised, step_down_now, step_up_now):
     difficulty_mode = block_state["difficulty_mode"]
-    rt_ms = trial_data["rt_ms"]
     response = trial_data["response"]
 
     return {
@@ -3493,7 +3495,8 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "response": response,
         "correct": trial_data["correct"] if response in ("BLACK", "WHITE") else None,
         "feedback": feedback_msg if block_cfg["TRIAL_FEEDBACK_ON"] else None,
-        "rt_s": (rt_ms / 1000.0) if rt_ms is not None else None,
+        "rt_s": trial_data["rt_s"],
+        **{field: trial_data[field] for field in AUDIT_FIELDS},
     }
 
 
@@ -3526,14 +3529,18 @@ def maybe_show_feedback(screen, clock, fonts, response, correct, feedback_on):
     return feedback_msg
 
 
-def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg, block_state,
-                     trials_left, trial_number, global_trial_index, run_timestamp):
+def present_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg, block_state,
+                  trials_left, trial_number, timing, responses):
+    """Prepare/present one stimulus while the native keyboard queue records."""
     vblack_prop, delta_realised = pick_trial_vblack_prop(block_state, trial_number - 1)
     dots, n_vblack, n_vwhite = make_trial_dots(N_DOTS, vblack_prop, center, DISH_RADIUS)
     stimulus = "BLACK" if n_vblack > n_vwhite else "WHITE"
 
     if block_cfg["AUTOMATION_ON"]:
-        aid_label, aid_correct = make_aid_recommendation(stimulus, accuracy=block_cfg["AID_ACCURACY"])
+        aid_label, aid_correct = make_aid_recommendation(
+            stimulus,
+            accuracy=block_cfg["AID_ACCURACY"],
+        )
     else:
         aid_label, aid_correct = None, None
 
@@ -3555,97 +3562,95 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
     }
 
     aid_visible = False
-    aid_onset_perf = None
+    aid_onset_ms = AID_ONSET_MS
+    pre_aid_onset_perf = None
     if block_cfg["AUTOMATION_ON"]:
         aid_visible, pre_aid_onset_perf = maybe_run_advanced_aid_phase(
             screen,
             clock,
             aid_render_payload,
             ui_payload,
+            aid_onset_ms,
+            timing.now,
         )
-    else:
-        pre_aid_onset_perf = None
 
-    responded = False
-    response = None
-    stim_onset_perf = None
-    resp_perf = None
-    trial_start_ticks = pygame.time.get_ticks()
+    # Simultaneous advice must be drawn on the very first stimulus frame.
+    if block_cfg["AUTOMATION_ON"] and aid_onset_ms == 0:
+        aid_visible = True
+    aid_mode = "automation" if block_cfg["AUTOMATION_ON"] else (
+        "masked" if block_cfg.get("SHOW_AID_MASKED", False) else "none"
+    )
+    aid_render_payload.update(mode=aid_mode, visible=aid_visible)
     trial_deadline_ms = trial_deadline_ms_for_block(block_cfg)
 
-    while not responded:
-        clock.tick(FPS)
-        now = pygame.time.get_ticks()
-
+    def handle_control_events():
+        # Native PTB events alone select D/J responses. Pygame still owns UI
+        # controls; window close remains ignored, as elsewhere in the task.
         for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
-                pass
-            if ev.type == pygame.KEYDOWN:
-                if is_hard_quit_event(ev):
-                    quit_clean()
-                if ev.key == keymap["key_black"]:
-                    responded = True
-                    response = "BLACK"
-                    resp_perf = time.perf_counter()
-                elif ev.key == keymap["key_white"]:
-                    responded = True
-                    response = "WHITE"
-                    resp_perf = time.perf_counter()
+            if ev.type == pygame.KEYDOWN and is_hard_quit_event(ev):
+                quit_clean()
 
-        if trial_deadline_ms is not None and (now - trial_start_ticks) >= trial_deadline_ms:
-            responded = True
-            response = "TIMEOUT"
-
-        update_dots(dots, center, DISH_RADIUS)
-
-        if stim_onset_perf is None:
-            stim_onset_perf = time.perf_counter()
-            if pre_aid_onset_perf is not None:
-                aid_onset_perf = pre_aid_onset_perf
-
-        if block_cfg["AUTOMATION_ON"] and AID_ONSET_MS >= 0 and stim_onset_perf is not None:
-            elapsed_ms = (time.perf_counter() - stim_onset_perf) * 1000.0
-            if (not aid_visible) and (elapsed_ms >= AID_ONSET_MS):
-                aid_visible = True
-                aid_onset_perf = time.perf_counter()
-
-        aid_mode = "none"
-        if block_cfg["AUTOMATION_ON"]:
-            aid_mode = "automation"
-        elif block_cfg.get("SHOW_AID_MASKED", False):
-            aid_mode = "masked"
-
-        ms_left = None
-        if trial_deadline_ms is not None:
-            ms_left = trial_deadline_ms - (now - trial_start_ticks)
-
+    def draw_frame(ms_left):
         draw_trial_frame(
-            screen,
-            dot_layer,
-            dots,
-            center,
-            {
-                "mode": aid_mode,
-                "label": aid_label,
-                "visible": aid_visible,
-                "transparency_level": block_state["aid_transparency"],
-                "evidence_black_pct": evidence_black_pct,
-                "evidence_white_pct": evidence_white_pct,
-            },
-            ui_payload,
+            screen, dot_layer, dots, center, aid_render_payload, ui_payload,
             ms_left=ms_left,
         )
         pygame.display.flip()
 
-    rt_ms = None
-    if stim_onset_perf is not None and resp_perf is not None:
-        rt_ms = (resp_perf - stim_onset_perf) * 1000.0
+    handle_control_events()
+    update_dots(dots, center, DISH_RADIUS)
+    draw_frame(trial_deadline_ms)
+    responses.mark_onset(timing.now(), trial_deadline_s_for_block(block_cfg))
+    aid_onset_s = pre_aid_onset_perf
+    if aid_visible and aid_onset_s is None:
+        aid_onset_s = responses.onset_s
+    # No post-flip keyboard flush: filter by original timestamps instead.
+    while responses.response is None:
+        handle_control_events()
+        # Establish an expiry fence BEFORE draining. This gives pre-deadline
+        # queued events precedence even if this frame runs after the deadline.
+        now_s = timing.now()
+        responses.consume(timing.drain())
+        responses.expire(now_s)
+        if responses.response is not None:
+            break
 
-    aid_onset_ms_rel = None
-    if stim_onset_perf is not None and aid_onset_perf is not None:
-        aid_onset_ms_rel = (aid_onset_perf - stim_onset_perf) * 1000.0
+        clock.tick(FPS)  # Limits animation only; PTB acquisition is asynchronous.
+        now_s = timing.now()
+        elapsed_ms = (now_s - responses.onset_s) * 1000.0
+        if block_cfg["AUTOMATION_ON"] and aid_onset_ms is not None and aid_onset_ms > 0:
+            aid_render_payload["visible"] = elapsed_ms >= aid_onset_ms
+        ms_left = None if trial_deadline_ms is None else max(0.0, trial_deadline_ms - elapsed_ms)
+        update_dots(dots, center, DISH_RADIUS)
+        draw_frame(ms_left)
+        if aid_render_payload["visible"] and aid_onset_s is None:
+            aid_onset_s = timing.now()
 
-    correct = response == stimulus
+    return {
+        "vblack_prop": vblack_prop,
+        "n_vblack": n_vblack,
+        "n_vwhite": n_vwhite,
+        "stimulus": stimulus,
+        "aid_label": aid_label,
+        "aid_correct": aid_correct,
+        "aid_onset_ms_rel": (None if aid_onset_s is None else
+                             (aid_onset_s - responses.onset_s) * 1000.0),
+        **responses.result(),
+    }, delta_realised
+
+
+def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg, block_state,
+                     trials_left, trial_number, global_trial_index, run_timestamp, timing):
+    # Start acquisition before any trial preparation; stop it before feedback.
+    with timing.trial(keymap) as responses:
+        trial_data, delta_realised = present_trial(
+            screen, clock, dot_layer, center, fonts, keymap, block_cfg, block_state,
+            trials_left, trial_number, timing, responses,
+        )
+
+    response = trial_data["response"]
+    correct = response == trial_data["stimulus"]
+    trial_data["correct"] = correct
     feedback_msg = maybe_show_feedback(screen, clock, fonts, response, correct, block_cfg["TRIAL_FEEDBACK_ON"])
     step_down_now, step_up_now = update_staircase_state(
         block_state,
@@ -3664,18 +3669,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
         global_trial_index=global_trial_index,
         block_cfg=block_cfg,
         block_state=block_state,
-        trial_data={
-            "vblack_prop": vblack_prop,
-            "n_vblack": n_vblack,
-            "n_vwhite": n_vwhite,
-            "stimulus": stimulus,
-            "aid_label": aid_label,
-            "aid_correct": aid_correct,
-            "aid_onset_ms_rel": aid_onset_ms_rel,
-            "response": response,
-            "correct": correct,
-            "rt_ms": rt_ms,
-        },
+        trial_data=trial_data,
         feedback_msg=feedback_msg,
         delta_realised=delta_realised,
         step_down_now=step_down_now,
@@ -3861,6 +3855,18 @@ def compute_performance_score(all_results):
 def main():
     args = parse_cli_args()
     pygame.init()
+    pygame.key.set_repeat()  # Trial holds/repeats are also checked in the native stream.
+    try:
+        with PsychtoolboxKeyboard() as timing:
+            run_experiment(args, timing)
+    except TimingError as exc:
+        print(f"[TIMING ERROR] {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+    finally:
+        pygame.quit()
+
+
+def run_experiment(args, timing):
     pygame.display.set_caption("Virus Detection Task")
     screen = create_display_surface()
 
@@ -3958,6 +3964,7 @@ def main():
                 trial_number,
                 global_trial_index,
                 run_ts,
+                timing,
             )
             block_results.append(row)
             all_results.append(row)

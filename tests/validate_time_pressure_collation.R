@@ -1,7 +1,10 @@
 # Independent source-to-combined audit for the current Semester 2 refresh.
 suppressPackageStartupMessages({library(dplyr); library(readr)})
-input <- "output/semester2_2026_data"
-output <- "data/semester2_2026_data"
+# Optional destinations let runtime regression checks use temporary collation
+# outputs without rewriting the saved study data or its validation receipt.
+args <- commandArgs(trailingOnly = TRUE)
+input <- if (length(args) >= 1) args[[1]] else "output/semester2_2026_data"
+output <- if (length(args) >= 2) args[[2]] else "data/semester2_2026_data"
 corrections <- read_csv("config/participant_identity_corrections.csv", show_col_types = FALSE)
 files <- sort(list.files(input, "^results_.*_b00_ALL\\.csv$", full.names = TRUE))
 expected_n <- 87L

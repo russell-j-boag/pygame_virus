@@ -10,8 +10,88 @@ Based on Bartlett & McCarley RDC task.
 - Analysis conducted in R
 
 ## Getting started
-- Run `0-setup_pygame.R` to install the required versions of python and pygame
+- Run `0-setup_pygame.R` to install Python, Pygame, and the pinned native keyboard backend (`psychtoolbox==3.0.22.2`).
 - Use `1-run_virus_task.R` to launch task and pre-task instructions using the helper functions
+
+## Response timing
+
+New trials use `rt_timing_version = ptb_queue_flip_v1`. A native Psychtoolbox
+keyboard queue starts before trial preparation. Stimulus onset is recorded with
+`GetSecs()` immediately after the first response-eligible display flip; RT is the
+original key-down timestamp minus that onset, in full-precision seconds. Animation
+and delayed event retrieval do not supply the response timestamp.
+
+The first eligible D/J press wins. Pre-onset presses and repeated key-downs are
+ignored; a held key must be released before it can respond again, while the other
+key remains available. HP and LP deadlines remain 1 s and 3 s from stimulus onset.
+A key timestamped before the deadline counts even if retrieved afterward; a key
+at or after the deadline does not. New timeout rows have missing RT. Alt/Option+Q
+and ordinary interface controls still use Pygame. The native queue stops before
+feedback and is released on completion or error. Backend failure stops the task
+with a timing error; there is no frame-based fallback.
+
+Raw block files, combined participant files, and both collated trial CSVs retain:
+
+| Field | Meaning |
+| --- | --- |
+| `rt_timing_version` | `ptb_queue_flip_v1` for new trials |
+| `rt_backend_version` | Psychtoolbox package version |
+| `stimulus_onset_s` | Native clock immediately after the first stimulus flip |
+| `response_timestamp_s` | Accepted source key-down timestamp; missing on timeout |
+| `n_ignored_pre_onset_keydowns` | Response-key downs between the initial held-state snapshot and onset |
+| `response_readout_delay_s` | Retrieval time minus key-down time; missing on timeout |
+
+These clock readings have a backend-defined origin, not a calendar origin.
+`aid_onset_ms` remains the configured delay; `aid_onset_ms_rel` records actual aid
+presentation after its first visible flip in the same clock domain. Simultaneous
+aid has relative onset zero, advanced aid has a negative onset, and aid that never
+appears has missing realised onset. A negative aid onset is distinct from RT.
+
+Timing fields are optional when collating historical files. Existing negative,
+zero, and timeout RT values are retained unchanged; old rows are not assigned the
+new timing version. Participant identity corrections and matching of trial, trust,
+and slider exports by run are unchanged. This runtime fix does not reconstruct
+historical keypress times or change analysis/QC exclusions.
+
+Run these checks with the collection computer's `r-pygame` Python (the local Mac
+path is shown below):
+
+```sh
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m unittest discover -s tests -p 'test_response_timing.py'
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m unittest discover -s tests -p 'test_participant_qc.py'
+Rscript tests/test_participant_identity.R
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/check_response_timing.py --preflight
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python python/check_response_timing.py
+```
+
+The automated timing tests cover both deadline boundaries, 8/20/50 ms readout
+stalls, held/early/repeated keys, both mappings and reliability patterns, all five
+conditions, the predictable 96-cell allocation, signed aid onsets, cleanup, and
+actual R collation of temporary mixed historical/new exports, including a 0.5 ms
+RT difference. They do not write participant data or saved analyses.
+
+Run native checks separately on each Windows or macOS collection computer. The
+preflight checks native APIs and queue lifecycle; the interactive diagnostic asks
+for D/J presses under 0/8/20/50 ms stalls and saves a separate JSON report under
+`analysis_outputs/response_timing/` (or a new `--output` path). Timeouts do not
+validate physical key input. On macOS, enable Input Monitoring for the launching
+application (Terminal or R/RStudio), restart it, and run outside sandboxes that
+deny native input access. Imports, `--help`, and screenshot tools do not start
+keyboard capture. These checks establish numerical precision and timestamped
+acquisition, not physical screen-to-keypress accuracy within ±1 ms.
+
+The adapter and diagnostic were copied locally from the
+`pygame_virus_dynamic_reliability` working tree on 17 October 2026 (source HEAD
+`20f2a6644621`, with the timing implementation still uncommitted). The copied
+files retain these source snapshot SHA-256 hashes:
+
+```text
+1121a271421c5c3fd1c9caabf74914ad71c1cc17c53f583f785fa66114edc0c6  python/response_timing.py
+0b7cbe044ce4521024f984b3ba8ada06554dba37fadf222770b37e92e484d7a2  python/check_response_timing.py
+```
+
+Trial integration and tests are adapted to this repository. There are no runtime
+imports from a sibling checkout.
 
 ## Screenshot review deck
 

@@ -88,6 +88,14 @@ TRIAL_SUMMARY_COLUMNS <- c(
   "feedback"
 )
 
+# Timing fields are optional for historical exports. Keep existing required
+# columns strict and preserve missing values rather than labelling old trials.
+OPTIONAL_TIMING_COLUMNS <- c(
+  "rt_timing_version", "rt_backend_version", "stimulus_onset_s",
+  "response_timestamp_s", "n_ignored_pre_onset_keydowns",
+  "response_readout_delay_s"
+)
+
 POSTBLOCK_COLUMNS <- c(
   "participant_id",
   "source_participant_id",
@@ -147,8 +155,8 @@ for (kind in c("trials", "trust", "sliders")) {
   }
   dat <- apply_participant_identity(bind_rows(parts))
   if (kind == "trials") {
-    write_csv(select(dat, all_of(TRIAL_COLUMNS)), file.path(OUTPUT_DIR, "data_virus_all.csv"))
-    write_csv(select(dat, all_of(TRIAL_SUMMARY_COLUMNS)), file.path(OUTPUT_DIR, "data_virus.csv"))
+    write_csv(select(dat, all_of(TRIAL_COLUMNS), any_of(OPTIONAL_TIMING_COLUMNS)), file.path(OUTPUT_DIR, "data_virus_all.csv"))
+    write_csv(select(dat, all_of(TRIAL_SUMMARY_COLUMNS), any_of(OPTIONAL_TIMING_COLUMNS)), file.path(OUTPUT_DIR, "data_virus.csv"))
   } else {
     columns <- if (kind == "trust") POSTBLOCK_COLUMNS else SLIDER_COLUMNS
     filename <- if (kind == "trust") "data_virus_postblock_all.csv" else "data_virus_sliders_all.csv"
