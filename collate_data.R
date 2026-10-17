@@ -117,7 +117,13 @@ dat <- dat %>%
       "reliability_phase_label",
       "aid_reliability_level",
       "automation_reliability_group",
-      "trial_deadline_s"
+      "trial_deadline_s",
+      "rt_timing_version",
+      "rt_backend_version",
+      "stimulus_onset_s",
+      "response_timestamp_s",
+      "n_ignored_pre_onset_keydowns",
+      "response_readout_delay_s"
     )),
     trial,
     vblack_prop,

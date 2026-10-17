@@ -10,8 +10,90 @@ Based on Bartlett & McCarley RDC task.
 - Analysis conducted in R
 
 ## Getting started
-- Run `0-setup_pygame.R` to install the required versions of python and pygame
+- Run `0-setup_pygame.R` to install Python, Pygame, and the pinned Psychtoolbox keyboard backend in `r-pygame`
 - Use `1-run_virus_task.R` to launch task and pre-task instructions using the helper functions
+
+## Response timing for new task runs
+
+Trial responses use the asynchronous native keyboard queue from
+`psychtoolbox==3.0.22.2`, on Windows x64 or macOS (Intel/Apple Silicon).
+Pygame continues drawing the task at its existing animation rate. Keyboard events
+are timestamped by the native backend independently of drawing; the frame which
+retrieves an event does not determine its RT. See the
+[PTB event timing documentation](https://psychtoolbox.org/docs/KbEventGet) and
+[Python package builds](https://pypi.org/project/psychtoolbox/3.0.22.2/).
+
+Stimulus onset is the first `GetSecs()` reading immediately after the first
+stimulus `pygame.display.flip()`. RT is the original keyboard-event timestamp
+minus that onset, in the **same PTB clock**. Calculations and CSV exports retain
+floating-point seconds without rounding to integer milliseconds. The deadline
+also starts at this onset. An event timestamped before the deadline remains
+eligible when retrieved after it; an event at or after the deadline does not.
+Timeouts have missing RT, response timestamp, and correctness.
+
+The old loop could process a key before recording/drawing stimulus onset,
+producing negative RTs. New runs ignore presses timestamped before onset and
+continue the trial without a penalty or restart. A held response key must be
+released before a fresh press of that key is eligible; the other key remains
+available. The earliest eligible press wins (native queue order breaks exact
+timestamp ties). There is no post-onset input flush, no minimum-RT threshold,
+and no clamping or absolute-value conversion. Valid responses below 200 ms are
+retained. Option/Alt+Q remains the hard-quit shortcut.
+
+New trial exports include:
+
+| Column | Meaning |
+| --- | --- |
+| `rt_timing_version` | `ptb_queue_flip_v1`; identifies the corrected acquisition convention. |
+| `rt_backend_version` | Pinned native backend version, `3.0.22.2`. |
+| `stimulus_onset_s` | PTB timestamp immediately after the first stimulus flip. |
+| `response_timestamp_s` | Original PTB key-down timestamp, missing for timeouts. |
+| `n_ignored_pre_onset_keydowns` | D/J key-down events after the initial held-state snapshot and before onset; excludes the preceding fixation period. |
+| `response_readout_delay_s` | Time from the original keypress timestamp until the task retrieved it; this delay is not added to RT. |
+
+Absolute timestamps are meaningful within their recording session, not as wall
+clock dates or for comparing clocks across computers. `collate_data.R` retains
+these optional columns in both trial CSVs. Historical exports keep missing audit
+fields and their original RTs; neither existing data nor exclusion rules are
+changed by this fix.
+
+Before collecting new data, run the native check **on each collection computer**
+using its `r-pygame` Python interpreter (the examples use an activated environment):
+
+```sh
+python python/check_response_timing.py --preflight
+python python/check_response_timing.py
+```
+
+The first command checks queue creation, startup, state queries, reads, stop,
+and release. The second opens a separate diagnostic window: press and release
+D or J for each of eight prompts. It inserts 0/8/20/50 ms main-thread stalls and
+records original event timestamps plus retrieval delays in a new JSON file under
+`analysis_outputs/response_timing/`. `--output PATH` selects a new output file;
+existing files are never overwritten. This is a diagnostic, not a participant run.
+Esc cancels it. A timeout is reported as missing response evidence, not a passed
+keypress check.
+
+On macOS, Input Monitoring permission may be needed for the application launching
+Python, such as Terminal or RStudio; restart that application after granting it.
+Task startup fails visibly if the pinned backend or native queue is unavailable;
+there is no silent fallback to frame-based response timing. Native checks must
+run outside restrictive sandboxes that prevent access to system input APIs.
+
+Software tests exercise delayed retrieval, onset/deadline boundaries, held keys,
+both key mappings, every block/phase, cleanup, and sub-millisecond CSV/collation
+precision:
+
+```sh
+python -m unittest discover -s tests -p 'test_response_timing.py'
+python -m unittest discover -s tests -p 'test_participant_qc.py'
+```
+
+The input timestamps are independent of the rendering loop, but the display
+timestamp is still a software estimate of onset. These checks do not establish
+physical ±1 ms accuracy for the keyboard/display. Native checks on one operating
+system do not establish validation on the other; run the diagnostic on both
+Windows and macOS collection machines.
 
 ## Screenshot review deck
 

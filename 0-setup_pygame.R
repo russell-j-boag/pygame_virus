@@ -37,6 +37,15 @@ conda_install(
   forge    = TRUE
 )
 
-## 4) Point reticulate at that env and show config
+## 4) Install the pinned asynchronous keyboard backend (Windows/macOS wheels).
+## Keep the same native clock and queue version on all collection computers.
+conda_install(
+  envname = env_name,
+  packages = "psychtoolbox==3.0.22.2",
+  pip = TRUE,
+  pip_options = "--only-binary=:all:"
+)
+
+## 5) Point reticulate at that env and show config
 use_condaenv(env_name, required = TRUE)
 py_config()
