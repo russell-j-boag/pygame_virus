@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "label": "Semester 2 2026 collection source",
+  "designation": "User identified the existing source bundle as the version to preserve for Semester 2 2026.",
+  "archived_on": "2026-10-17",
+  "original_zip_path": "pygame_virus_time_pressure_task_source.zip",
+  "archive_zip": "pygame_virus_time_pressure_task_source_semester2_2026.zip",
+  "archive_size_bytes": 154551,
+  "archive_sha256": "5e07f5868f96620e02281deb23c8698a035cef1e48124d4cdede0d573602efe7",
+  "archive_last_committed_change": "a47bb64059e42d9030c1e93038fb14a325300b6c",
+  "committed_zip_sha256": "f8ed87a1eaf6e530f5ce5d3df39ddc982ccf388645ac58c1bb28d63ebc86b8f6",
+  "working_zip_differs_from_committed": true,
+  "working_zip_comparison": "Preserved the existing working-tree ZIP byte-for-byte. Its 11 member payloads match the last committed ZIP exactly; member ZIP timestamps differ. The committed ZIP remains recoverable from Git history.",
+  "matches_source_at_commit": "26427220e3cf1527c6e74b94d1f1e789d389179d",
+  "timing_fix_commit": "670743264ca13c5c1a1d55ad22f4d286e3bf74af",
+  "timing_convention": "Historical Pygame frame-polled response timing; no rt_timing_version field.",
+  "preservation": "Original working-tree ZIP moved without recompression or content edits. All 11 members match pre-timing-fix Git source.",
+  "local_extracted_copy": "extracted/",
+  "local_extracted_copy_note": "Created from the preserved ZIP for local inspection and verified byte-for-byte. Ignored by Git because the ZIP is the canonical record.",
+  "members": [
+    {
+      "path": "0-helpers.R",
+      "size_bytes": 3142,
+      "sha256": "5fd464358c8e3defecddb488b09389aa0caf108ab1a6a148dead9790b72f6e38",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    },
+    {
+      "path": "0-setup_pygame.R",
+      "size_bytes": 1059,
+      "sha256": "aa59845151c393dfca9e41bfe042381f92a3f7b7c6f10082b29035960764c028",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    },
+    {
+      "path": "1-run_virus_task.R",
+      "size_bytes": 565,
+      "sha256": "bd05110f192cbfae9cfe67ae11f6bc0681fd6e8dd4a7fd406cf9d344b2ab97da",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    },
+    {
+      "path": "pygame_virus_time_pressure.Rproj",
+      "size_bytes": 205,
+      "sha256": "3a81ccc25a62f1a31c7d3404389935ced50831abea5e848408745ad1a1bf6126",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    },
+    {
+      "path": "python/build_screenshot_deck.py",
+      "size_bytes": 11298,
+      "sha256": "c96717ea1edbf2e3e8bf120931b72beb043238966ffba41f14c380c4289356fe",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    },
+    {
+      "path": "python/capture_instruction_screenshots.py",
+      "size_bytes": 7409,
+      "sha256": "e7804322a0c008b03455b46fcf82088b1191433967e393ccaa70a96bcf520878",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    },
+    {
+      "path": "python/capture_virus_task_screenshots.py",
+      "size_bytes": 12769,
+      "sha256": "78a1568067e7f87eda12b75f8da7bc213b2bbe9dd2b097bab00b4feb9a9b3ebe",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    },
+    {
+      "path": "python/instructions.py",
+      "size_bytes": 36635,
+      "sha256": "fbbf27985765922b037cf6e44bd78fa80fa5f4acbb2cdc17c26eee2e3dc15d41",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    },
+    {
+      "path": "python/virus_task.py",
+      "size_bytes": 133263,
+      "sha256": "c41130fef3f766529ce3271ff8d510ef09d4fc64db46fac0d0e821b02d04bd63",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    },
+    {
+      "path": "python/fonts/Roboto-Light.ttf",
+      "size_bytes": 162636,
+      "sha256": "94df4e4976db8ddaec27f8e8c33eef912e744fb200ca09051794b38e5a502fc0",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    },
+    {
+      "path": "python/fonts/Roboto-Bold.ttf",
+      "size_bytes": 48420,
+      "sha256": "ccf92316fdf3cf064892c0e019b456128eb88a69c4d57de749b77436e490f20e",
+      "zip_member_timestamp": [
+        2026,
+        8,
+        4,
+        19,
+        11,
+        40
+      ]
+    }
+  ]
+}

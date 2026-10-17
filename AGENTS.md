@@ -14,3 +14,10 @@
 - For the planned sample of 96 participants, the full factorial allocation cycle is completed exactly once.
 - Single-block `CALIBRATION` runs must use the 3 s LP calibration deadline. The task code rejects the 1 s HP deadline because `CAL_HP` is not an active block.
 - Use the allocation functions in `python/virus_task.py` as the source of truth for counterbalancing tables and smoke checks.
+
+# Source Bundle Provenance
+
+- The frozen source bundle used for Semester 2 2026 is in `source_archives/semester2_2026/`. Read its `README.md` and `manifest.json` before working on source bundles. Preserve the ZIP byte for byte; never rebuild or overwrite this historical record with current code.
+- The local `source_archives/semester2_2026/extracted/` folder is an ignored copy of the historical bundle, not a source for future releases. Preserve it as well.
+- Build future bundles from the current repository source, including the updated `python/virus_task.py`, `python/response_timing.py`, `python/check_response_timing.py`, and `0-setup_pygame.R`, alongside the normal launcher, helpers, instructions, fonts, project file, and other required assets. Include the response-timing setup and validation instructions from `README.md`.
+- Future bundle names and manifests must distinguish them from the Semester 2 2026 record and identify their source revision, any uncommitted changes, and timing convention (`ptb_queue_flip_v1` for the current implementation). Check the bundled files against the intended source and validate the timing dependency/imports before distribution.
