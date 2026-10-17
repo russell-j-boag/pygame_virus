@@ -13,6 +13,19 @@ Based on Bartlett & McCarley RDC task.
 - Run `0-setup_pygame.R` to install Python, Pygame, and the pinned Psychtoolbox keyboard backend in `r-pygame`
 - Use `1-run_virus_task.R` to launch task and pre-task instructions using the helper functions
 
+## Semester 2 2026 source archive
+
+The source bundle used for Semester 2 2026 is preserved in
+[source_archives/semester2_2026](source_archives/semester2_2026/README.md).
+The original ZIP was moved without recompression or code changes. Its manifest
+records the ZIP and member-file SHA-256 hashes and the verified source revision.
+It retains the historical response-timing implementation used for that semester.
+
+Future bundles must be built from the current repository source and include the
+updated timing module, diagnostic, dependency setup, and instructions below.
+Use a distinct release name and source manifest; never overwrite the semester
+archive or use its extracted folder as the basis for a new bundle.
+
 ## Response timing for new task runs
 
 Trial responses use the asynchronous native keyboard queue from

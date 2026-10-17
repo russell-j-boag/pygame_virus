@@ -20,6 +20,9 @@ instruction_screenshots/
 virus_task_screenshots/
 screenshots_review.pptx
 
+# Local unpacked copy; preserve the canonical Semester 2 2026 ZIP and manifest.
+source_archives/semester2_2026/extracted/
+
 !output/.gitkeep
 !plots/.gitkeep
 !data/.gitkeep

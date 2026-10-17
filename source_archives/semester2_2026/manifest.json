@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "label": "Semester 2 2026 collection source",
+  "designation": "User identified the existing source bundle as the version used in Semester 2 2026.",
+  "archived_on": "2026-10-17",
+  "original_zip_path": "pygame_virus_dynamic_reliability_source.zip",
+  "archive_zip": "pygame_virus_dynamic_reliability_source_semester2_2026.zip",
+  "archive_size_bytes": 153616,
+  "archive_sha256": "c854b350d419fd79d5d45c36ba9bb4294906309b79f55ae26dd22143e7213bee",
+  "archive_last_changed_commit": "ce61f9c2f6002c5ee11af62296cf864d56aa02c3",
+  "matches_source_at_commit": "20f2a6644621ec14668ee94219acc12e87ec4a53",
+  "timing_fix_commit": "0a9ea8b4f771a5609de99bf9c71e557589b74d26",
+  "timing_convention": "Historical Pygame frame-polled response timing; no rt_timing_version field.",
+  "preservation": "Original ZIP moved without recompression or content edits. All 10 source members match the prior extracted folder and pre-timing-fix Git source.",
+  "local_extracted_copy": "extracted/",
+  "local_extracted_copy_note": "Moved without edits; ignored by Git because the ZIP is the canonical record. The existing .DS_Store is retained locally but is not a ZIP member.",
+  "members": [
+    {
+      "path": "0-helpers.R",
+      "size_bytes": 2152,
+      "sha256": "6ed2826cb8d280f946548078846664a5f1e8569b3b14374537bba2746cfe4be9"
+    },
+    {
+      "path": "0-setup_pygame.R",
+      "size_bytes": 1059,
+      "sha256": "aa59845151c393dfca9e41bfe042381f92a3f7b7c6f10082b29035960764c028"
+    },
+    {
+      "path": "1-run_virus_task.R",
+      "size_bytes": 365,
+      "sha256": "b0d590d8f66848e59abca6291d23b995d9434f6873af169b778cf1964c441eaa"
+    },
+    {
+      "path": "python/build_screenshot_deck.py",
+      "size_bytes": 9195,
+      "sha256": "b714ffa58ff5beaecd972a3971a545dc55b57d23f68e2efec7615c3df46c8af8"
+    },
+    {
+      "path": "python/capture_instruction_screenshots.py",
+      "size_bytes": 7412,
+      "sha256": "ede6e2a8d89fcc30284faca1842e9ff5e3fda2a5e6f6ff5e1cb7909bcc6ebca2"
+    },
+    {
+      "path": "python/capture_virus_task_screenshots.py",
+      "size_bytes": 13873,
+      "sha256": "16a09a6d086895bd54878539f04fc6cafff8b0ffd0e8fab20b20f00b5f75d0ee"
+    },
+    {
+      "path": "python/fonts/Roboto-Bold.ttf",
+      "size_bytes": 48420,
+      "sha256": "ccf92316fdf3cf064892c0e019b456128eb88a69c4d57de749b77436e490f20e"
+    },
+    {
+      "path": "python/fonts/Roboto-Light.ttf",
+      "size_bytes": 162636,
+      "sha256": "94df4e4976db8ddaec27f8e8c33eef912e744fb200ca09051794b38e5a502fc0"
+    },
+    {
+      "path": "python/instructions.py",
+      "size_bytes": 36327,
+      "sha256": "295c638da4e89488c1ad7b2e00072725d573e6bdc40fc44aeb03b1017c0bc33f"
+    },
+    {
+      "path": "python/virus_task.py",
+      "size_bytes": 129519,
+      "sha256": "f00c2e1087a60c0b57c35cc93a59f6fd2b1ad77afa277f7efc391702096a42c0"
+    }
+  ]
+}
