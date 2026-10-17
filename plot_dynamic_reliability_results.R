@@ -4,7 +4,8 @@ suppressPackageStartupMessages({library(dplyr); library(tidyr); library(readr); 
 Sys.setenv(XDG_CACHE_HOME = file.path(tempdir(), "fontconfig-cache"))
 dir.create(Sys.getenv("XDG_CACHE_HOME"), recursive = TRUE, showWarnings = FALSE)
 args <- commandArgs(trailingOnly = TRUE)
-stopifnot(length(args) <= 2)
+stopifnot(length(args) <= 3, length(args) < 3 || args[3] == "--components-only")
+components_only <- length(args) == 3
 script <- normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1]))
 root <- dirname(script)
 input <- if (length(args)) args[1] else file.path(root, "analysis_outputs/semester2_2026_behavioural")
@@ -217,15 +218,18 @@ writeLines(c('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="v
   '<header><h1>Dynamic reliability: behavioural figures</h1>',
   sprintf('<p>%d participants. CAL65 is blue; CAL90 is orange. Open diamonds show mixed-model estimates; filled circles show participant sensitivity estimates.</p>',N),
   '<p>All hypotheses were specified after data collection. Convergence alone does not establish model adequacy; read participant sensitivities alongside mixed-model estimates. Phase order is fixed; agreement does not establish advice-caused switching. Confidence intervals are pointwise.</p>',
-  '<p><a href="presentation/index.html">Presentation figures: one 16:9 figure per H1-H4 / E1-E2</a>. Click any supporting figure below for its full-resolution PNG or PDF. Numerical panel data are in the <a href="data/">data folder</a>.</p></header><main>',
+  '<p><a href="presentation/index.html">Revised H1-H7 report: 11 core pages with matched SDT views and cohort sensitivities</a>. Click any historical supporting figure below for its full-resolution PNG or PDF. Numerical panel data are in the <a href="data/">data folder</a>.</p></header><main>',
   cards,'</main></html>'),file.path(out,"index.html"))
-source(file.path(root,"plot_dynamic_reliability_slides.R"))
-plot_dynamic_reliability_slides(input,out,root)
+if (!components_only) {
+  source(file.path(root,"plot_dynamic_reliability_slides.R"))
+  plot_dynamic_reliability_slides(input,out,root)
+}
 plot_sources <- c(script,file.path(root,"plot_dynamic_reliability_slides.R"))
 write_csv(tibble(path=plot_sources,md5=unname(tools::md5sum(plot_sources))),file.path(out,"plot_sources.csv"))
 manifest <- list.files(out,pattern="\\.(csv|pdf|png|html)$",recursive=TRUE,full.names=TRUE)
 # The presentation bundle has its own receipt and can be rebuilt independently.
-manifest <- manifest[!startsWith(normalizePath(manifest),paste0(normalizePath(file.path(out,"presentation")),"/"))]
+manifest <- manifest[!startsWith(normalizePath(manifest),paste0(normalizePath(out),"/presentation/"))]
+manifest <- manifest[!startsWith(normalizePath(manifest),paste0(normalizePath(out),"/archive/"))]
 manifest <- manifest[basename(manifest)!="plot_manifest.csv"]
 write_csv(tibble(path=normalizePath(manifest),md5=unname(tools::md5sum(manifest))),file.path(out,"plot_manifest.csv"))
 writeLines(format(Sys.time(),tz="UTC"),file.path(out,"COMPLETE.txt"))

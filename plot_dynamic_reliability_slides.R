@@ -42,7 +42,7 @@ dynamic_ordinary <- function(d, keys) {
     interval = "Ordinary participant mean 95% t CI", analysis_scale = "original units")
 }
 
-plot_dynamic_reliability_slides <- function(input, plot_base, root) {
+build_dynamic_reliability_legacy_slides <- function(input, plot_base, root, return_bundle = FALSE) {
   suppressPackageStartupMessages({
     library(dplyr); library(tidyr); library(readr); library(ggplot2); library(patchwork)
   })
@@ -374,12 +374,18 @@ plot_dynamic_reliability_slides <- function(input, plot_base, root) {
   obsolete <- c("04_e1_within_phase_adaptation","05_e2_speed_and_manual_change","06_e3_subjective_evaluation")
   for (stem in obsolete) unlink(c(file.path(out,paste0(stem,c(".png",".pdf"))),
     file.path(out,"data",paste0(stem,c("_data.csv","_participants.csv","_annotations.csv","_association_lines.csv")))))
-  artifacts <- list.files(out,pattern = "\\.(pdf|png|csv|html)$",recursive = TRUE,full.names = TRUE)
+  artifacts <- c(list.files(out,pattern = "\\.(pdf|png|csv|html)$",full.names = TRUE),
+    list.files(file.path(out,"data"),pattern = "\\.csv$",full.names = TRUE))
   artifacts <- artifacts[basename(artifacts) != "plot_manifest.csv"]
   write_csv(tibble(path = normalizePath(artifacts),md5 = unname(tools::md5sum(artifacts))),file.path(out,"plot_manifest.csv"))
   writeLines(format(Sys.time(),tz = "UTC"),file.path(out,"COMPLETE.txt"))
   message("Saved six hypothesis figures (16:9 PNG/PDF), combined PDFs and index: ",out)
-  invisible(catalog)
+  invisible(if (return_bundle) list(catalog = catalog, figures = figures) else catalog)
+}
+
+plot_dynamic_reliability_slides <- function(input, plot_base, root) {
+  source(file.path(root, "plot_dynamic_reliability_hypotheses.R"), local = TRUE)
+  plot_dynamic_reliability_hypotheses(input, plot_base, root)
 }
 
 if (sys.nframe() == 0L) {

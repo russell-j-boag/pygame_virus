@@ -201,7 +201,7 @@ sdt_phase_figure <- function(hypothesis, outcome_name, summaries, contrasts) {
       "Does discrimination between correct and incorrect advice change differently between groups?"
   } else if (bias) "Does acceptance tendency increase from P2 to P3, and differ between P3 and P1?" else
     "Does discrimination change from P2 to P3, and differ between P3 and P1?"
-  caption <- paste("Exploratory SDT alternative; answered trials only, with loglinear rate correction. Higher values indicate",
+  caption <- paste("Retrospective SDT analysis; answered trials only, with loglinear rate correction. Higher values indicate",
     if (bias) "greater acceptance tendency." else "greater discrimination.",
     "\nChanges: paired / Welch participant tests; * Holm p < .05; ns p >= .05 (nine H1/H3 tests per outcome). CIs are pointwise.",
     sdt_correction_note(a),
@@ -273,7 +273,7 @@ sdt_h4_figure <- function(h4, original_subjective) {
     predictions = pred, title = title)
 }
 
-run_dynamic_reliability_sdt <- function(base, plot_base, root) {
+run_dynamic_reliability_sdt <- function(base, plot_base, root, analysis_out = NULL) {
   sdt_check(file.exists(file.path(base, "COMPLETE.txt")), "Base analysis is incomplete")
   for (name in c("input_manifest", "source_checksums", "analysis_artifacts"))
     sdt_verify(file.path(base, paste0(name, ".csv")))
@@ -304,7 +304,8 @@ run_dynamic_reliability_sdt <- function(base, plot_base, root) {
     pivot_wider(names_from = correction, values_from = c(estimate, p_holm)) %>%
     mutate(same_direction = sign(estimate_loglinear) == sign(estimate_extreme_only),
       same_holm_decision = (p_holm_loglinear < .05) == (p_holm_extreme_only < .05))
-  out <- file.path(base, "sdt_alternates"); plots <- file.path(plot_base, "presentation", "alternates")
+  out <- if (is.null(analysis_out)) file.path(base, "sdt_alternates") else analysis_out
+  plots <- file.path(plot_base, "presentation", "alternates")
   dir.create(file.path(out, "models"), recursive = TRUE, showWarnings = FALSE)
   dir.create(file.path(plots, "data"), recursive = TRUE, showWarnings = FALSE)
   unlink(c(file.path(out, "COMPLETE.txt"), file.path(plots, "COMPLETE.txt")))
@@ -342,7 +343,7 @@ run_dynamic_reliability_sdt <- function(base, plot_base, root) {
   tryCatch(invisible(lapply(figures, print)), finally = dev.off())
   notes <- c("Alternate H1/H3/H4 SDT sensitivity analyses, selected after inspection of original results.",
     "H = agreement with correct advice; F = agreement with incorrect advice. Bias = -c = (z(H)+z(F))/2; d-prime = z(H)-z(F).",
-    "Answered trials regardless of RT. Timeouts are excluded, not treated as disagreements. No performance-based participant exclusions.",
+    "Answered trials regardless of RT. Timeouts are excluded, not treated as disagreements. Cohort matches the supplied behavioural analysis; see its membership and provenance.",
     "Loglinear correction: (agreements + 0.5)/(answered + 1), applied to both rates in every participant/phase.",
     "Extreme-only sensitivity: replace zero/one by 0.5/n or 1-0.5/n. Sparse-cell uncertainty remains under either correction.",
     "H1: P2-P1 within each group and CAL90-CAL65 difference in paired changes; a negative bias interaction matches the prediction.",
@@ -409,6 +410,8 @@ run_dynamic_reliability_sdt <- function(base, plot_base, root) {
   receipt <- paste("Completed", format(Sys.time(), tz = "UTC"), "- exploratory SDT alternatives; inspect diagnostics and correction sensitivity.")
   writeLines(receipt, file.path(out, "COMPLETE.txt")); writeLines(receipt, file.path(plots, "COMPLETE.txt"))
   message("Saved alternate H1/H3/H4 SDT analyses to ", out, " and five figure pairs to ", plots)
+  invisible(list(scores = scores, contrasts = contrasts, subjective = h4,
+    summaries = summaries, catalog = catalog, figures = figures, analysis_dir = out, plot_dir = plots))
 }
 
 main_sdt <- function(args = commandArgs(trailingOnly = TRUE)) {
@@ -416,6 +419,7 @@ main_sdt <- function(args = commandArgs(trailingOnly = TRUE)) {
   root <- dirname(normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1])))
   base <- if (length(args)) args[1] else file.path(root, "analysis_outputs/semester2_2026_behavioural")
   plots <- if (length(args) >= 2) args[2] else file.path(root, "plots/semester2_2026_behavioural")
-  run_dynamic_reliability_sdt(base, plots, root)
+  source(file.path(root, "plot_dynamic_reliability_hypotheses.R"), local = TRUE)
+  plot_dynamic_reliability_hypotheses(base, plots, root)
 }
 if (sys.nframe() == 0L) main_sdt()
