@@ -265,7 +265,15 @@ run_aid_onset_sdt <- function(root, out, plots) {
 if (sys.nframe() == 0L) {
   script <- sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[[1]])
   root <- dirname(normalizePath(script)); args <- commandArgs(trailingOnly = TRUE)
-  sdt_check(length(args) <= 2, "Usage: Rscript analyse_aid_onset_sdt.R [analysis_dir] [plot_dir]")
+  if (!length(args)) {
+    status <- system2(file.path(R.home("bin"), "Rscript"), shQuote(file.path(root, "plot_aid_onset_hypotheses.R")))
+    quit(status = status)
+  }
+  sdt_check(length(args) == 2, "Legacy SDT requires both analysis_dir and plot_dir; no arguments builds the unified gallery from validated primary fits.")
+  protected <- file.path(root, c("analysis_outputs/semester2_2026_hypotheses/primary", "plots/semester2_2026_key_findings/presentation"))
+  source(file.path(root, "R/aid_onset_entrypoints.R"))
+  for (path in vapply(args, ao_resolve_destination, character(1))) for (dest in protected)
+    sdt_check(path != dest && !startsWith(path, paste0(dest, "/")), "Legacy outputs must be outside the canonical primary analysis/gallery.")
   run_aid_onset_sdt(root,
     if (length(args)) args[1] else file.path(root, "analysis_outputs/semester2_2026_presentation_followups/sdt_alternates"),
     if (length(args) >= 2) args[2] else file.path(root, "plots/semester2_2026_key_findings/presentation/alternates"))

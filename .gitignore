@@ -23,3 +23,14 @@ screenshots_review.pptx
 !output/.gitkeep
 !plots/.gitkeep
 !data/.gitkeep
+
+# Standalone participant-QC builds, archives and validation evidence
+analysis_outputs/semester2_2026_qc/
+analysis_outputs/semester2_2026_qc.previous_*/
+analysis_outputs/.semester2_2026_qc.build-*/
+analysis_outputs/semester2_2026_qc_validation/
+
+# Revised hypothesis models and transaction archives (reproducible from scripts)
+analysis_outputs/semester2_2026_hypotheses/primary/
+analysis_outputs/semester2_2026_hypotheses/.primary_build_*/
+analysis_outputs/semester2_2026_hypotheses/archive/primary_*/

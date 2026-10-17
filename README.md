@@ -103,138 +103,258 @@ This writes `instruction_screenshots/`, `virus_task_screenshots/`, and `screensh
 ## Author
 Russell J. Boag
 
-## Behavioural research-question analysis
+## Participant exclusion audit
 
-The Semester 2 analysis includes **60 participants**. The earlier p59 run
-`20260903_120309` was excluded for chance performance and replaced by
-`20260924_110831`. Include the later replacement in all analyses; never exclude
-participant number 59 wholesale. Both raw runs remain preserved.
-
-From the repository root, regenerate the data, participant summaries and reports:
+The standalone `participant_qc/` pipeline adapts the dynamic-reliability and
+time-pressure audits to this study's two-decision design. It produces an
+exclusion-candidate list and supporting evidence. **It does not remove participants
+or trials, rewrite canonical CSVs, or rerun behavioural analyses.**
 
 ```sh
-Rscript collate_data.R output/semester2_2026_data data
-Rscript create_averaged_within_participants.R
-Rscript test_aid_onset_hypotheses.R
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python participant_qc/run_qc.py
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m unittest discover -s tests -p 'test_participant_qc.py'
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_participant_qc.py --expect-current-cohort --receipt analysis_outputs/semester2_2026_qc_validation/validation_receipt.json
 ```
 
-Collation selects the latest filename timestamp per participant and requires
-trial, questionnaire and slider exports from that same run. It stops if the
-latest run is incomplete rather than combining exports from different runs.
-`data/collation_manifest.csv` records source paths, run timestamps and MD5
-checksums; questionnaire outputs now also retain `run_timestamp`.
+Open `analysis_outputs/semester2_2026_qc/index.html`. The runner accepts
+`--input`, `--manifest`, `--config` and `--output-dir`; their defaults are
+`data/data_virus_all.csv`, `data/collation_manifest.csv`,
+`participant_qc/config.json`, and `analysis_outputs/semester2_2026_qc/`.
+NumPy, Matplotlib and Pygame are available in `r-pygame`; validation also uses
+Pillow and Poppler's `pdfinfo`. No package installation is performed.
+The optional `--expect-current-cohort` validator flag checks the initial
+60-participant snapshot; omit it for future cohorts. The generator's sample size
+and candidate membership are data-driven.
 
-The original analysis retains its H1–H5 identifiers, participant-random-intercept logistic models,
-two-sided Holm tests within each H2–H5 family, and paired participant sensitivity
-analyses. H1 compares mean perceived aid reliability with perceived self-reliability
-in Manual. Trust remains the exploratory six-item mean. The timing-by-advice
-correctness interaction is exploratory and does not replace H3 or H4.
+### Agreed first-pass criteria
 
-The generated `analysis_outputs/semester2_2026_hypotheses/research_questions_report.html`
-leads with the direct timing contrasts and includes the full hypothesis families,
-trust, decision-transition decomposition, provenance and diagnostic limitations.
-`switch_proportion_breakdowns.html` is generated from the same run. All reported
-confidence intervals are pointwise; adjusted p-values are labelled separately.
-Aid-first Decision 1 already follows advice exposure, so between-condition
-comparisons of subsequent switching or net gain are not comparisons from a common
-independent baseline. The prior 59-participant result set is superseded.
+These are retrospective descriptive screens agreed on 2026-10-17, not
+preregistered exclusions or proof of equivalence to chance.
 
-The revised presentation replaces original H5 overall accuracy with three
-follow-ups: **H5 revision quality**, **H6 advice-use errors**, and **H7 selective
-uptake in Stimulus-first**. The original analysis tables retain their original
-IDs for provenance; H5-H7 in the presentation remain exploratory, having been
-selected after inspecting the results. **H8 trust** promotes the original
-exploratory six-item trust comparison into the primary presentation, retaining
-its original two-sided paired test and exploratory origin.
+| Screen | Scope | Use |
+| --- | --- | --- |
+| All-trial accuracy **<=55%** | Each main condition, pooled aided trials, and all main trials; Decision 1 and Decision 2 separately | Exclusion candidate |
+| RT **<200 ms** on **>=20% of all scope trials**, **>=20 fast responses**, and fast-response accuracy **<=55%**, jointly in the same decision and scope | Same main scopes and decisions | Exclusion candidate |
+| Absolute accuracy deviation from recorded calibration target **>10 percentage points** | Practice trials 21-60, Decision 2 | Diagnostic only |
+| Same target-deviation screen | Whole Manual block, Decision 2 | Diagnostic only |
+| Low-accuracy and anticipatory screens above | Whole 60-trial Practice block, both decisions separately | Diagnostic only |
 
-Generate the dedicated follow-up results, then the figures:
+The main conditions contain 260 trials each, pooled aided contains 520, and all
+main trials contains 780. The current calibration target is 75% for all 60
+participants; it is read from their recorded practice metadata and cross-checked
+against their calibration summaries, never inferred from today's task defaults.
+The final-40 target check excludes the first 20 practice trials; whole-practice
+diagnostics retain all 60. Missing target metadata remains unassessable.
+
+Both decisions' low-accuracy and anticipatory screens can create candidates,
+including Aid-first and Decision 2. **Aid-first Decision 1 can be prepared from
+the preceding advice, and Decision 2 can be prepared before its response screen.**
+Their short RTs therefore require interpretation. The two decisions are never
+combined into a single denominator or scored against each other's correctness.
+Neither switching frequency nor advice agreement is a separate exclusion rule.
+
+Timeouts count as incorrect and never fast. Exactly 200 ms is not fast; finite
+nonpositive answered RTs count as fast and are reported separately. Fast-rate
+denominators include all scope trials; fast accuracy includes only fast answered
+trials. Empty fast subsets have missing accuracy. No trial trimming occurs.
+Wilson intervals are descriptive and do not account for adaptive calibration
+or serial dependence.
+
+### Run provenance, reports and comparisons
+
+The audit verifies canonical/raw agreement and source MD5s in the collation
+manifest. Practice and calibration-summary files must match each canonical
+participant's exact run timestamp. Missing files do not fall back to an older
+run or get selected by modification time. The selected replacement p59 is
+`20260924_110831`; the historical `20260903_120309` run remains preserved and
+does not enter the audit. No participant-wide exclusion list is hard-coded.
+
+Missing schema, duplicate trial identities and conflicting or ambiguous run
+provenance stop generation. Incomplete/invalid scopes remain unassessable;
+affected pooled scopes inherit those failures. Response, correctness, key
+mapping, block order, advice, preview timing, decision-transition and calibration
+metadata checks are exported. A missing RT in one decision does not silently
+invalidate the other decision's otherwise valid measurements.
+
+Outputs include participant and decision/scope summaries, all screening checks,
+flagged checks, integrity findings, candidate unions and overlaps, source hashes,
+10-trial practice bins and 50-trial main bins (with the final 10-trial bin).
+The HTML report provides a searchable participant table, four cohort figure
+families, PDF/PNG diagnostics for every participant and a comparison page for
+every anticipatory candidate. Each person counts once in the candidate total;
+repeated flags across scopes and decisions count once per exclusion criterion.
+Diagnostic-only flags and incomplete assessments remain separate.
+
+Individual plots follow administered order, offsetting main `global_trial` by
+60 for display because the raw main sequence restarts at 1 after practice.
+Decision 1 and Decision 2 have separate RT, fast-rate, accuracy and fast-only
+accuracy panels. Peer bands use other complete participants with the same
+calibration target and no main-task anticipatory flag, aligned by condition,
+within-block trial and decision. These are descriptive references across block
+orders, not adjustments for order effects.
+
+Comparators additionally match key mapping. Select the smallest sum of absolute
+MAD-standardised distances from subgroup medians of overall accuracy and positive
+median RT for both decisions. Zero-MAD terms contribute zero; participant ID
+breaks ties. Other exclusion or diagnostic flags do not silently disqualify a
+comparator. All pools, rankings and missing matches are exported.
+
+Builds use staging and publish only after successful generation and unchanged
+input/source checks. Earlier reports are retained as `.previous_<timestamp>`
+siblings. The manifest hashes input data, configuration, implementation and
+generated artifacts. The independent validator imports no QC scoring code: it
+recomputes metrics, Wilson intervals, flags, unions, peers and comparators from
+source, and checks hashes, local links, PDF pages and PNG integrity. After plot
+changes, inspect rendered PDFs as well as running automated validation. Keep
+validation receipts outside the generated bundle.
+
+The first validated audit selected **010, 013, 020, 022 and 027** (5/60, 8.3%;
+55 would remain if applied). All five met the anticipatory rule; 022 and 027 also
+met the low-accuracy rule. All candidate checks arose in Decision 1. Eleven
+participants had practice-target flags and 15 had Manual-target flags; their
+overlap and overlap with candidates leave **18 diagnostic-only participants**.
+All scopes were assessable. Replacement p59 had diagnostic target deviations
+and **was not an exclusion candidate**. No exclusions were applied.
+
+## Revised hypothesis analysis and presentation
+
+The current report uses all 60 canonical participants, including replacement p59
+(`20260924_110831`). **Participant exclusions are not applied.** The participant-QC
+audit is independent of this analysis and is never read by it.
 
 ```sh
-Rscript analyse_aid_onset_followups.R
-Rscript plot_aid_onset_slides.R
+Rscript analyse_aid_onset_primary.R
+Rscript tests/validate_aid_onset_primary.R
+Rscript plot_aid_onset_hypotheses.R
+Rscript tests/validate_aid_onset_slides.R
 ```
 
-Open `plots/semester2_2026_key_findings/presentation/index.html` for one figure per
-H1-H8, including `08_h8_trust`. Numbered filenames include
-the hypothesis (for example, `03_h3_correct_advice_accuracy`). Each figure is
-16:9, with a 3600 x 2025 PNG at 300 dpi and a vector PDF; `primary_hypotheses.pdf`
-collects all eight main presentation figures. Typography and styling follow the current auto-reliability and
-time-pressure figures.
+Open `plots/semester2_2026_key_findings/presentation/index.html`. It contains eight
+core figures and five supporting figures, individual 16:9 vector PDFs and
+3600 x 2025 PNGs at 300 dpi, an eight-page `aid_onset_core_hypotheses.pdf`, and a
+13-page `aid_onset_all_hypotheses.pdf`. Each figure links to its plotted values,
+model estimates and tests. The complete preceding gallery, including alternate
+SDT figures, is archived under `plots/semester2_2026_key_findings/archive/` before
+a successful replacement. Earlier analysis outputs remain intact.
 
-Observed participant means have Cousineau-Morey within-participant 95% CIs.
-H3/H4 share normalization over five accuracy cells, an identical all-trial Manual
-baseline, and the same axis range. Brackets use saved Holm-adjusted logistic GLMM
-contrasts for H2-H4, and the saved paired tests for H1 and H8 trust.
-H5 uses all-trial beneficial and harmful revision rates, two separate logistic
-GLMMs, and Holm adjustment across six contrasts. Its three-condition Morey
-normalization is separate for each revision type. H6 uses final disagreement
-with correct advice and agreement with incorrect advice: exact error-rate
-counterparts of H3/H4, retaining the original tests and Holm families. H6 CIs
-normalize across the two timings within each advice type. H7 uses only initial
-disagreements in Stimulus-first, with two-advice-type Morey CIs and one exploratory
-GLMM contrast. Correct-advice opportunities begin with an incorrect judgment;
-incorrect-advice opportunities begin with a correct judgment. This conditional
-comparison does not isolate a causal effect of advice correctness.
+`config/hypothesis_figures.csv` is the ordered panel registry and historical
+crosswalk. This framework is a **retrospective reorganisation**, specified after
+inspection of earlier results; promotion to the primary presentation does not
+make an exploratory outcome preregistered.
 
-Follow-up results, models and diagnostics are in
-`analysis_outputs/semester2_2026_presentation_followups/`. All new models retain
-participant random intercepts only. Dagger annotations identify significant
-model contrasts that disagree with paired participant sensitivity tests; this
-affects both H5 harmful-revision comparisons involving Manual. Retired slide
-filenames move to `presentation/archive/retired/` after a successful rebuild.
-These intervals are pointwise; their overlap is not a significance test.
-The generator verifies the analysis input checksums and trial-derived means,
-exports the plotted values and bracket tests, and does not refit models.
-Validate the generated intervals and annotations independently with
-`Rscript tests/validate_aid_onset_slides.R`.
+| Order | Question | Primary comparisons |
+| --- | --- | --- |
+| H1 | Final performance: accuracy and task d-prime | AF - Manual, SF - Manual, SF - AF for each outcome (6) |
+| H2 | Human performance beyond the realised aid: accuracy and task d-prime | Human - aid at each timing, and SF - AF in advantage (6) |
+| H3 | Advice acceptance bias and task BLACK-response bias | SF - AF for each (2) |
+| H4 | Advice-following and task discrimination | Advice d-prime SF - AF (1); reuse the exact H1 task timing test |
+| H5a | Switching frequency | Three condition comparisons (3) |
+| H5b | Beneficial and harmful revisions | Three condition comparisons for each outcome (6) |
+| H6 | Selective uptake after initial disagreement, Stimulus-first only | Correct - incorrect advice (1) |
+| H7 | Subjective reliability and trust | Mean aid rating - Manual self-rating; SF - AF aid rating; SF - AF trust (3) |
 
-**Alternate H6 SDT figures** supplement the existing advice-use error figure:
+There are **28 unique primary comparisons**, all two-sided. Holm adjustment is
+separate within each hypothesis/outcome. H4's repeated task-discrimination panel
+uses the same H1 model, contrast ID and three-test-family adjusted p-value.
+
+The five supporting figures show initial/final performance, task bias across
+both decisions, final accuracy conditional on advice correctness (with an
+overall Manual baseline), SDT correction sensitivity, and model-versus-participant
+inference. Initial/final comparisons are descriptive and use matched valid
+responses; Aid-first's initial response already follows advice exposure.
+
+### Estimands and models
+
+Task SDT uses H = BLACK response given BLACK stimulus and F = BLACK response
+given WHITE stimulus. Advice SDT uses H = agreement given correct advice and
+F = agreement given incorrect advice. Both use `d-prime = z(H) - z(F)` and
+`-c = (z(H) + z(F))/2`. Positive task -c means BLACK preference; positive advice
+-c means acceptance tendency, not necessarily inappropriate reliance. Final
+agreement does not demonstrate active uptake or deliberate verification.
+
+Primary rates use `(k + 0.5)/(n + 1)` in every cell. Extreme-only correction is
+analysed separately as a sensitivity. All answered rows enter SDT regardless of
+RT. Timeouts count as incorrect for accuracy and are omitted from SDT. Empty
+stimulus/advice classes or invalid responses stop the pipeline. Human-versus-aid
+accuracy compares all-trial human accuracy with realised advice correctness,
+assuming a timely aid response. Task d-prime compares human and aid on exactly
+the human's final-answered rows. Revisions use all valid initial/final response
+pairs, not just switch trials; exported denominators make this explicit.
+
+Binary outcomes use logistic mixed models with condition fixed effects and a
+participant random intercept. Contrasts are differences of estimated probabilities
+in percentage points, computed after response-scale regridding. Displayed binary
+means condition on a zero participant random effect; they are not population-
+marginal probabilities. SDT, benchmark differences and ratings use linear mixed
+models with participant random intercepts and Satterthwaite degrees of freedom.
+H6 replaces condition with advice correctness in the restricted Stimulus-first
+sample. It contrasts opportunities that also differ in initial correctness,
+so it does not isolate a causal effect of advice correctness.
+
+Figures show participant values, fitted cell means and pointwise 95% CIs.
+Significance brackets follow the sibling repositories: `*** p < .001`,
+`** p < .01`, `* p < .05`, and `ns p >= .05`, using the saved Holm-adjusted
+model tests. H2 labels each human-minus-aid cell against zero and brackets the
+timing difference. H7 groups both aided ratings for the mean-aid versus self
+comparison. Bracket endpoints, symbols and source contrast IDs are exported
+with each figure; unavailable inference never receives a significance star.
+Contrast intervals are also pointwise; interval overlap is not a test.
+Singular, nonconverged or rank-deficient fits yield unavailable primary inference
+and no significance annotations. Paired participant tests are separately labelled
+sensitivities, never fallback primary tests. Conditional cell dispersion and
+linear-model residual plots accompany the results. Several revision models have
+elevated dispersion; inspect their sensitivities before interpreting uncertainty.
+The historical joint two-outcome advice-SDT and six-contrast revision-quality
+Holm families are exported as additional sensitivities.
+
+Perceived reliability intentionally compares different rating targets: self
+in Manual, aid in the aided conditions. Trust is the mean of six positive 1-5
+items, with no Manual trust cell. Shared responses across accuracy, SDT and
+revision outcomes do not provide independent evidence. Nonsignificance does not
+establish equivalence.
+
+### Reproducibility and legacy entry points
+
+The new results live only in
+`analysis_outputs/semester2_2026_hypotheses/primary/`. They contain cohort selection,
+raw-source provenance, SDT counts/scores, model data and saved fits, contrast
+weights, model diagnostics, participant sensitivities, decision-context values,
+and artifact checksums. The analysis verifies each of the 180 canonical source
+exports against `data/collation_manifest.csv` and checks all three collated data
+families against those exports before computing outcomes. The validator checks
+independent counts, scores, cells, model covariance/intervals, Holm families,
+all 28 comparisons and exact H1/H4 reuse. A synthetic policy excluding everyone
+also confirms that this pipeline ignores participant exclusion files.
+
+Plotting requires the validation receipt and unchanged analysis/source checksums;
+it never refits models. Generation is staged before the public gallery is
+replaced, and failures preserve the preceding gallery. Model and plotting scripts
+accept explicit output paths for isolated reproducibility checks:
 
 ```sh
-Rscript analyse_aid_onset_sdt.R
-Rscript tests/validate_aid_onset_sdt.R
+Rscript analyse_aid_onset_primary.R /tmp/aid_onset_analysis
+Rscript tests/validate_aid_onset_primary.R /tmp/aid_onset_analysis
+Rscript plot_aid_onset_hypotheses.R /tmp/aid_onset_analysis /tmp/aid_onset_figures
+Rscript tests/validate_aid_onset_primary.R /tmp/aid_onset_analysis /tmp/aid_onset_figures
 ```
 
-The standalone commands accept optional `[analysis_dir] [plot_dir]` arguments.
-Defaults are `analysis_outputs/semester2_2026_presentation_followups/sdt_alternates/`
-and `plots/semester2_2026_key_findings/presentation/alternates/`. Open the latter's
-`index.html` or two-page `H6_alternate_sdt.pdf`. Individual PNG/vector PDF stems
-follow the sibling repositories' alternate naming convention:
-
-- `06_main_H6_alternate_sdt_reliance`
-- `06_main_H6_alternate_sdt_discrimination`
-
-Both retain H6 titles and the existing 16:9 dimensions (3600 x 2025 PNG, 300 dpi).
-The original eight figures, combined presentation PDF and analyses are preserved.
-Regenerate the alternates after refreshing their source data or H6 follow-ups.
-
-Here H is final agreement given correct advice and F is final agreement given
-incorrect advice: `-c = (z(H) + z(F))/2` and `d-prime = z(H) - z(F)`. Scores use
-all answered aided trials per participant/timing, without initial-disagreement
-or RT filtering. Manual has no SDT score. The validated 60-person cohort includes
-replacement p59 and has complete final responses. The script stops on missing or
-invalid responses, empty advice cells, stale input checksums or run mismatches.
-
-Main rates use `(agreements + 0.5)/(trials + 1)` for both advice types in every
-participant/timing cell. An extreme-only correction is exported as a sensitivity
-check. These are exploratory outcomes specified after inspecting the existing
-results. Fresh two-sided paired tests compare Stimulus-first minus Aid-first;
-Holm adjustment covers the two outcomes separately within each correction.
-Contrast CIs are pointwise paired 95% t intervals. The plots show equally weighted
-participant means and Cousineau-Morey 95% CIs across the two timings, separately
-for each outcome; interval overlap is not a significance test.
-
-Higher -c indicates acceptance tendency, not necessarily inappropriate
-overreliance. Higher d-prime indicates discrimination expressed in final agreement
-under conventional equal-variance SDT; it can reflect perceptual competence and
-does not establish deliberate verification. Final agreement does not establish
-active uptake. These outcomes decompose existing H6 information and do not replace
-H7's selective-uptake analysis. Counts, scores, contrasts, correction sensitivity,
-count diagnostics, plotted data and checksums accompany the figures.
-
-Independent source and result checks, including regressions for file-modification
-times and incomplete replacement runs:
+With no arguments, `plot_aid_onset_slides.R` and `analyse_aid_onset_sdt.R` now
+build the unified gallery from the validated primary results. Their validation
+entry points likewise validate the unified report. Explicit legacy outputs must
+be outside the canonical presentation gallery; the SDT component requires both
+output paths to prevent an accidental write into that gallery:
 
 ```sh
-/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_behavioural_reanalysis.py
+Rscript plot_aid_onset_slides.R /tmp/aid_onset_legacy_slides
+Rscript analyse_aid_onset_sdt.R /tmp/aid_onset_legacy_sdt /tmp/aid_onset_legacy_sdt_plots
+Rscript tests/validate_aid_onset_sdt.R /tmp/aid_onset_legacy_sdt /tmp/aid_onset_legacy_sdt_plots
 ```
+
+`test_aid_onset_hypotheses.R`, `analyse_aid_onset_followups.R`, and
+`aid_onset_research_questions.R` remain the historical analysis workflow. Their
+original H1-H5 tests and exploratory extensions are retained for provenance;
+use the new primary entry point for the reorganised framework. The original
+H3/H4 conditional-accuracy outcomes appear as supporting S3, original H1 perceived
+reliability appears in H7, and prior exploratory H5/H6/H7/H8 presentation outcomes
+map to H5b/H3-H4/H6/H7 respectively. The former alternate advice SDT figures are
+now core outcomes alongside their task-SDT analogues.

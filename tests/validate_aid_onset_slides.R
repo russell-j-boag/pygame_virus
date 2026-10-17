@@ -2,6 +2,13 @@
 # Rscript tests/validate_aid_onset_slides.R [figure_dir]
 suppressPackageStartupMessages(library(lme4))
 args <- commandArgs(trailingOnly = TRUE)
+if (!length(args)) {
+  script <- sub("^--file=", "", grep("^--file=", commandArgs(), value=TRUE)[1])
+  root <- dirname(dirname(normalizePath(script)))
+  status <- system2(file.path(R.home("bin"), "Rscript"), shQuote(c(file.path(root,"tests/validate_aid_onset_primary.R"),
+    file.path(root,"analysis_outputs/semester2_2026_hypotheses/primary"),file.path(root,"plots/semester2_2026_key_findings/presentation"))))
+  quit(status=status)
+}
 stopifnot(length(args) <= 1L)
 out <- if (length(args)) args[[1]] else "plots/semester2_2026_key_findings/presentation"
 base <- "analysis_outputs/semester2_2026_presentation_followups"
