@@ -235,7 +235,25 @@ reference_lines <- tibble(
 )
 
 point_labels <- participant_condition_means %>%
-  filter(accuracy < AID_LOW_ACCURACY | accuracy > AID_HIGH_ACCURACY)
+  filter(accuracy < AID_LOW_ACCURACY | accuracy > AID_HIGH_ACCURACY) %>%
+  group_by(condition_deadline_code) %>%
+  arrange(accuracy, .by_group = TRUE) %>%
+  mutate(
+    # Keep nearby participant labels readable as the cohort grows.
+    label_y = {
+      positions <- accuracy
+      if (length(positions) > 1) {
+        for (i in seq.int(2, length(positions))) {
+          positions[[i]] <- max(positions[[i]], positions[[i - 1]] + 0.018)
+        }
+      }
+      positions - mean(positions - accuracy)
+    },
+    label_x = as.numeric(condition_label) +
+      if_else(condition_deadline_code == "M_LP", 0.10, -0.10),
+    label_hjust = if_else(condition_deadline_code == "M_LP", 0, 1)
+  ) %>%
+  ungroup()
 
 below_aid_low_summary <- participant_condition_means %>%
   group_by(condition_label) %>%
@@ -334,27 +352,16 @@ accuracy_plot <- ggplot(
     size = 2.4,
     show.legend = FALSE
   ) +
-  geom_text(
-    data = filter(point_labels, condition_deadline_code == "CAL_LP"),
-    aes(label = participant_id),
-    hjust = 1,
-    nudge_x = -0.03,
-    size = PARTICIPANT_TEXT_SIZE,
+  geom_segment(
+    data = point_labels,
+    aes(xend = label_x, yend = label_y),
+    colour = "grey40",
+    linewidth = 0.3,
     show.legend = FALSE
   ) +
   geom_text(
-    data = filter(point_labels, condition_deadline_code == "M_HP"),
-    aes(label = participant_id),
-    hjust = 1,
-    nudge_x = -0.03,
-    size = PARTICIPANT_TEXT_SIZE,
-    show.legend = FALSE
-  ) +
-  geom_text(
-    data = filter(point_labels, condition_deadline_code == "M_LP"),
-    aes(label = participant_id),
-    hjust = 0,
-    nudge_x = 0.03,
+    data = point_labels,
+    aes(x = label_x, y = label_y, label = participant_id, hjust = label_hjust),
     size = PARTICIPANT_TEXT_SIZE,
     show.legend = FALSE
   ) +

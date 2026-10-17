@@ -30,11 +30,15 @@ for (prefix in c("H3_perceived", "H4_trust")) {
   pred <- r(paste0(prefix, "_predictions"))
   stopifnot(all(pred$probability >= 0 & pred$probability <= 1),
             all(pred$lower <= pred$probability & pred$upper >= pred$probability))
+  curves <- read_csv(file.path(plots, "data", paste0(prefix, "_curves.csv")), show_col_types = FALSE)
+  status <- r("model_diagnostics") %>% filter(model == paste0(prefix, "_agreement"))
+  stopifnot(nrow(status) == 1, all(curves$inference_available == status$inference_available))
 }
 x <- r("exploratory_contrasts")
 stopifnot(nrow(x) == 172, setequal(x$hypothesis, paste0("H", 1:6)), !anyDuplicated(x[c("hypothesis", "outcome", "analysis", "contrast")]),
           all(is.finite(x$estimate)), all(x$lower <= x$estimate & x$upper >= x$estimate),
           all(x$p_holm >= x$p_raw, na.rm = TRUE), all(x$p_holm_all_six >= x$p_holm, na.rm = TRUE))
+stopifnot(all(is.na(x$p_raw[!x$inference_available])), all(is.na(x$p_holm[!x$inference_available])))
 check_holm <- x %>% group_by(hypothesis, analysis_family) %>% mutate(expected = p.adjust(p_raw, "holm")) %>% ungroup()
 stopifnot(isTRUE(all.equal(check_holm$p_holm, check_holm$expected)))
 # Independent paired t-test checks of the benchmark and its CI scale.

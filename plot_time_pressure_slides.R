@@ -29,7 +29,7 @@ time_pressure_morey <- function(d, groups, levels, log_scale = FALSE) {
   list(summary = s, participants = d)
 }
 
-plot_time_pressure_slides <- function(base, plot_base, root) {
+build_time_pressure_legacy_slides <- function(base, plot_base, root, return_bundle = FALSE) {
   suppressPackageStartupMessages({
     library(dplyr); library(tidyr); library(readr); library(ggplot2); library(patchwork)
   })
@@ -87,9 +87,17 @@ plot_time_pressure_slides <- function(base, plot_base, root) {
   morey_caption <- "Observed means + Cousineau-Morey within-participant 95% CIs."
   export <- function(d, stem) write_csv(d, file.path(out, "data", paste0(stem, ".csv")))
   catalog <- list(); figures <- list()
+  # Captured plots must keep their theme after the generator restores the caller's
+  # global theme. Patchwork children can otherwise silently revert to theme_grey.
+  freeze_theme <- function(p) {
+    p$theme <- theme_get() + p$theme
+    if(inherits(p,"patchwork") && length(p$patches$plots))p$patches$plots <- lapply(p$patches$plots,freeze_theme)
+    p
+  }
   save <- function(p, stem, set, hypothesis, question, message, notes, d, participants,
                    source_set = set, source_hypothesis = hypothesis) {
     stopifnot(!stem %in% names(figures))
+    p <- freeze_theme(p)
     figures[[stem]] <<- p
     for (ext in c("png", "pdf")) ggsave(file.path(out, paste0(stem, ".", ext)), p,
       width = 12, height = 6.75, units = "in", dpi = 300, bg = "white",
@@ -465,7 +473,7 @@ plot_time_pressure_slides <- function(base, plot_base, root) {
     scale_colour_manual(values = group_colours, labels = short_groups) +
     labs(title = title, subtitle = "Each point is one participant's HP-minus-LP change across their two aided blocks.",
       x = "Change in trust (HP - LP)", y = "Change in agreement (pp)",
-      caption = "Exploratory, unadjusted paired changes. Reliability also switches across blocks; ratings follow the block.\nThese points do not isolate a trust effect. The saved adjusted analyses show no robust trust association across methods.")
+      caption = "Exploratory, unadjusted paired changes. Reliability also switches across blocks; ratings follow the block.\nThese points do not isolate a trust effect. Adjusted models and participant sensitivity tests are reported separately.")
   save(p, "11_exploratory_H4_trust_association", "Exploratory", "H4", "Does within-person trust track advice following?", title,
     "One empirical point per participant for each advice correctness panel. X is HP-minus-LP six-item trust (equivalently the difference of within-person centred scores); Y is HP-minus-LP answered-trial agreement in percentage points. Colours identify opposite reliability assignments. These are unadjusted paired changes: pressure, reliability and block position vary concurrently. No fitted line, slope, interval or significance bracket is plotted; a two-condition bracket is not meaningful on individual change scatter points; Morey is not applicable to individual scatter points. Post-block ratings do not support causal inference.", changes, trust_cells)
 
@@ -535,7 +543,13 @@ plot_time_pressure_slides <- function(base, plot_base, root) {
     md5 = unname(tools::md5sum(file.path(out, artifacts)))), file.path(out, "data/artifact_manifest.csv"))
   writeLines(capture.output(sessionInfo()), file.path(out, "data/session_info.txt"))
   message("Saved 9 main and 3 exploratory hypothesis figures (16:9 PNG/PDF), primary/combined PDFs and index to ", out)
-  invisible(catalog)
+  invisible(if (return_bundle) list(catalog = catalog, figures = figures) else catalog)
+}
+
+# Compatibility entry point: all routine rebuilds now publish the unified report.
+plot_time_pressure_slides <- function(base, plot_base, root) {
+  source(file.path(root, "plot_time_pressure_hypotheses.R"), local = TRUE)
+  plot_time_pressure_hypotheses(base, plot_base, root)
 }
 
 if (sys.nframe() == 0) {

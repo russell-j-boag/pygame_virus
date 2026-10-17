@@ -10,6 +10,13 @@ suppressPackageStartupMessages({
   library(ggplot2)
 })
 
+# Resolve relative to this script whether sourced by tests or run with Rscript.
+.identity_sources <- Filter(Negate(is.null), lapply(sys.frames(), function(frame) frame$ofile))
+.identity_source <- if (length(.identity_sources)) tail(.identity_sources, 1)[[1]] else
+  sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1])
+source(file.path(dirname(normalizePath(.identity_source)), "R/participant_identity.R"))
+rm(.identity_source, .identity_sources)
+
 binary <- function(x, label) {
   z <- tolower(trimws(as.character(x)))
   if (any(!is.na(z) & !z %in% c("true", "false", "1", "0")))
@@ -33,6 +40,7 @@ strict_model_control <- function(binary_outcome) {
 }
 
 prepare_trials <- function(raw) {
+  raw <- apply_participant_identity(raw)
   needed <- c("participant_id", "run_timestamp", "condition_deadline_code", "block_idx",
               "trial", "response", "correct", "rt_s", "stimulus", "aid_label",
               "aid_correct", "automation_reliability_pattern", "aid_accuracy_setting",
@@ -231,22 +239,22 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   check(status == 0, "Task allocation validation failed")
   files <- sort(list.files(input, "^results_.*_b00_ALL\\.csv$", full.names = TRUE))
   selected <- lapply(files, function(path) {
-    trials <- read_csv(path, show_col_types = FALSE)
+    trials <- read_identity_csv(path)
     qpath <- sub("_ALL.csv$", "_POSTBLOCK_ALL.csv", path)
     check(file.exists(qpath), paste("Missing questionnaire for", basename(path)))
-    questions <- read_csv(qpath, show_col_types = FALSE)
+    questions <- read_identity_csv(qpath)
     check(n_distinct(trials$participant_id) == 1 && n_distinct(trials$run_timestamp) == 1, "Mixed trial run")
     check(all(questions$participant_id == trials$participant_id[1]) &&
             all(questions$run_timestamp == trials$run_timestamp[1]), "Questionnaire run mismatch")
     selected_paths <- normalizePath(c(path, qpath))
     list(trials = trials, questions = questions,
-         manifest = tibble(participant_id = trials$participant_id[1], run_timestamp = trials$run_timestamp[1],
+         manifest = tibble(participant_id = trials$participant_id[1], source_participant_id = trials$source_participant_id[1], run_timestamp = trials$run_timestamp[1],
                            kind = c("trials", "trust"), path = selected_paths,
                            md5 = unname(tools::md5sum(selected_paths)), n_rows = c(nrow(trials), nrow(questions))))
   })
   manifest <- bind_rows(lapply(selected, `[[`, "manifest"))
   write_csv(manifest, file.path(out, "input_manifest.csv"))
-  source_paths <- c(script, file.path(root, "analyse_time_pressure_exploratory.R"), file.path(root, "python/validate_time_pressure_allocation.py"), file.path(root, "python/virus_task.py"))
+  source_paths <- c(script, file.path(root, "analyse_time_pressure_exploratory.R"), file.path(root, "python/validate_time_pressure_allocation.py"), file.path(root, "python/virus_task.py"), file.path(root, "R/participant_identity.R"), IDENTITY_CORRECTIONS_FILE)
   write_csv(tibble(path = normalizePath(source_paths), md5 = unname(tools::md5sum(source_paths))),
             file.path(out, "source_checksums.csv"))
   raw <- bind_rows(lapply(selected, `[[`, "trials"))
@@ -282,7 +290,7 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   write_csv(reliance, file.path(out, "participant_reliance.csv"))
   write_csv(describe(reliance, c("pattern", "pressure", "reliability", "advice"), "agreement"),
             file.path(out, "descriptive_reliance.csv"))
-  questions <- bind_rows(lapply(selected, `[[`, "questions"))
+  questions <- apply_participant_identity(bind_rows(lapply(selected, `[[`, "questions")))
   check(all(questions$response %in% 1:5), "Trust responses must be complete and scored 1-5")
   check(all(questions$scale_min == 1 & questions$scale_max == 5), "Unexpected trust scale")
   check(all(questions$condition_deadline_code %in% c("A_HP", "A_LP")), "Unexpected trust block")
@@ -362,6 +370,8 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     "See model_participant_comparison.csv for every agreement/disagreement between analyses.")
   report <- c("TIME-PRESSURE BEHAVIOURAL ANALYSIS", "",
     sprintf("Cohort: %d participants; %d post-calibration trials. Pilots excluded.", n_distinct(dat$subject), nrow(dat)),
+    sprintf("Documented analysis-ID corrections: %d runs. See input_manifest.csv and config/participant_identity_corrections.csv; recorded IDs and administered allocations are preserved.",
+      sum(manifest$kind == "trials" & manifest$participant_id != manifest$source_participant_id)),
     sprintf("Timeouts counted incorrect: %d. Other invalid correct RTs excluded from RT only: %d.",
             sum(dat$timeout), sum(dat$accuracy == 1 & !dat$valid_correct_rt)),
     "", key_findings, "", "METHODS AND INTERPRETATION",

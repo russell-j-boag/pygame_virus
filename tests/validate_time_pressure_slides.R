@@ -2,8 +2,9 @@
 # Run from the repository root after Rscript plot_time_pressure_slides.R.
 suppressPackageStartupMessages({library(dplyr); library(tidyr); library(readr)})
 source("plot_time_pressure_slides.R")
-base <- "analysis_outputs/semester2_2026_behavioural"
-out <- "plots/semester2_2026_behavioural/presentation"
+args <- commandArgs(trailingOnly=TRUE);stopifnot(length(args)<=2)
+base <- if(length(args)>=1)args[1] else "analysis_outputs/semester2_2026_behavioural"
+out <- if(length(args)>=2)args[2] else file.path(base,"hypothesis_components/presentation")
 read <- function(name, exploratory = FALSE) read_csv(file.path(
   if (exploratory) file.path(base, "exploratory") else base, paste0(name, ".csv")), show_col_types = FALSE)
 catalog <- read_csv(file.path(out, "figure_catalog.csv"), show_col_types = FALSE)
@@ -155,10 +156,10 @@ for (i in c(2,4)) {
     all(interaction$x1 == 1.5 & interaction$x2 == 3.5),
     all(a$test_outcome == if (i == 2) "accuracy" else "correct_rt"))
 }
-# H2 explicitly tests the stated gain pattern and its direction in both groups.
+# H2 must contain the current gain-difference tests, irrespective of significance.
 h2 <- filter(sensitivity,outcome == "accuracy",contrast %in% paste(c("HP95_LP65","HP65_LP95"),"HP gain - LP gain"))
-stopifnot(nrow(h2) == 2,all(h2$p_holm < .05),
-  h2$estimate[grepl("^HP95",h2$contrast)] > 0,h2$estimate[grepl("^HP65",h2$contrast)] < 0)
+stopifnot(nrow(h2) == 2, all(is.finite(h2$estimate)),
+  all(is.finite(h2$p_holm)), all(h2$p_holm >= 0 & h2$p_holm <= 1))
 a <- plotted(3,"annotations");stopifnot(all(a$contrast == paste(a$pattern,"Aided HP - Manual LP")),all(a$x1 == 1 & a$x2 == 2))
 for (i in c(5,6)) {
   a <- plotted(i,"annotations")

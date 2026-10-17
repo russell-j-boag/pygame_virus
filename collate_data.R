@@ -10,6 +10,9 @@ library("purrr")
 # Usage:
 #   Rscript collate_data.R [input_dir] [output_dir]
 
+script <- sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1])
+root <- dirname(normalizePath(script))
+source(file.path(root, "R/participant_identity.R"))
 args <- commandArgs(trailingOnly = TRUE)
 
 INPUT_DIR <- if (length(args) >= 1) args[[1]] else "output"
@@ -23,6 +26,7 @@ dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
 
 TRIAL_COLUMNS <- c(
   "participant_id",
+  "source_participant_id",
   "run_timestamp",
   "key_black",
   "key_white",
@@ -62,6 +66,8 @@ TRIAL_COLUMNS <- c(
 
 TRIAL_SUMMARY_COLUMNS <- c(
   "participant_id",
+  "source_participant_id",
+  "run_timestamp",
   "block",
   "block_idx",
   "condition_deadline_code",
@@ -84,6 +90,8 @@ TRIAL_SUMMARY_COLUMNS <- c(
 
 POSTBLOCK_COLUMNS <- c(
   "participant_id",
+  "source_participant_id",
+  "run_timestamp",
   "block",
   "block_idx",
   "condition_deadline_code",
@@ -102,6 +110,7 @@ POSTBLOCK_COLUMNS <- c(
 
 SLIDER_COLUMNS <- c(
   "participant_id",
+  "source_participant_id",
   "run_timestamp",
   "block",
   "block_idx",
@@ -116,149 +125,37 @@ SLIDER_COLUMNS <- c(
   "response_percent"
 )
 
-# 1) First collate all choice-RT results files ----------------------------
-
-# Find all complete results files
-files <- list.files(
-  INPUT_DIR,
-  pattern = "^results_.*_b00_ALL\\.csv$",
-  full.names = TRUE
-)
-
-# Make a file table
-file_tbl <- tibble(path = files) %>%
-  mutate(
-    file_name = basename(path),
-    participant_id = str_extract(file_name, "(?<=results_)[^_]+"),
-    mtime = file.info(path)$mtime
-  )
-
-# For each participant, keep only the most recent b00_ALL file
-latest_per_participant <- file_tbl %>%
-  group_by(participant_id) %>%
-  slice_max(order_by = mtime, n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-# Show which files were selected
-print(latest_per_participant %>% select(participant_id, path, mtime))
-nrow(latest_per_participant)
-
-# Read and bind all selected files
-dat <- latest_per_participant %>%
-  mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
-  pull(data) %>%
-  bind_rows() %>%
-  select(all_of(TRIAL_COLUMNS))
-
-# Inspect combined data
-head(dat)
-tail(dat)
-str(dat)
-length(unique(dat$participant_id))
-
-# Save master CSV
-write_csv(dat, file.path(OUTPUT_DIR, "data_virus_all.csv"))
-
-# To make the data more manageable, take a subset of relevant columns 
-dat <- latest_per_participant %>%
-  mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
-  pull(data) %>%
-  bind_rows() %>%
-  select(all_of(TRIAL_SUMMARY_COLUMNS))
-
-dat <- data.frame(dat)
-
-# Inspect combined data
-head(dat)
-tail(dat)
-str(dat)
-# View(dat)
-
-# Save master CSV
-write_csv(dat, file.path(OUTPUT_DIR, "data_virus.csv"))
-
-
-# 2) Collate post-block questionnaire files -------------------------------
-
-# Find all complete post-block results files
-files <- list.files(
-  INPUT_DIR,
-  pattern = "^results_.*_b00_POSTBLOCK_ALL\\.csv$",
-  full.names = TRUE
-)
-
-# Make a file table
-file_tbl <- tibble(path = files) %>%
-  mutate(
-    file_name = basename(path),
-    participant_id = str_extract(file_name, "(?<=results_)[^_]+"),
-    mtime = file.info(path)$mtime
-  )
-
-# For each participant, keep only the most recent POSTBLOCK_ALL file
-latest_per_participant <- file_tbl %>%
-  group_by(participant_id) %>%
-  slice_max(order_by = mtime, n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-# Show which files were selected
-print(latest_per_participant %>% select(participant_id, path, mtime))
-
-# Read and bind all selected files
-dat <- latest_per_participant %>%
-  mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
-  pull(data) %>%
-  bind_rows() %>%
-  select(all_of(POSTBLOCK_COLUMNS))
-
-# Inspect combined data
-head(dat)
-tail(dat)
-str(dat)
-# View(dat)
-
-# Save master CSV
-write_csv(dat, file.path(OUTPUT_DIR, "data_virus_postblock_all.csv"))
-
-
-# 3) Collate post-block accuracy slider files -----------------------------
-
-# Find all complete post-block results files
-files <- list.files(
-  INPUT_DIR,
-  pattern = "^results_.*_b00_POSTBLOCK_SLIDERS_ALL\\.csv$",
-  full.names = TRUE
-)
-
-# Make a file table
-file_tbl <- tibble(path = files) %>%
-  mutate(
-    file_name = basename(path),
-    participant_id = str_extract(file_name, "(?<=results_)[^_]+"),
-    mtime = file.info(path)$mtime
-  )
-
-# For each participant, keep only the most recent POSTBLOCK_SLIDERS_ALL file
-latest_per_participant <- file_tbl %>%
-  group_by(participant_id) %>%
-  slice_max(order_by = mtime, n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-# Show which files were selected
-print(latest_per_participant %>% select(participant_id, path, mtime))
-
-# Read and bind all selected files
-dat <- latest_per_participant %>%
-  mutate(data = map(path, read_csv, show_col_types = FALSE)) %>%
-  pull(data) %>%
-  bind_rows() %>%
-  select(all_of(SLIDER_COLUMNS))
-
-# Inspect combined data
-head(dat)
-tail(dat)
-str(dat)
-# View(dat)
-
-# Save master CSV
-write_csv(dat, file.path(OUTPUT_DIR, "data_virus_sliders_all.csv"))
+# Select matching complete exports by run, applying identity corrections before
+# checking participant uniqueness. Unexplained duplicates require an explicit decision.
+files <- sort(list.files(INPUT_DIR, pattern = "^results_.*_b00_ALL\\.csv$", full.names = TRUE))
+if (!length(files)) stop("No complete trial exports found")
+trials <- apply_participant_identity(bind_rows(lapply(files, read_identity_csv)))
+runs <- distinct(trials, participant_id, source_participant_id, run_timestamp)
+manifest <- list()
+for (kind in c("trials", "trust", "sliders")) {
+  paths <- switch(kind, trials = files,
+    trust = sub("_ALL.csv$", "_POSTBLOCK_ALL.csv", files),
+    sliders = sub("_ALL.csv$", "_POSTBLOCK_SLIDERS_ALL.csv", files))
+  if (!all(file.exists(paths))) stop("Missing same-run ", kind, " exports")
+  parts <- lapply(paths, read_identity_csv)
+  for (i in seq_along(parts)) {
+    ids <- distinct(parts[[i]], participant_id, source_participant_id, run_timestamp)
+    expected <- distinct(read_identity_csv(files[i]), participant_id, source_participant_id, run_timestamp)
+    if (nrow(ids) != 1 || !identical(ids, expected)) stop("Mismatched run: ", paths[i])
+    manifest[[length(manifest) + 1L]] <- mutate(ids, kind = kind,
+      path = normalizePath(paths[i]), md5 = unname(tools::md5sum(paths[i])), n_rows = nrow(parts[[i]]))
+  }
+  dat <- apply_participant_identity(bind_rows(parts))
+  if (kind == "trials") {
+    write_csv(select(dat, all_of(TRIAL_COLUMNS)), file.path(OUTPUT_DIR, "data_virus_all.csv"))
+    write_csv(select(dat, all_of(TRIAL_SUMMARY_COLUMNS)), file.path(OUTPUT_DIR, "data_virus.csv"))
+  } else {
+    columns <- if (kind == "trust") POSTBLOCK_COLUMNS else SLIDER_COLUMNS
+    filename <- if (kind == "trust") "data_virus_postblock_all.csv" else "data_virus_sliders_all.csv"
+    write_csv(select(dat, all_of(columns)), file.path(OUTPUT_DIR, filename))
+  }
+  message(kind, ": ", n_distinct(dat$participant_id), " participants, ", nrow(dat), " rows")
+}
+write_csv(bind_rows(manifest), file.path(OUTPUT_DIR, "input_manifest.csv"))
+sources <- normalizePath(c(script, file.path(root, "R/participant_identity.R"), IDENTITY_CORRECTIONS_FILE))
+write_csv(tibble(path = sources, md5 = unname(tools::md5sum(sources))), file.path(OUTPUT_DIR, "source_checksums.csv"))

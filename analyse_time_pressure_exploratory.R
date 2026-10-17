@@ -204,15 +204,18 @@ exploratory_main <- function(base, root) {
     time_pressure_condition, trial_deadline_s, automation_reliability_pattern, automation_reliability_group)
   slider_paths <- sub("_ALL.csv$", "_POSTBLOCK_SLIDERS_ALL.csv", manifest$path[manifest$kind == "trials"])
   check(all(file.exists(slider_paths)), "Missing same-run sliders")
-  sliders <- bind_rows(lapply(slider_paths, read_csv, show_col_types = FALSE)) %>% filter(question_key == "perc_auto_correct")
+  sliders <- apply_participant_identity(bind_rows(lapply(slider_paths, read_identity_csv))) %>% filter(question_key == "perc_auto_correct")
   keys <- c("participant_id", "run_timestamp", "block_idx", "condition_deadline_code", "time_pressure_condition", "trial_deadline_s",
             "automation_reliability_pattern", "automation_reliability_group")
   check(!anyDuplicated(sliders[c("participant_id", "run_timestamp", "block_idx")]), "Duplicate aid-reliability ratings")
   check(all(is.finite(sliders$response_percent) & sliders$response_percent >= 0 & sliders$response_percent <= 100), "Invalid aid-reliability rating")
   check(nrow(anti_join(sliders, block_meta, by = keys)) == 0 && nrow(sliders) == nrow(block_meta), "Slider/run coverage mismatch")
-  slider_manifest <- tibble(kind = "perceived_reliability", path = normalizePath(slider_paths), md5 = unname(tools::md5sum(slider_paths)))
-  write_csv(bind_rows(manifest %>% select(kind, path, md5), slider_manifest), file.path(out, "input_manifest.csv"))
-  sources <- file.path(root, c("analyse_time_pressure.R", "analyse_time_pressure_exploratory.R"))
+  slider_manifest <- manifest %>% filter(kind == "trials") %>%
+    transmute(participant_id, source_participant_id, run_timestamp,
+      kind = "perceived_reliability", path = normalizePath(slider_paths), md5 = unname(tools::md5sum(slider_paths)))
+  write_csv(bind_rows(manifest %>% select(participant_id, source_participant_id, run_timestamp, kind, path, md5),
+    slider_manifest), file.path(out, "input_manifest.csv"))
+  sources <- file.path(root, c("analyse_time_pressure.R", "analyse_time_pressure_exploratory.R", "R/participant_identity.R", "config/participant_identity_corrections.csv"))
   write_csv(tibble(path = sources, md5 = unname(tools::md5sum(sources))), file.path(out, "source_checksums.csv"))
   hypotheses <- tibble(hypothesis = paste0("H", 1:6), question = c("Selective agreement", "Value beyond always following the aid",
     "Awareness of aid reliability", "Trust-behaviour association", "Next-trial adjustment after aid errors", "Completion versus choice accuracy"),

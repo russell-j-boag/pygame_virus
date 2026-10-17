@@ -2,9 +2,10 @@
 # Run after Rscript analyse_time_pressure_sdt.R, from the repository root.
 suppressPackageStartupMessages({library(dplyr); library(tidyr); library(readr)})
 source("analyse_time_pressure_sdt.R")
-base <- "analysis_outputs/semester2_2026_behavioural"
+args <- commandArgs(trailingOnly=TRUE);stopifnot(length(args)<=2)
+base <- if(length(args)>=1)args[1] else "analysis_outputs/semester2_2026_behavioural"
 out <- file.path(base, "sdt_alternates")
-plots <- "plots/semester2_2026_behavioural/presentation/alternates"
+plots <- if(length(args)>=2)args[2] else file.path(base,"hypothesis_components/presentation/alternates")
 read <- function(name) read_csv(file.path(out, paste0(name, ".csv")), show_col_types = FALSE)
 near <- function(x, y) stopifnot(length(x) == length(y), length(x) > 0,
   all(is.finite(x)), all(is.finite(y)), max(abs(x-y)) < 1e-9)

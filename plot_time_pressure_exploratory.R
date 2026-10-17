@@ -75,7 +75,10 @@ plot_exploratory <- function(base, plot_base, root) {
     facet_grid(metric ~ pattern, scales = "free_y", labeller = labeller(pattern = labels)) + labs(y = "Rating error (percentage points)")
 
   association_plot <- function(h, score, title, xlab) {
+    status <- read("model_diagnostics") %>% filter(model == paste0(h, "_", score, "_agreement"))
+    stopifnot(nrow(status) == 1)
     d <- read(paste0(h, "_", score, "_predictions")) %>% mutate(pressure = factor(pressure, c("HP", "LP")))
+    d$inference_available <- status$inference_available
     export(d, paste0(h, "_", score, "_curves"))
     # Trust panels share both axis spans so slopes can be compared visually.
     # Shift each window to its prediction range, preserving the original values.
@@ -104,7 +107,7 @@ plot_exploratory <- function(base, plot_base, root) {
         caption = "Exploratory associations, not causal effects. Bands: pointwise model 95% CIs; curves span observed 10th-90th percentile score deviations.\nBetween-participant rating is held at its mean, block position at midpoint, and random intercept at zero. See participant-cluster sensitivity tests.")
     labels <- labeller(advice = c(Correct = "Correct advice", Incorrect = "Incorrect advice"),
                       reliability = c("65%" = "65% aid", "95%" = "95% aid"))
-    if (trust_axes) p +
+    p <- if (trust_axes) p +
       geom_blank(data = bounds, aes(x = trust_bound, y = agreement_bound), inherit.aes = FALSE) +
       facet_wrap(vars(advice, reliability), ncol = 2, scales = "free", labeller = labels) +
       scale_x_continuous(breaks = scales::breaks_width(.5), expand = expansion(mult = .03)) +
@@ -112,6 +115,9 @@ plot_exploratory <- function(base, plot_base, root) {
       labs(subtitle = sprintf("Each panel spans %g trust points and %g agreement percentage points; axis ranges differ.", x_span, span),
         caption = "Exploratory associations, not causal effects. Equal axis spans permit slope comparisons; read each panel's axis labels.\nBands: pointwise model 95% CIs. Curves cover observed central score ranges; other predictors are held fixed. See participant-cluster sensitivity tests.")
     else p + facet_grid(advice ~ reliability, scales = "free_x", labeller = labels) + coord_cartesian(ylim = c(0,100))
+    if (!isTRUE(status$inference_available)) p <- p + labs(
+      subtitle = "Model failed numerical checks; estimates and intervals require caution. Inferential p-values are withheld.")
+    p
   }
   p3a <- association_plot("H3", "perceived", "H3  Perceived reliability and agreement", "Block rating minus participant mean (percentage points)")
   p4 <- association_plot("H4", "trust", "H4  Trust and agreement under pressure", "Block trust minus participant mean (1-5 scale points)")

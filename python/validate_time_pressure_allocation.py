@@ -13,6 +13,21 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import virus_task as task
 
 
+def identity_corrections():
+    path = Path(__file__).resolve().parents[1] / "config/participant_identity_corrections.csv"
+    with path.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    mapping, targets = {}, set()
+    for row in rows:
+        key = (int(row["source_participant_id"]), row["run_timestamp"])
+        target = int(row["participant_id"])
+        if key in mapping or target in targets or min(key[0], target) < 1 or not key[1] or not row["reason"]:
+            raise ValueError("Invalid or conflicting identity corrections")
+        mapping[key] = target
+        targets.add(target)
+    return mapping
+
+
 def validate(input_dir):
     cycle = [task.counterbalance_allocation_for_participant(i) for i in range(1, 97)]
     assert len({(a["post_calibration_block_order"], a["reliability_pattern"],
@@ -22,6 +37,7 @@ def validate(input_dir):
     assert set(Counter(a["key_flip"] for a in cycle).values()) == {48}
     assert cycle[0]["reliability_pattern"] == "HP95_LP65" and not cycle[0]["key_flip"]
     records, seen = [], set()
+    corrections = identity_corrections()
     files = sorted(Path(input_dir).glob("results_*_b00_ALL.csv"))
     if not files:
         raise ValueError("No complete trial exports found")
@@ -31,9 +47,11 @@ def validate(input_dir):
         if not rows:
             raise ValueError(f"Empty export: {path}")
         pid = int(rows[0]["participant_id"])
-        if pid in seen:
-            raise ValueError(f"Ambiguous duplicate run for participant {pid}")
-        seen.add(pid)
+        analysis_id = corrections.get((pid, rows[0]["run_timestamp"]), pid)
+        if analysis_id in seen:
+            raise ValueError(f"Ambiguous duplicate run or collision for analysis participant {analysis_id}")
+        seen.add(analysis_id)
+        # Allocation is determined by the recorded task ID, never the analysis ID.
         allocation = task.counterbalance_allocation_for_participant(pid)
         expected = task.build_blocks_for_participant(pid, task.BLOCKS)
         # BLOCKS is the task template; use its current trial counts and metadata.
@@ -73,7 +91,8 @@ def validate(input_dir):
             item_idx = int(q["question_idx"]) - 1
             if item_idx not in range(len(task.QUESTION_ITEMS)) or q["question"].strip() != task.QUESTION_ITEMS[item_idx]["question"].strip():
                 raise ValueError(f"p{pid}: trust item text differs from the task")
-        records.append(dict(participant_id=pid, run_timestamp=rows[0]["run_timestamp"],
+        records.append(dict(participant_id=analysis_id, source_participant_id=pid,
+                            run_timestamp=rows[0]["run_timestamp"],
                             pattern=allocation["reliability_pattern"],
                             order=f"O{allocation['post_calibration_block_order_idx'] + 1:02d}",
                             key_mapping="flipped" if allocation["key_flip"] else "standard",
@@ -89,4 +108,9 @@ if __name__ == "__main__":
         writer = csv.DictWriter(handle, fieldnames=list(result[0]))
         writer.writeheader()
         writer.writerows(result)
-    print(f"Validated {len(result)} participants and the full 96-cell allocation cycle.")
+    cells = Counter((r["order"], r["pattern"], r["key_mapping"]) for r in result)
+    print(f"Validated {len(result)} analysis participants against their administered allocations; "
+          f"{len(cells)} distinct observed allocation cells. The task's planned 96-cell cycle also passed.")
+    for cell, count in cells.items():
+        if count > 1:
+            print(f"Observed repeated allocation cell {cell}: {count} participants")

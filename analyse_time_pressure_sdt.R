@@ -179,13 +179,14 @@ run_time_pressure_sdt <- function(base, plot_base, root) {
   writeLines(capture.output(sessionInfo()), file.path(out, "session_info.txt"))
   writeLines(paste("Completed", format(Sys.time(), tz = "UTC")), file.path(out, "COMPLETE.txt"))
   message("Saved alternate H5 (-c) and H9 (d-prime) analyses and PNG/PDF plots to ", plots)
-  invisible(list(scores = scores, contrasts = results, catalog = catalog))
+  invisible(list(scores = scores, contrasts = results, catalog = catalog, figures = figures))
 }
 
 if (sys.nframe() == 0) {
   script <- sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1])
   root <- dirname(normalizePath(script)); args <- commandArgs(trailingOnly = TRUE)
   stopifnot(length(args) <= 2)
-  run_time_pressure_sdt(if (length(args)) args[1] else file.path(root, "analysis_outputs/semester2_2026_behavioural"),
+  source(file.path(root, "plot_time_pressure_hypotheses.R"), local = TRUE)
+  plot_time_pressure_hypotheses(if (length(args)) args[1] else file.path(root, "analysis_outputs/semester2_2026_behavioural"),
     if (length(args) >= 2) args[2] else file.path(root, "plots/semester2_2026_behavioural"), root)
 }
