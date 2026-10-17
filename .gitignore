@@ -22,3 +22,7 @@ data/*
 
 # Historical source ZIP is canonical; optional local extraction is disposable.
 source_archives/semester1_2026/extracted/
+
+# Reproducible participant audits, staging builds and preserved prior reports.
+analysis_outputs/semester1_2026_qc*/
+analysis_outputs/.semester1_2026_qc.build-*/

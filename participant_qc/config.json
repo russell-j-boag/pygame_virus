@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "calibration_tail_n": 150,
+  "calibration_target_band_pp": 10,
+  "manual_target_band_pp": 10,
+  "chance_accuracy_max": 0.55,
+  "fast_rt_seconds": 0.2,
+  "fast_fraction_min": 0.2,
+  "fast_count_min": 20,
+  "fast_accuracy_max": 0.55,
+  "bin_size": 50,
+  "interval_level": 0.95,
+  "sensitivity_thresholds_ms": [50, 100, 150, 200]
+}

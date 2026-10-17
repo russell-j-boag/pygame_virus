@@ -104,5 +104,20 @@ and native Windows checks remain to be completed on collection machines.
 Preflight and simulated tests do not establish physical screen-to-keypress
 accuracy within ±1 ms; that requires hardware measurement.
 
+## Participant exclusion audit
+
+The [Semester 1 2026 participant audit](participant_qc/README.md) adapts the
+diagnostic reports used in the time-pressure and dynamic-reliability studies to
+this study's 80% calibration target and three counterbalanced 500-trial blocks.
+It generates an audit-only HTML report, CSV/JSON summaries and PDF/PNG diagnostics
+without applying exclusions or changing existing data and analyses.
+
+```sh
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m participant_qc.run_qc
+```
+
+Open `analysis_outputs/semester1_2026_qc/index.html` after generation. See the
+linked documentation for criteria, provenance checks and independent validation.
+
 ## Author
 Russell J. Boag
