@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "label": "Semester 1 2026 pre-fix task source",
+  "designation": "User designated the base Virus source archive as Semester 1 2026.",
+  "archived_on": "2026-10-17",
+  "archive_kind": "reconstructed_from_pre_fix_git_source",
+  "original_zip_path": null,
+  "original_distributed_zip_preserved": false,
+  "provenance_note": "No existing base-Virus source ZIP was found in the repository, its Git history, or the inspected local locations. This ZIP was created from exact Git blobs at the pre-timing-fix revision; it is not claimed to be an original distributed ZIP or independently verified collection-computer installation.",
+  "archive_zip": "pygame_virus_task_source_semester1_2026.zip",
+  "archive_size_bytes": 138299,
+  "archive_sha256": "803bdf8b90ff0c05cc251dda07367107fd40c49b4f188babc3cd5abeb0fd3e85",
+  "matches_source_at_commit": "a458ece4b93ac93740297642812d3f121ef40b63",
+  "source_commit_timestamp": "2026-05-17T11:48:23+10:00",
+  "zip_timestamp_convention": "Source commit timestamp converted to UTC, rounded down to ZIP two-second resolution. These are archive metadata, not original file modification times.",
+  "timing_convention": "Historical Pygame frame-polled response timing, including response-before-onset ordering; no rt_timing_version field.",
+  "timing_fix_status": "Present in the current working tree and uncommitted at archive creation.",
+  "future_bundle_timing_version": "ptb_queue_flip_v1",
+  "preservation": "All eight member payloads match pre-fix Git blobs exactly. Preserve this archive without rebuilding or applying the timing fix.",
+  "validation": {
+    "zip_crc": "passed",
+    "all_members_match_git_blobs": true,
+    "deployment_on_collection_computers_verified": false,
+    "python_compile": "passed for both archived Python modules",
+    "archived_task_help": "passed using r-pygame; no task run or data writes",
+    "archived_r_parse": "passed for setup, helpers and launcher",
+    "current_timing_implementation_unchanged": true
+  },
+  "local_extracted_copy": "extracted/",
+  "local_extracted_copy_note": "Optional; not created. Ignored by Git. Extract the canonical ZIP for inspection without editing it.",
+  "members": [
+    {
+      "path": "0-helpers.R",
+      "size_bytes": 2032,
+      "sha256": "318deb664c836af8964668005dabc9fade631bd2380539553ddf152b3ff6cd65",
+      "git_blob_id": "af5213cddda622c539917923748798821fc81f99",
+      "zip_member_timestamp": [
+        2026,
+        5,
+        17,
+        1,
+        48,
+        22
+      ]
+    },
+    {
+      "path": "0-setup_pygame.R",
+      "size_bytes": 1059,
+      "sha256": "aa59845151c393dfca9e41bfe042381f92a3f7b7c6f10082b29035960764c028",
+      "git_blob_id": "1a2d1ac2cbf63187e21f060a3d45a2402a909c21",
+      "zip_member_timestamp": [
+        2026,
+        5,
+        17,
+        1,
+        48,
+        22
+      ]
+    },
+    {
+      "path": "1-run_virus_task.R",
+      "size_bytes": 358,
+      "sha256": "60cc752d26b6ee1bbc3678dfb09a2a987229e4cca2db322e8d49b8beb3758a72",
+      "git_blob_id": "8874f610f482c89bd0de69e06b5121f557e27251",
+      "zip_member_timestamp": [
+        2026,
+        5,
+        17,
+        1,
+        48,
+        22
+      ]
+    },
+    {
+      "path": "pygame_virus.Rproj",
+      "size_bytes": 205,
+      "sha256": "3a81ccc25a62f1a31c7d3404389935ced50831abea5e848408745ad1a1bf6126",
+      "git_blob_id": "8e3c2ebc99e2e337f7d69948b93529a437590b27",
+      "zip_member_timestamp": [
+        2026,
+        5,
+        17,
+        1,
+        48,
+        22
+      ]
+    },
+    {
+      "path": "python/instructions.py",
+      "size_bytes": 40295,
+      "sha256": "fbb6810068350d3ea5d9c08157110165a9c3e4e5509f37bc2a07de0d24a2ff9b",
+      "git_blob_id": "52c6e600c4a252696d2ac3d2359fe627c0ef5620",
+      "zip_member_timestamp": [
+        2026,
+        5,
+        17,
+        1,
+        48,
+        22
+      ]
+    },
+    {
+      "path": "python/virus_task.py",
+      "size_bytes": 100753,
+      "sha256": "0a30d18e666a26154f832e5a0379c13a289098ec3fafb04344f787d68258d883",
+      "git_blob_id": "6f959ac019d80f7b75adac7ebb34356908d03809",
+      "zip_member_timestamp": [
+        2026,
+        5,
+        17,
+        1,
+        48,
+        22
+      ]
+    },
+    {
+      "path": "python/fonts/Roboto-Bold.ttf",
+      "size_bytes": 48420,
+      "sha256": "ccf92316fdf3cf064892c0e019b456128eb88a69c4d57de749b77436e490f20e",
+      "git_blob_id": "5a156f57c14c7567698489aa2ca19bf9c9a58cce",
+      "zip_member_timestamp": [
+        2026,
+        5,
+        17,
+        1,
+        48,
+        22
+      ]
+    },
+    {
+      "path": "python/fonts/Roboto-Light.ttf",
+      "size_bytes": 162636,
+      "sha256": "94df4e4976db8ddaec27f8e8c33eef912e744fb200ca09051794b38e5a502fc0",
+      "git_blob_id": "d43e943312e0f2c653815dd791d93f94f0abd73f",
+      "zip_member_timestamp": [
+        2026,
+        5,
+        17,
+        1,
+        48,
+        22
+      ]
+    }
+  ]
+}

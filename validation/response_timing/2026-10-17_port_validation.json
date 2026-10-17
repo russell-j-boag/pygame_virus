@@ -1,0 +1,70 @@
+{
+  "timestamp_utc": "2026-10-17T05:02:13.304857+00:00",
+  "repository": "/Users/rjb779/Documents/pygame_virus",
+  "branch": "transparency",
+  "base_commit": "a458ece4b93ac93740297642812d3f121ef40b63",
+  "reference_repository": "/Users/rjb779/Documents/pygame_virus_dynamic_reliability",
+  "reference_files_sha256": {
+    "python/response_timing.py": "1121a271421c5c3fd1c9caabf74914ad71c1cc17c53f583f785fa66114edc0c6",
+    "python/check_response_timing.py": "0b7cbe044ce4521024f984b3ba8ada06554dba37fadf222770b37e92e484d7a2",
+    "tests/test_response_timing.py": "c378c9fdfd672fa46f8bd55067592e2db8aa94bfb65fd42cb377f719bbf845e2",
+    "python/virus_task.py": "7230aaca6966129c7bfcf055e16bf3effa4e34e8c17756260b63d2108e104f19"
+  },
+  "reference_snapshot_matches_port_guide": true,
+  "adaptations": [
+    "Preserved base Virus design, exports and 10-second deadline.",
+    "Recorded signed realised advice onset after visible flips.",
+    "Native queue also releases on KeyboardInterrupt during initialisation.",
+    "R collation uses only required packages and optional audit columns; selection rules retained."
+  ],
+  "target_files_sha256": {
+    "0-setup_pygame.R": "2ef68b27b78d6b7b8a9a4a0c958157edc2466401ee158a4ce93473db3158cf7f",
+    "README.md": "7d24a762ac8e9e15f389b16ce98da537bed825b85c012bae4497e1ac586fe993",
+    "collate_data.R": "6618a9d9125c87001eab7d9878582189f433613e297c1cb01626f8c23bc8b0e7",
+    "python/virus_task.py": "1058dd0d751a9a171de570bdffa9e5436d48d9f09aa0fe40b38c22899940f318",
+    "python/response_timing.py": "c6f427a131bee5562e2ae14941ebe1892e273ff457a99226a44dabc47323face",
+    "python/check_response_timing.py": "0b7cbe044ce4521024f984b3ba8ada06554dba37fadf222770b37e92e484d7a2",
+    "tests/test_response_timing.py": "37393202550f6058838a2a0c59598dd3bf88d1f8d0ba55f14ec9e375b08e9276"
+  },
+  "software_validation": {
+    "command": "/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -B -m unittest discover -s tests -v",
+    "tests_run": 39,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "actual_r_collation": "passed with temporary mixed historical/new and historical-only fixtures",
+    "half_millisecond_difference_survives_raw_and_collated_csv": true,
+    "historical_negative_zero_and_timeout_values_preserved": true,
+    "r_parse_checks": [
+      "0-setup_pygame.R",
+      "collate_data.R"
+    ],
+    "entry_point_import_and_help_checks": "passed without initialising native capture",
+    "unchanged_function_ast_checks": [
+      "copy_block_config",
+      "build_blocks_for_participant",
+      "key_mapping_for_participant",
+      "make_trial_dots",
+      "update_dots",
+      "prepare_block_state",
+      "update_staircase_state",
+      "draw_trial_frame",
+      "maybe_show_feedback",
+      "compute_performance_score",
+      "write_csv_rows",
+      "save_combined_outputs"
+    ],
+    "all_module_assignments_unchanged": true,
+    "git_diff_check": "passed"
+  },
+  "native_macos_preflight": "2026-10-17_macos_preflight.json",
+  "native_macos_headless_smoke": "2026-10-17_macos_headless_smoke.json",
+  "native_smoke_scope": "10 cases; actual 3600-dot rendering with dummy display and native queue; test deadline 60 ms; timeout-only",
+  "interactive_physical_keypress_validation": "not performed",
+  "windows_native_validation": "not performed",
+  "physical_screen_to_keypress_accuracy_validated": false,
+  "historical_data_and_analysis_outputs_changed": false,
+  "existing_untracked_guide_preserved": true,
+  "committed": false,
+  "pushed": false
+}

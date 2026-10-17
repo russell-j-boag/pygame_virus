@@ -19,3 +19,6 @@ data/*
 !output/.gitkeep
 !plots/.gitkeep
 !data/.gitkeep
+
+# Historical source ZIP is canonical; optional local extraction is disposable.
+source_archives/semester1_2026/extracted/
