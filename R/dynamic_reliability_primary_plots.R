@@ -159,18 +159,25 @@ dpr_plot_build <- function(bundle,registry,out) {
       raw <- filter(d$trajectories,outcome==o) %>% mutate(value=100*value,advice=if(o=="accuracy")"All" else as.character(advice))
       m <- means[[paste0(o,"_trend")]] %>% mutate(advice=if(o=="accuracy")"All" else as.character(advice))
       t <- choose("H5",o)
-      aa <- t %>% mutate(line=match(group,c(GROUPS,"CAL90 - CAL65")),y=126-(line-1)*7,
+      # Match the zoom across phases and cohorts, retaining every participant bin
+      # (the all-participant minima are about 42-43%). Incorrect advice keeps 0-100%.
+      bounds <- tibble(advice=unique(raw$advice)) %>%
+        mutate(bottom=ifelse(advice=="Incorrect",0,40),top=ifelse(advice=="Incorrect",135,118))
+      aa <- t %>% mutate(line=match(group,c(GROUPS,"CAL90 - CAL65")),
+        y=ifelse(advice=="Incorrect",126-(line-1)*7,114-(line-1)*4),
         label=paste(ifelse(group=="CAL90 - CAL65","Group difference",group),dpr_p_label(p_holm)))
       p <- ggplot(raw,aes(progress,value,colour=group))+
+        geom_blank(data=bounds,aes(x=0,y=bottom),inherit.aes=FALSE)+
+        geom_blank(data=bounds,aes(x=0,y=top),inherit.aes=FALSE)+
         geom_line(aes(group=participant_id),alpha=.07,linewidth=.22)+geom_point(alpha=.13,size=.8)+
         geom_ribbon(data=m,aes(x=progress,y=NULL,ymin=lower,ymax=upper,fill=group,group=group),alpha=.12,colour=NA)+
         geom_line(data=m,aes(progress,estimate,group=group),linewidth=.8)+
         geom_point(data=filter(m,progress %in% c(0,1)),aes(progress,estimate),shape=23,fill="white",size=2.3)+
         geom_text(data=aa,aes(x=.03,y=y,label=label,colour=group),inherit.aes=FALSE,hjust=0,size=3,show.legend=FALSE)+
-        facet_grid(advice~phase,labeller=labeller(phase=c(P1="Phase 1: 95%",P2="Phase 2: 70%",P3="Phase 3: 95%")))+
+        facet_grid(advice~phase,scales="free_y",labeller=labeller(phase=c(P1="Phase 1: 95%",P2="Phase 2: 70%",P3="Phase 3: 95%")))+
         scale_colour_manual(values=colours,breaks=GROUPS,name=NULL)+scale_fill_manual(values=colours,guide="none")+
         scale_x_continuous(breaks=c(0,.5,1),labels=c("Start","Middle","End"))+
-        scale_y_continuous(breaks=c(0,25,50,75,100))+coord_cartesian(ylim=c(0,135))+
+        scale_y_continuous(breaks=function(limits)if(limits[1]>0)seq(40,100,10) else seq(0,100,25))+
         labs(x=NULL,y=if(o=="accuracy")"Accuracy (%)" else "Agreement (%)")+dpr_theme()
       register(o,m,raw,t)
       finish(if(o=="accuracy")8 else 9,p,paste(caption,"Curves and bands: phase-specific model predictions; points: participant 100-trial bins.",
