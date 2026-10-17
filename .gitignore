@@ -20,6 +20,9 @@ virus_task_screenshots/
 screenshots_review.pptx
 ~$*.pptx
 
+# Optional local extraction; the Semester 2 2026 ZIP and manifest are canonical.
+source_archives/semester2_2026/extracted/
+
 !output/.gitkeep
 !plots/.gitkeep
 !data/.gitkeep

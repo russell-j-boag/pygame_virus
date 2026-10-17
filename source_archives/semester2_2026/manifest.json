@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "label": "Semester 2 2026 collection source",
+  "designation": "User designated the existing source bundle for preservation as the Semester 2 2026 source.",
+  "archived_on": "2026-10-17",
+  "original_zip_path": "pygame_virus_aid_onset_task_source.zip",
+  "archive_zip": "pygame_virus_aid_onset_task_source_semester2_2026.zip",
+  "archive_size_bytes": 156031,
+  "archive_sha256": "cfff80c8e02f858257fbeb16c8b56b88291c1530d807ed60b37d039a61c8909f",
+  "archive_last_changed_commit": "ed0d0a8772e9cbadf5b9452498d87a351746c86a",
+  "matches_source_at_commit": "3d8a3e6467a7b0965337891a15694ab771e78b1e",
+  "also_matches_source_at_commit": "ed0d0a8772e9cbadf5b9452498d87a351746c86a",
+  "timing_fix_commit": null,
+  "timing_fix_status": "The phase-specific timing fix is present in the current working tree and remains uncommitted at archive creation.",
+  "future_timing_version": "ptb_queue_phase_flip_v1",
+  "timing_convention": "Historical Pygame frame-polled response timing, starting before the response display; no rt_timing_version field.",
+  "preservation": "Original ZIP moved without recompression or content edits. All 11 source members match the pre-fix HEAD and the commit that last changed the ZIP.",
+  "local_extracted_copy": null,
+  "local_extracted_copy_note": "No separate extracted bundle existed at archive creation. The ZIP is the canonical record; optional local extraction under extracted/ is ignored by Git.",
+  "members": [
+    {
+      "path": "0-helpers.R",
+      "size_bytes": 2140,
+      "sha256": "c98cd7194df4aecc86e706a8d5f46c7575fffad83d9c95fa7b7cbf5561123afe"
+    },
+    {
+      "path": "0-setup_pygame.R",
+      "size_bytes": 1059,
+      "sha256": "aa59845151c393dfca9e41bfe042381f92a3f7b7c6f10082b29035960764c028"
+    },
+    {
+      "path": "1-run_virus_task.R",
+      "size_bytes": 360,
+      "sha256": "14efa68014404ea05d87d98297d60ba53018b1f97470e1adbd5fcf959c99b4c4"
+    },
+    {
+      "path": "pygame_virus_aid_onset.Rproj",
+      "size_bytes": 205,
+      "sha256": "3a81ccc25a62f1a31c7d3404389935ced50831abea5e848408745ad1a1bf6126"
+    },
+    {
+      "path": "python/build_screenshot_deck.py",
+      "size_bytes": 9195,
+      "sha256": "b714ffa58ff5beaecd972a3971a545dc55b57d23f68e2efec7615c3df46c8af8"
+    },
+    {
+      "path": "python/instructions.py",
+      "size_bytes": 38255,
+      "sha256": "ea71fcb3c0acc8fc4784303d124d52fabb3d32a61866245e45ae80a8f3b1fd35"
+    },
+    {
+      "path": "python/capture_virus_task_screenshots.py",
+      "size_bytes": 33860,
+      "sha256": "0682b3f0544bf3c879b6ba43ef8e57a9087c980397ab2f2377acdef163fbac32"
+    },
+    {
+      "path": "python/virus_task.py",
+      "size_bytes": 124030,
+      "sha256": "9c65120f24dbe1afdd86abc37981a2cbc240cc7793c9327c540a309ff93d8a1d"
+    },
+    {
+      "path": "python/capture_instruction_screenshots.py",
+      "size_bytes": 7594,
+      "sha256": "c309e0dada1b9bba744ab38a6c8d5a437c870c29141cf126e7c03692a1b117fe"
+    },
+    {
+      "path": "python/fonts/Roboto-Light.ttf",
+      "size_bytes": 162636,
+      "sha256": "94df4e4976db8ddaec27f8e8c33eef912e744fb200ca09051794b38e5a502fc0"
+    },
+    {
+      "path": "python/fonts/Roboto-Bold.ttf",
+      "size_bytes": 48420,
+      "sha256": "ccf92316fdf3cf064892c0e019b456128eb88a69c4d57de749b77436e490f20e"
+    }
+  ]
+}

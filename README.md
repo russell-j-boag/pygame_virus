@@ -10,8 +10,21 @@ Based on Bartlett & McCarley RDC task.
 - Analysis conducted in R
 
 ## Getting started
-- Run `0-setup_pygame.R` to install the required versions of python and pygame
+- Run `0-setup_pygame.R` to install Python, Pygame and `psychtoolbox==3.0.22.2`
 - Use `1-run_virus_task.R` to launch task and pre-task instructions using the helper functions
+
+## Semester 2 2026 source archive
+
+The existing Semester 2 2026 source bundle is preserved in
+[source_archives/semester2_2026](source_archives/semester2_2026/README.md).
+The original ZIP was moved without recompression or code changes. Its manifest
+records the ZIP and member-file SHA-256 hashes and verified source revisions.
+It retains the historical response-timing implementation.
+
+Future bundles must be built from current repository source and include the
+updated timing module, diagnostic, dependency setup, and timing instructions
+below. Use a distinct release name and source manifest; never overwrite the
+semester archive or use an extracted historical copy to build a future bundle.
 
 ## Current task design
 
@@ -29,6 +42,91 @@ The `PRACTICE` block uses an adaptive staircase targeting 75% final-decision acc
 Responses are made with the `D` and `J` keys. The standard key mapping is `D = V-BLACK` and `J = V-WHITE`; the flipped key mapping is `J = V-BLACK` and `D = V-WHITE`. On the second decision screen, participants use the same keys to confirm their first response or switch to the other response.
 
 Participant-facing automation instructions are qualitative rather than numeric. Participants are told that the aid is reasonably reliable but not perfect in automation blocks, and that automation advice errors remain possible.
+
+## Response timing
+
+New trials use `ptb_queue_phase_flip_v1`. Psychtoolbox records native D/J event
+timestamps independently of the Pygame drawing loop. Each decision starts its
+own queue window and held-key snapshot before preparing its response display.
+Decision 1 onset is the PTB `GetSecs()` reading immediately after the first
+stimulus-frame flip; Decision 2 onset is the reading immediately after the first
+blank final-decision-frame flip. Each RT is the original key-down timestamp
+minus that phase's onset, retained as floating-point seconds without rounding.
+Both decision windows remain unlimited.
+
+Pre-onset presses are ignored, and a held response key must be released before
+it becomes eligible again; the other response key remains available. Preview
+and fixation durations, all conditions, key mappings, calibration, scoring and
+change-of-mind logic retain their existing design. The queue stops between
+decisions and before feedback, and is released on completion, hard quit or an
+exception. Backend failure stops the task with an error; there is no fallback
+to Pygame event-retrieval timing. Imports and `--help` do not start native input.
+
+Raw block files, combined trial exports and both collated trial CSVs retain:
+
+| Field | Meaning |
+| --- | --- |
+| `rt_timing_version`, `rt_backend_version` | Timing convention and native package version |
+| `decision1_onset_s`, `decision2_onset_s` | Separate post-flip onset timestamps |
+| `decision1_response_timestamp_s`, `decision2_response_timestamp_s` | Original accepted key-down timestamps |
+| `decision1_n_ignored_pre_onset_keydowns`, `decision2_n_ignored_pre_onset_keydowns` | Early downs after each initial held-state snapshot |
+| `decision1_response_readout_delay_s`, `decision2_response_readout_delay_s` | Retrieval time minus source key time; excluded from RT |
+
+These timestamps share the PTB monotonic clock; they are not dates or time since
+task launch. An absent phase has missing timing fields. The retained single-decision
+helper records Decision 1 and leaves Decision 2 missing. Historical exports keep
+their original RTs, including negative/zero values, and have missing audit fields.
+The collation run-selection, matching export families, manifest and p59
+replacement rule are unchanged. This runtime change cannot retrospectively
+correct previously collected RTs.
+
+On each collection computer, use its `r-pygame` Python to run:
+
+```bash
+python python/check_response_timing.py --preflight
+python python/check_response_timing.py
+```
+
+On this Mac the interpreter is
+`/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python`.
+On macOS, grant Input Monitoring access to the launching application (for
+example Terminal or RStudio), restart it, and run the native checks outside a
+sandbox that denies keyboard APIs.
+
+The interactive diagnostic tests separate Decision 1/2 windows with intervening
+non-responsive previews and 0/8/20/50 ms readout stalls. It records source times
+and readout delays in a new JSON file under `analysis_outputs/response_timing/`,
+or at `--output PATH`. Its 15-second diagnostic timeout does not apply to the
+experiment. Timeouts do not establish successful keypress validation. Run it
+on each collection platform and verify responses in both phases and all stall
+conditions. Numerical precision and independent keyboard timestamps do not
+establish physical screen-to-key accuracy within ±1 ms; that requires hardware
+measurement.
+
+Automated regressions, using synthetic inputs and temporary R collation files:
+
+```bash
+python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+Port provenance: the four dynamic-reliability reference files matched all
+SHA-256 values in `CODEX_RT_TIMING_PORT_GUIDE.md` on 17 October 2026. The local
+adapter adds phase-specific audit exports and cleanup on interrupted startup;
+the diagnostic and integration tests are adapted for this task's two decisions.
+On 17 October 2026, all 47 Python tests passed, including the existing participant
+QC tests and actual R collation of synthetic mixed exports. Launch/import checks
+passed for the task, diagnostic, screenshot utilities and QC package. R syntax
+checks and `git diff --check` also passed.
+
+The macOS native API preflight passed; its report is
+[`tests/validation/response_timing_native_macos_20261017.json`](tests/validation/response_timing_native_macos_20261017.json).
+A headless Pygame/native-queue smoke test also completed both phases in practice,
+all three scheduled conditions and hidden simultaneous support, with queue
+release verified. It used test-only 40 ms deadlines and all ten phases timed out;
+it did not validate physical keypresses. Its report is
+[`tests/validation/response_timing_native_smoke_macos_20261017.json`](tests/validation/response_timing_native_smoke_macos_20261017.json).
+Interactive physical-keypress validation and native Windows validation remain
+outstanding. Automated Windows API-shape tests do not replace native validation.
 
 ## Counterbalancing
 

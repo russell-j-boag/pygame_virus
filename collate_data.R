@@ -175,6 +175,16 @@ select_current_cols <- function(dat, cols) {
 }
 
 
+# Optional for historical exports: select_current_cols supplies missing values,
+# without assigning the new timing version or changing any recorded RT.
+phase_timing_cols <- c(
+  "rt_timing_version", "rt_backend_version",
+  "decision1_onset_s", "decision1_response_timestamp_s",
+  "decision1_n_ignored_pre_onset_keydowns", "decision1_response_readout_delay_s",
+  "decision2_onset_s", "decision2_response_timestamp_s",
+  "decision2_n_ignored_pre_onset_keydowns", "decision2_response_readout_delay_s"
+)
+
 current_trial_all_cols <- c(
   "participant_id",
   "run_timestamp",
@@ -219,7 +229,8 @@ current_trial_all_cols <- c(
   "decision2_rt_s",
   "decision2_matches_aid",
   "changed_response",
-  "feedback"
+  "feedback",
+  phase_timing_cols
 )
 
 current_trial_summary_cols <- c(
@@ -254,7 +265,8 @@ current_trial_summary_cols <- c(
   "decision2_rt_s",
   "decision2_matches_aid",
   "changed_response",
-  "feedback"
+  "feedback",
+  phase_timing_cols
 )
 
 current_postblock_cols <- c(

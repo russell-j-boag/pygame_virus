@@ -18,6 +18,11 @@ import time
 from datetime import datetime
 from typing import Any, Dict
 
+if __package__:
+    from .response_timing import AUDIT_FIELDS, PsychtoolboxKeyboard, TimingError, phase_audit_fields
+else:
+    from response_timing import AUDIT_FIELDS, PsychtoolboxKeyboard, TimingError, phase_audit_fields
+
 # -----------------------------
 # Run start time
 # -----------------------------
@@ -2962,48 +2967,55 @@ def run_decision2_preview_phase(screen, clock, aid_condition, aid_payload, ui_pa
     return preview_display, preview_label
 
 
-def collect_key_response(screen, clock, keymap, draw_frame_fn, deadline_ms=None, update_fn=None):
-    phase_start_ticks = pygame.time.get_ticks()
-    phase_start_perf = time.perf_counter()
+def collect_key_response(screen, clock, keymap, draw_frame_fn, deadline_ms=None,
+                         update_fn=None, timing=None):
+    """Own one response phase, with onset at its first flip and native key times."""
+    if timing is None:
+        # Standalone helper calls receive the same contract and cleanup as main.
+        with PsychtoolboxKeyboard() as owned_timing:
+            return collect_key_response(screen, clock, keymap, draw_frame_fn,
+                                        deadline_ms, update_fn, owned_timing)
 
-    while True:
-        clock.tick(FPS)
-        now = pygame.time.get_ticks()
-
+    def handle_control_events():
+        # D/J responses come only from PTB. Preserve the task's hard quit and
+        # its existing convention of ignoring ordinary window-close events.
         for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
-                pass
-            if ev.type == pygame.KEYDOWN:
-                if is_hard_quit_event(ev):
-                    quit_clean()
-                if ev.key == keymap["key_black"]:
-                    return {
-                        "response": "BLACK",
-                        "rt_ms": (time.perf_counter() - phase_start_perf) * 1000.0,
-                    }
-                if ev.key == keymap["key_white"]:
-                    return {
-                        "response": "WHITE",
-                        "rt_ms": (time.perf_counter() - phase_start_perf) * 1000.0,
-                    }
+            if ev.type == pygame.KEYDOWN and is_hard_quit_event(ev):
+                quit_clean()
 
-        if deadline_ms is not None and (now - phase_start_ticks) >= deadline_ms:
-            return {"response": "TIMEOUT", "rt_ms": None}
-
+    def present(ms_left):
         if update_fn is not None:
             update_fn()
-
-        ms_left = None
-        if deadline_ms is not None:
-            ms_left = deadline_ms - (now - phase_start_ticks)
-
         draw_frame_fn(ms_left)
         pygame.display.flip()
+
+    pygame.key.set_repeat()
+    with timing.trial(keymap) as responses:
+        # Acquisition and a fresh held-state snapshot precede frame preparation.
+        handle_control_events()
+        present(deadline_ms)
+        responses.mark_onset(timing.now(), None if deadline_ms is None else deadline_ms / 1000.0)
+        # Never flush after onset: a valid key may already be in the queue.
+        while responses.response is None:
+            handle_control_events()
+            fence_s = timing.now()
+            responses.consume(timing.drain())
+            responses.expire(fence_s)
+            if responses.response is not None:
+                break
+            clock.tick(FPS)  # Animation only; native acquisition is independent.
+            ms_left = None if responses.deadline_s is None else max(
+                0.0, (responses.deadline_s - timing.now()) * 1000.0
+            )
+            present(ms_left)
+        result = responses.result()
+    # Seconds are authoritative; milliseconds remain an internal convenience.
+    return {**result, "rt_ms": None if result["rt_s"] is None else 1000.0 * result["rt_s"]}
 
 
 def collect_stimulus_response(screen, clock, dot_layer, dots, center, keymap, aid_payload,
                               ui_payload, show_aid=False, show_masked_aid=False,
-                              deadline_ms=None, initial_response=None):
+                              deadline_ms=None, initial_response=None, timing=None):
     def update_fn():
         update_dots(dots, center, DISH_RADIUS)
 
@@ -3033,10 +3045,11 @@ def collect_stimulus_response(screen, clock, dot_layer, dots, center, keymap, ai
         draw_frame_fn=draw_frame,
         deadline_ms=deadline_ms,
         update_fn=update_fn,
+        timing=timing,
     )
 
 
-def collect_aid_only_response(screen, clock, keymap, aid_payload, ui_payload, initial_response=None):
+def collect_aid_only_response(screen, clock, keymap, aid_payload, ui_payload, initial_response=None, timing=None):
     def draw_frame(ms_left):
         draw_aid_only_frame(screen, aid_payload, ui_payload, show_prompt=True, initial_response=initial_response)
 
@@ -3047,6 +3060,7 @@ def collect_aid_only_response(screen, clock, keymap, aid_payload, ui_payload, in
         draw_frame_fn=draw_frame,
         deadline_ms=None,
         update_fn=None,
+        timing=timing,
     )
 
 
@@ -3057,6 +3071,7 @@ def collect_masked_response(
     keymap,
     ui_payload,
     initial_response=None,
+    timing=None,
 ):
     def draw_frame(ms_left):
         draw_masked_placeholder_frame(
@@ -3073,10 +3088,11 @@ def collect_masked_response(
         draw_frame_fn=draw_frame,
         deadline_ms=None,
         update_fn=None,
+        timing=timing,
     )
 
 
-def collect_final_decision_response(screen, clock, keymap, ui_payload, initial_response=None):
+def collect_final_decision_response(screen, clock, keymap, ui_payload, initial_response=None, timing=None):
     def draw_frame(ms_left):
         draw_final_decision_frame(
             screen,
@@ -3092,6 +3108,7 @@ def collect_final_decision_response(screen, clock, keymap, ui_payload, initial_r
         draw_frame_fn=draw_frame,
         deadline_ms=None,
         update_fn=None,
+        timing=timing,
     )
 
 
@@ -3113,6 +3130,8 @@ def make_decision_record(result, stimulus, aid_label, display_type):
         "response": response,
         "correct": response_correct(response, stimulus),
         "rt_ms": result["rt_ms"],
+        "rt_s": result["rt_s"],
+        **{field: result[field] for field in AUDIT_FIELDS},
         "display": display_type,
         "matches_aid": response_matches_aid(response, aid_label),
     }
@@ -3177,7 +3196,7 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "decision1_display": trial_data["decision1_display"],
         "decision1_response": trial_data["decision1_response"],
         "decision1_correct": trial_data["decision1_correct"],
-        "decision1_rt_s": (trial_data["decision1_rt_ms"] / 1000.0) if trial_data["decision1_rt_ms"] is not None else None,
+        "decision1_rt_s": trial_data["decision1_rt_s"],
         "decision1_matches_aid": trial_data["decision1_matches_aid"],
         "decision2_preview_display": trial_data["decision2_preview_display"],
         "decision2_preview_label": trial_data["decision2_preview_label"],
@@ -3185,9 +3204,10 @@ def build_trial_row(participant_id, run_timestamp, keymap, block_name, block_idx
         "decision2_label": trial_data["decision2_label"],
         "decision2_response": trial_data["decision2_response"],
         "decision2_correct": trial_data["decision2_correct"],
-        "decision2_rt_s": (trial_data["decision2_rt_ms"] / 1000.0) if trial_data["decision2_rt_ms"] is not None else None,
+        "decision2_rt_s": trial_data["decision2_rt_s"],
         "decision2_matches_aid": trial_data["decision2_matches_aid"],
         "changed_response": trial_data["changed_response"],
+        **phase_audit_fields(trial_data["decision1_timing"], trial_data["decision2_timing"]),
         "feedback": feedback_msg if block_cfg["TRIAL_FEEDBACK_ON"] else None,
     }
 
@@ -3222,7 +3242,7 @@ def maybe_show_feedback(screen, clock, fonts, response, correct, feedback_on):
 
 
 def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg, block_state,
-                     trials_left, trial_number, global_trial_index, run_timestamp):
+                     trials_left, trial_number, global_trial_index, run_timestamp, timing=None):
     vblack_prop, delta_realised = pick_trial_vblack_prop(block_state, trial_number - 1)
     dots, n_vblack, n_vwhite = make_trial_dots(N_DOTS, vblack_prop, center, DISH_RADIUS)
     stimulus = "BLACK" if n_vblack > n_vwhite else "WHITE"
@@ -3252,6 +3272,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
         "response": None,
         "correct": None,
         "rt_ms": None,
+        "rt_s": None,
         "display": None,
         "matches_aid": None,
     }
@@ -3273,7 +3294,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision1_result = collect_stimulus_response(
                 screen, clock, dot_layer, dots, center, keymap,
-                aid_render_payload, ui_payload, deadline_ms=None,
+                aid_render_payload, ui_payload, deadline_ms=None, timing=timing,
             )
             decision1 = make_decision_record(
                 decision1_result, stimulus, aid_label, display_type="stimulus_only"
@@ -3286,7 +3307,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision1_result = collect_stimulus_response(
                 screen, clock, dot_layer, dots, center, keymap,
-                aid_render_payload, ui_payload, show_aid=True, deadline_ms=None,
+                aid_render_payload, ui_payload, show_aid=True, deadline_ms=None, timing=timing,
             )
             decision1 = make_decision_record(
                 decision1_result, stimulus, aid_label, display_type="aid_stimulus"
@@ -3302,7 +3323,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision1_result = collect_stimulus_response(
                 screen, clock, dot_layer, dots, center, keymap,
-                aid_render_payload, ui_payload, show_aid=False, deadline_ms=None,
+                aid_render_payload, ui_payload, show_aid=False, deadline_ms=None, timing=timing,
             )
             decision1 = make_decision_record(
                 decision1_result, stimulus, aid_label, display_type="stimulus_only"
@@ -3315,7 +3336,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             fixation_cross_screen(screen, clock, FIXATION_DURATION_MS)
             decision1_result = collect_stimulus_response(
                 screen, clock, dot_layer, dots, center, keymap,
-                aid_render_payload, ui_payload, show_aid=False, deadline_ms=None,
+                aid_render_payload, ui_payload, show_aid=False, deadline_ms=None, timing=timing,
             )
             decision1 = make_decision_record(
                 decision1_result, stimulus, aid_label, display_type="stimulus_only"
@@ -3343,6 +3364,7 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             keymap,
             ui_payload,
             initial_response=decision1["response"],
+            timing=timing,
         )
         decision2 = make_decision_record(
             decision2_result, stimulus, aid_label, display_type="blank_response"
@@ -3367,7 +3389,10 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             ui_payload,
             show_aid=False,
             deadline_ms=trial_deadline_ms_for_block(block_cfg),
+            timing=timing,
         )
+        # Retained single-decision helper path: this is Decision 1 only.
+        decision1 = make_decision_record(final, stimulus, aid_label, display_type="stimulus_only")
         response = final["response"]
         rt_ms = final["rt_ms"]
         correct = response_correct(response, stimulus)
@@ -3410,7 +3435,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             "decision1_display": decision1["display"],
             "decision1_response": decision1["response"],
             "decision1_correct": decision1["correct"],
-            "decision1_rt_ms": decision1["rt_ms"],
+            "decision1_rt_s": decision1["rt_s"],
+            "decision1_timing": decision1,
             "decision1_matches_aid": decision1["matches_aid"],
             "decision2_preview_display": decision2_preview_display,
             "decision2_preview_label": decision2_preview_label,
@@ -3418,7 +3444,8 @@ def run_single_trial(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             "decision2_label": decision2_label,
             "decision2_response": decision2["response"],
             "decision2_correct": decision2["correct"],
-            "decision2_rt_ms": decision2["rt_ms"],
+            "decision2_rt_s": decision2["rt_s"],
+            "decision2_timing": decision2,
             "decision2_matches_aid": decision2["matches_aid"],
             "changed_response": changed_response,
         },
@@ -3599,7 +3626,7 @@ def compute_performance_score(all_results):
 
 
 def run_trial_block(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
-                    run_timestamp, output_dir, global_trial_index):
+                    run_timestamp, output_dir, global_trial_index, timing=None):
     block_state = prepare_block_state(
         block_cfg,
         block_cfg["participant_id"],
@@ -3623,6 +3650,7 @@ def run_trial_block(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
             trial_number,
             global_trial_index,
             run_timestamp,
+            timing=timing,
         )
         block_results.append(row)
 
@@ -3671,6 +3699,18 @@ def run_trial_block(screen, clock, dot_layer, center, fonts, keymap, block_cfg,
 def main():
     args = parse_cli_args()
     pygame.init()
+    pygame.key.set_repeat()
+    try:
+        with PsychtoolboxKeyboard() as timing:
+            run_experiment(args, timing)
+    except TimingError as exc:
+        print(f"[TIMING ERROR] {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+    finally:
+        pygame.quit()
+
+
+def run_experiment(args, timing):
     pygame.display.set_caption("Virus Detection Task")
     screen = create_display_surface()
 
@@ -3725,6 +3765,7 @@ def main():
             run_timestamp=run_ts,
             output_dir=output_dir,
             global_trial_index=0,
+            timing=timing,
         )
         show_block_complete_screen(
             screen,
@@ -3761,6 +3802,7 @@ def main():
             run_timestamp=run_ts,
             output_dir=output_dir,
             global_trial_index=global_trial_index,
+            timing=timing,
         )
         all_results.extend(block_results)
 

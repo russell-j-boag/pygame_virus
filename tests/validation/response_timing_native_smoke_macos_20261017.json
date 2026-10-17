@@ -1,0 +1,56 @@
+{
+  "validation": "native_headless_rendering_smoke",
+  "timing_version": "ptb_queue_phase_flip_v1",
+  "physical_keypress_validated": false,
+  "physical_accuracy_validated": false,
+  "diagnostic_deadline_s": 0.04,
+  "cases": [
+    {
+      "condition": "PRACTICE",
+      "decision1_response": "TIMEOUT",
+      "decision1_rt_s": null,
+      "decision1_onset_s": 271254.8636314583,
+      "decision2_response": "TIMEOUT",
+      "decision2_rt_s": null,
+      "decision2_onset_s": 271256.9148229167
+    },
+    {
+      "condition": "MANUAL",
+      "decision1_response": "TIMEOUT",
+      "decision1_rt_s": null,
+      "decision1_onset_s": 271258.98514895834,
+      "decision2_response": "TIMEOUT",
+      "decision2_rt_s": null,
+      "decision2_onset_s": 271261.0311685
+    },
+    {
+      "condition": "AIDFIRST",
+      "decision1_response": "TIMEOUT",
+      "decision1_rt_s": null,
+      "decision1_onset_s": 271263.1000611667,
+      "decision2_response": "TIMEOUT",
+      "decision2_rt_s": null,
+      "decision2_onset_s": 271265.15786033333
+    },
+    {
+      "condition": "STIMFIRST",
+      "decision1_response": "TIMEOUT",
+      "decision1_rt_s": null,
+      "decision1_onset_s": 271267.2302852917,
+      "decision2_response": "TIMEOUT",
+      "decision2_rt_s": null,
+      "decision2_onset_s": 271269.290799375
+    },
+    {
+      "condition": "SIM",
+      "decision1_response": "TIMEOUT",
+      "decision1_rt_s": null,
+      "decision1_onset_s": 271271.35725716664,
+      "decision2_response": "TIMEOUT",
+      "decision2_rt_s": null,
+      "decision2_onset_s": 271273.42097645835
+    }
+  ],
+  "queue_released": true,
+  "backend_version": "3.0.22.2"
+}

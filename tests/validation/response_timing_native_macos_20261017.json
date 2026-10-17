@@ -1,0 +1,11 @@
+{
+  "platform": "macOS-26.7.1-arm64-arm-64bit",
+  "architecture": "arm64",
+  "python": "3.11.14 | packaged by conda-forge | (main, Oct 22 2025, 22:56:31) [Clang 19.1.7 ]",
+  "timing_version": "ptb_queue_phase_flip_v1",
+  "timestamp_utc": "2026-10-17T04:41:24.513907+00:00",
+  "validation": "native_preflight",
+  "physical_accuracy_validated": false,
+  "backend_version": "3.0.22.2",
+  "native_queue_preflight": "passed"
+}
