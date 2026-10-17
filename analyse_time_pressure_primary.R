@@ -200,16 +200,31 @@ run_time_pressure_primary <- function(base,input,root=PRIMARY_ROOT) {
   associations <- inner_join(advice,select(trust_scores,participant_id,pressure,trust,trust_between,trust_within,block_position),by=c("participant_id","pressure"))
   for(co in c("loglinear","extreme_only"))for(o in c("advice_bias","advice_dprime")) {
     d <- filter(associations,correction==co) %>% mutate(value=if(o=="advice_bias")automation_bias else dprime)
-    name <- paste("H7",o,co,sep="_"); f <- value ~ pressure * reliability + trust_within + trust_between + block_position + (1|subject)
+    # Pressure x allocation pattern spans the same four aided-condition means
+    # as pressure x reliability, without aliasing the pattern main effect.
+    name <- paste("H7",o,co,sep="_")
+    f <- value ~ pressure * pattern + (trust_within + trust_between) * pattern + block_position + (1|subject)
     environment(f) <- asNamespace("stats")
     z <- fit(name,f,d);lmfit <- lm(nobars(f),d);vc <- sandwich::vcovCL(lmfit,cluster=d$participant_id,type="HC1")
     saveRDS(lmfit,file.path(stage,"models",paste0(name,"_sensitivity.rds")))
     for(component in c("trust_within","trust_between"))for(kind in c("mixed_model","participant_cluster_sensitivity")) {
-      em <- if(kind=="mixed_model")emtrends(z$model,~1,var=component,lmer.df="satterthwaite") else
-        emtrends(lmfit,~1,var=component,vcov.=vc,df=n_distinct(d$participant_id)-1)
+      em <- if(kind=="mixed_model")emtrends(z$model,~pattern,var=component,lmer.df="satterthwaite") else
+        emtrends(lmfit,~pattern,var=component,vcov.=vc,df=n_distinct(d$participant_id)-1)
+      g <- as.data.frame(em)
+      methods <- setNames(lapply(patterns,function(p)as.numeric(g$pattern==p)),paste(component,patterns,sep="_"))
+      methods[[paste0(component,"_group_difference")]] <- as.numeric(g$pattern==patterns[1])-as.numeric(g$pattern==patterns[2])
       # add() keys distinguish slope components before combining the Holm family.
       temp_o <- paste(o,component,sep="__")
-      add(em,setNames(list(1),component),"H7",temp_o,name,co,1,if(kind=="mixed_model")z$diagnostics$inference_available else TRUE,analysis=kind)
+      add(em,methods,"H7",temp_o,name,co,1,if(kind=="mixed_model")z$diagnostics$inference_available else TRUE,analysis=kind)
+    }
+    # Retain the preceding additive specification as a separate sensitivity,
+    # matching the group-interaction update in dynamic_reliability.
+    common_name <- paste0(name,"_common")
+    common <- fit(common_name,value ~ pressure * reliability + trust_within + trust_between + block_position + (1|subject),d)
+    for(component in c("trust_within","trust_between")) {
+      em <- emtrends(common$model,~1,var=component,lmer.df="satterthwaite")
+      add(em,setNames(list(1),component),"H7",paste(o,component,sep="__"),common_name,co,1,
+        common$diagnostics$inference_available,analysis="common_slope_sensitivity")
     }
   }
   f <- agreement ~ pressure * reliability * advice + previous_aid_error * pressure * reliability + previous_response_error + progress + (1|subject)
@@ -239,7 +254,7 @@ run_time_pressure_primary <- function(base,input,root=PRIMARY_ROOT) {
       units=case_when(hypothesis=="H7"~"SDT units per trust point",outcome %in% c("accuracy","accuracy_benchmark","agreement")~"percentage points",outcome=="correct_rt"~"log ratio; plotted as ratio",
         outcome=="trust"~"trust points",outcome %in% c("perceived","signed_error")~"rating percentage points",TRUE~"SDT units"))
   # Refresh superseded probability measures on the SAME included cohort. Their
-  # historical 10- and 5-test families stay separate from the 97 primary tests.
+  # historical 10- and 5-test families stay separate from the 105 primary tests.
   hz <- fit("historical_agreement",agreement ~ pressure * reliability * advice + (1|subject),filter(dat,mode=="Automation",!timeout),TRUE)
   he <- regrid(emmean(hz$model,~pressure*reliability*advice),transform="response");hg <- as.data.frame(he)
   cg <- primary_grid();index <- match(paste(hg$pressure,hg$reliability),paste(cg$pressure,cg$reliability))
@@ -268,6 +283,7 @@ run_time_pressure_primary <- function(base,input,root=PRIMARY_ROOT) {
     cohort=dat %>% distinct(participant_id,source_participant_id,run_timestamp,pattern),cohort_selection=selection,exclusions=exclusions)
   for(nm in names(data))write_csv(data[[nm]],file.path(stage,paste0(nm,".csv")))
   write_csv(results,file.path(stage,"contrasts.csv"));write_csv(bind_rows(diagnostics),file.path(stage,"model_diagnostics.csv"))
+  write_csv(filter(results,analysis=="common_slope_sensitivity"),file.path(stage,"common_slope_contrasts.csv"))
   write_csv(bind_rows(weights),file.path(stage,"contrast_weights.csv"));saveRDS(estimates,file.path(stage,"estimates.rds"));saveRDS(audit,file.path(stage,"contrast_audit.rds"))
   saveRDS(list(data=data,results=results,estimates=estimates,diagnostics=bind_rows(diagnostics),historical=historical),file.path(stage,"bundle.rds"))
   writeLines(c("Revised primary framework agreed 2026-10-17 after inspection of previous results; not preregistered.",
@@ -282,7 +298,9 @@ run_time_pressure_primary <- function(base,input,root=PRIMARY_ROOT) {
     "H4 advice -c = acceptance; task -c = BLACK preference. H5 advice dprime = selectivity; task dprime = participant-plus-aid discrimination.",
     "SDT frames summarise the same decisions and are not independent replication. Answered-trial selection remains relevant.",
     "H2 compensation is a derived contrast; completion/choice is descriptive accounting, not causal mediation.",
-    "H7 trust is measured after each block; within- and between-person slopes are associations, adjusted for conditions and block position.",
+    "H7 revised 2026-10-18: within- and between-person trust slopes vary by allocation pattern, adjusting for pressure x pattern and block position. Pressure x pattern spans the same four condition means as pressure x reliability.",
+    "H7 has six tests per SDT outcome: four group slopes and two HP95_LP65-minus-HP65_LP95 slope differences, Holm-adjusted together. Both SDT corrections and participant-cluster sensitivities use this specification. Post-block trust associations are not causal effects.",
+    "H7 additive models remain as common_slope_sensitivity with separate two-test Holm families per SDT outcome and correction. The group-interaction update followed inspection of common-slope plots and is retrospective.",
     "H8 excludes current/previous timeouts and nonconsecutive trials, controls previous response errors and progress, and weights current advice by assigned reliability.",
     "Random-intercept models are accompanied by participant contrast/cluster sensitivities and dispersion/residual diagnostics. Numerical convergence does not establish adequacy.",
     "Singular, nonconverged or rank-deficient models have no primary p-values. Missing inference is not nonsignificance."),file.path(stage,"methods.txt"))

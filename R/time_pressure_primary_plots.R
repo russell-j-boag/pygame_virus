@@ -19,10 +19,8 @@ primary_trust_predictions <- function(model,associations,raw,component) {
     positions <- filter(associations,.data$pattern==.env$pattern) %>%
       group_by(pressure) %>% summarise(position=mean(block_position),.groups="drop")
     block <- function(pressure) {
-      reliability <- if((pattern=="HP95_LP65" && pressure=="HP") ||
-        (pattern=="HP65_LP95" && pressure=="LP"))"95%" else "65%"
       nd <- data.frame(pressure=factor(pressure,levels=levels(mf$pressure)),
-        reliability=factor(reliability,levels=levels(mf$reliability)),
+        pattern=factor(pattern,levels=levels(mf$pattern)),
         trust_within=if(component=="trust_within")grid$x*(if(pressure=="HP").5 else -.5) else 0,
         trust_between=if(component=="trust_between")grid$x-grand_trust else 0,
         block_position=positions$position[positions$pressure==pressure])
@@ -61,6 +59,7 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
     if("value" %in% names(raw))raw$display_value <- if(o=="correct_rt" && h!="H1")exp(raw$value) else raw$value
     if(nrow(t))annotations[[key]] <<- t %>% mutate(filename=stem,annotation_type=case_when(
       contrast_id=="interaction"~"difference_of_differences",grepl("^cell_|^compensation_",contrast_id)~"zero_reference",
+      grepl("^trust_.*_group_difference$",contrast_id)~"slope_difference",
       grepl("^trust_",contrast_id)~"adjusted_slope",TRUE~"bracket"))
     rawdata[[key]] <<- as_tibble(raw) %>% mutate(filename=stem,outcome=o)
     plotdata[[key]] <<- as_tibble(means) %>% mutate(filename=stem,outcome=o)
@@ -218,13 +217,16 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
     raw <- if(component=="trust_within")a %>% select(participant_id,pattern,pressure,trust,value) %>%
       pivot_wider(names_from=pressure,values_from=c(trust,value)) %>% mutate(x=trust_HP-trust_LP,y=value_HP-value_LP) else
       a %>% group_by(participant_id,pattern) %>% summarise(x=mean(trust),y=mean(value),.groups="drop")
-    t <- select_tests("H7",o,component)
-    pred <- primary_trust_predictions(association_models[[t$model]],a,raw,component) %>%
-      mutate(outcome=o,component=component,model=t$model,inference_available=t$inference_available)
-    if(!t$inference_available)pred$lower <- pred$upper <- NA_real_
+    t <- select_tests("H7",o,c(paste(component,patterns,sep="_"),paste0(component,"_group_difference")))
+    model_name <- unique(t$model);usable <- all(t$inference_available)
+    pred <- primary_trust_predictions(association_models[[model_name]],a,raw,component) %>%
+      mutate(outcome=o,component=component,model=model_name,inference_available=usable)
+    if(!usable)pred$lower <- pred$upper <- NA_real_
     association_predictions[[paste(o,component)]] <- pred
     title <- paste(if(o=="advice_bias")"Acceptance" else "Discrimination",if(component=="trust_within")"within person" else "between people",sep=": ")
-    subtitle <- if(t$inference_available)sprintf("Adjusted slope %.3f [%.3f, %.3f]; Holm %s",t$estimate,t$lower,t$upper,primary_p_text(t$p_holm)) else "Adjusted inference unavailable; see model diagnostics"
+    subtitle <- if(usable)paste(sprintf("%s: %.3f [%.3f, %.3f]; %s",
+      c("HP95/LP65","HP65/LP95","Slope difference"),t$estimate,t$lower,t$upper,primary_p_text(t$p_holm)),collapse="\n") else
+      "Adjusted inference unavailable; see model diagnostics"
     panels[[paste(o,component)]] <- ggplot(raw,aes(x,y,colour=pattern))+geom_hline(yintercept=0,linetype="dotted",colour="#BBC3C9")+
       geom_ribbon(data=pred,aes(x=x,ymin=lower,ymax=upper,fill=pattern,group=pattern),inherit.aes=FALSE,alpha=.12,colour=NA,show.legend=FALSE)+
       geom_line(data=pred,aes(x,estimate,group=pattern),linewidth=.8)+
@@ -234,7 +236,7 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
         y=if(component=="trust_within")"SDT difference (HP minus LP)" else "Mean SDT score")+primary_plot_theme()
     register(stem_for(9),"H7",paste(o,component,sep="__"),t,raw,t)
   }
-  add_figure(9,wrap_plots(panels,ncol=2,guides="collect"),"Points: participants; lines/bands: adjusted mixed-model fits and pointwise 95% CIs by allocation pattern, over its observed trust range. Left: predicted HP-LP difference; right: mean of HP/LP predictions. Block position is held at its pattern/pressure mean. Holm across within/between slopes per SDT outcome. Post-block associations are not causal effects.")
+  add_figure(9,wrap_plots(panels,ncol=2,guides="collect"),"Points: participants; lines/bands: group-specific adjusted fits and pointwise 95% CIs. Left: HP-LP difference; right: mean across HP/LP. Block position: pattern/pressure mean. Slopes are per trust point; difference = HP95/LP65 minus HP65/LP95. All p-values: Holm across four slopes and two differences per SDT outcome. Post-block associations are not causal effects.")
   write_csv(bind_rows(association_predictions),file.path(out,"data",paste0(stem_for(9),"_fits.csv")))
   # H8: raw history patterns alongside the adjusted, standardised primary contrasts.
   raw <- d$sequence_raw %>% select(participant_id,pressure,reliability,previous_aid_error,agreement) %>%
@@ -275,13 +277,13 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
   add_figure(14,pp,"Each point is one planned SDT contrast or trust slope. Diagonal = identical estimates. Correction-specific Holm tests and model diagnostics are in the data tables; missing inference is not nonsignificance.")
   write_csv(sensitivity,file.path(out,"data",paste0(stem_for(14),"_data.csv")))
   comparison <- primary %>% select(hypothesis,outcome,contrast_id,estimate,se,p_holm) %>% inner_join(
-    results %>% filter(analysis!="mixed_model",correction %in% c("none","loglinear")) %>% select(hypothesis,outcome,contrast_id,sensitivity=estimate,sensitivity_p=p_holm),
+    results %>% filter(analysis %in% c("participant_sensitivity","participant_cluster_sensitivity"),correction %in% c("none","loglinear")) %>% select(hypothesis,outcome,contrast_id,sensitivity=estimate,sensitivity_p=p_holm),
     by=c("hypothesis","outcome","contrast_id")) %>% mutate(x=estimate/se,y=sensitivity/se,
       decision=case_when(is.na(p_holm)|is.na(sensitivity_p)~"Unavailable",(p_holm<.05)==(sensitivity_p<.05)~"Same decision",TRUE~"Different decision"))
   pp <- ggplot(comparison,aes(x,y,colour=decision))+geom_abline(slope=1,intercept=0,colour="#A7B0B8")+geom_point(size=1.7)+
     facet_wrap(~hypothesis,scales="free",ncol=4)+scale_colour_manual(values=c("Same decision"="#1976A3","Different decision"="#C56924","Unavailable"="#697681"))+
     labs(x="Model estimate / model SE",y="Participant estimate / model SE",colour=NULL)+primary_plot_theme()
-  add_figure(15,pp,"All 97 primary contrasts are compared with participant sensitivities. Both coordinates use the SAME model SE only to make different outcomes readable; these are not participant t statistics. Colours compare separate within-outcome Holm decisions. RT comparisons use log ratios.")
+  add_figure(15,pp,"All 105 primary contrasts are compared with participant sensitivities. Both coordinates use the SAME model SE only to make different outcomes readable; these are not participant t statistics. Colours compare separate within-outcome Holm decisions. RT comparisons use log ratios.")
   write_csv(comparison,file.path(out,"data",paste0(stem_for(15),"_data.csv")))
   cc <- d$performance %>% select(participant_id,pressure,mode,completion,answered_accuracy,accuracy) %>% pivot_longer(c(completion,answered_accuracy,accuracy),names_to="measure",values_to="value")
   pp <- ggplot(cc,aes(pressure,100*value,colour=mode))+geom_boxplot(outlier.shape=NA,width=.5)+
@@ -298,13 +300,13 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
     m <- hist$agreement_means %>% filter(startsWith(contrast_id,paste0(a,"__"))) %>% mutate(contrast_id=sub("^[^_]+__","",contrast_id))
     panels[[a]] <- cell_panel(raw,m,t,paste(a,"advice"),"Agreement (%)")
   }
-  add_figure(17,wrap_plots(panels,nrow=1),"Historical probability measure, refreshed on the current cohort. Raw participant points; model means and pointwise 95% CIs. Holm across the ten conditional-agreement comparisons. These tests are separate from the 97 primary comparisons; primary SDT bias and discrimination are H4/H5.")
+  add_figure(17,wrap_plots(panels,nrow=1),"Historical probability measure, refreshed on the current cohort. Raw participant points; model means and pointwise 95% CIs. Holm across the ten conditional-agreement comparisons. These tests are separate from the 105 primary comparisons; primary SDT bias and discrimination are H4/H5.")
   write_csv(hist$agreement_means,file.path(out,"data",paste0(stem_for(17),"_data.csv")))
   write_csv(hist$participants,file.path(out,"data",paste0(stem_for(17),"_participants.csv")))
   write_csv(hist$agreement_tests,file.path(out,"data",paste0(stem_for(17),"_annotations.csv")))
   pp <- cell_panel(mutate(hist$selectivity,value=100*selectivity),hist$selectivity_means,hist$selectivity_tests,
     "Agreement on correct minus incorrect advice","Selectivity (percentage points)")
-  add_figure(18,pp,"Historical probability measure, refreshed on the current cohort. Raw participant points; model estimates and pointwise 95% CIs. Holm across five selectivity comparisons. These tests are separate from the 97 primary comparisons; the primary discrimination measures are in H5.")
+  add_figure(18,pp,"Historical probability measure, refreshed on the current cohort. Raw participant points; model estimates and pointwise 95% CIs. Holm across five selectivity comparisons. These tests are separate from the 105 primary comparisons; the primary discrimination measures are in H5.")
   write_csv(hist$selectivity_means,file.path(out,"data",paste0(stem_for(18),"_data.csv")))
   write_csv(hist$selectivity,file.path(out,"data",paste0(stem_for(18),"_participants.csv")))
   write_csv(hist$selectivity_tests,file.path(out,"data",paste0(stem_for(18),"_annotations.csv")))

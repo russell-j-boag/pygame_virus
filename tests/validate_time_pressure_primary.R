@@ -105,15 +105,62 @@ for(key in names(audit)) {
 }
 families <- r %>% group_by(hypothesis,outcome,correction,analysis) %>% group_split()
 for(f in families)check(close(f$p_holm,p.adjust(f$p_raw,"holm",n=nrow(f))) && all(f$family_size==nrow(f)),"Holm family mismatch")
+# Independently recover group slopes as finite changes in an explicit reference
+# grid, rather than reusing the production emtrends() contrasts. Check both SDT
+# corrections, the clustered sensitivity, and the retained additive models.
+h7 <- filter(r,hypothesis=="H7")
+check(nrow(h7)==56 && all(h7$family_size[h7$analysis=="common_slope_sensitivity"]==2) &&
+  all(h7$family_size[h7$analysis!="common_slope_sensitivity"]==6),"H7 family coverage")
+common <- read_csv(file.path(pdir,"common_slope_contrasts.csv"),col_types=spec(r),show_col_types=FALSE)
+check(isTRUE(all.equal(common,filter(r,analysis=="common_slope_sensitivity"),check.attributes=FALSE)),"Common-slope export mismatch")
+for(co in c("loglinear","extreme_only"))for(o in c("advice_bias","advice_dprime"))for(kind in c("mixed_model","participant_cluster_sensitivity","common_slope_sensitivity")) {
+  rr <- filter(h7,outcome==o,correction==co,analysis==kind)
+  path <- file.path(pdir,"models",paste0(unique(rr$model),if(kind=="participant_cluster_sensitivity")"_sensitivity" else "",".rds"))
+  model <- readRDS(path)
+  is_common <- kind=="common_slope_sensitivity"
+  at <- list(trust_within=c(0,1),trust_between=c(0,1),block_position=0)
+  spec <- if(is_common)~pressure*reliability*trust_within*trust_between else ~pressure*pattern*trust_within*trust_between
+  em <- if(kind=="participant_cluster_sensitivity")emmeans(model,spec,at=at,
+    vcov.=sandwich::vcovCL(model,cluster=b$data$associations$participant_id[b$data$associations$correction==co],type="HC1"),df=n_participants-1) else
+    emmeans(model,spec,at=at,lmer.df="satterthwaite")
+  gd <- as.data.frame(em)
+  vectors <- list()
+  for(component in c("trust_within","trust_between")) {
+    other <- setdiff(c("trust_within","trust_between"),component)
+    if(is_common) {
+      pick <- gd$pressure=="HP" & gd$reliability=="95%" & gd[[other]]==0
+      vectors[[component]] <- em@linfct[pick & gd[[component]]==1,]-em@linfct[pick & gd[[component]]==0,]
+    } else {
+      for(pattern in c("HP95_LP65","HP65_LP95")) {
+        slope <- function(pressure) {
+          pick <- gd$pressure==pressure & gd$pattern==pattern & gd[[other]]==0
+          em@linfct[pick & gd[[component]]==1,]-em@linfct[pick & gd[[component]]==0,]
+        }
+        check(close(slope("HP"),slope("LP")),"H7 slope must be specific to allocation group, not pressure")
+        vectors[[paste(component,pattern,sep="_")]] <- slope("HP")
+      }
+      vectors[[paste0(component,"_group_difference")]] <- vectors[[paste0(component,"_HP95_LP65")]]-vectors[[paste0(component,"_HP65_LP95")]]
+    }
+  }
+  check(setequal(names(vectors),rr$contrast_id),"H7 slope identities")
+  rr <- rr[match(names(vectors),rr$contrast_id),]
+  L <- do.call(rbind,vectors);estimate <- drop(L %*% em@bhat);se <- sqrt(diag(L %*% em@V %*% t(L)))
+  # Cluster sensitivity uses participant-count df, overriding lm residual df.
+  df <- if(kind=="participant_cluster_sensitivity")rep(n_participants-1,nrow(L)) else
+    apply(L,1,function(w)em@dffun(w,em@dfargs))
+  check(close(rr$estimate,estimate) && close(rr$se,se) && close(rr$df,df),
+    paste("H7 group slope/difference estimate, covariance or df:",co,o,kind))
+  if(!is_common)check(qr(L[c(1,2,4,5),])$rank==4,"H7 does not allow four independently varying group slopes")
+}
 pri <- filter(r,analysis=="mixed_model",correction %in% c("none","loglinear"))
-check(nrow(pri)==97,"Expected 97 primary tests")
-check(identical(as.integer(table(pri$hypothesis)),c(3L,31L,18L,10L,10L,14L,4L,7L)),"Hypothesis test counts")
+check(nrow(pri)==105,"Expected 105 primary tests")
+check(identical(as.integer(table(pri$hypothesis)),c(3L,31L,18L,10L,10L,14L,12L,7L)),"Hypothesis test counts")
 check(!anyDuplicated(pri[c("hypothesis","outcome","contrast_id")]),"Duplicate primary tests")
 contract <- registry %>% filter(role=="Core",!is.na(contrast_ids),contrast_ids!="") %>%
   separate_rows(contrast_ids,sep="\\|") %>% rename(contrast_id=contrast_ids) %>% select(filename,hypothesis,outcome,model,contrast_id)
-check(nrow(contract)==97,"Registry must require all 97 tests exactly once")
+check(nrow(contract)==105,"Registry must require all 105 tests exactly once")
 ann <- read(file.path(plots,"data/annotation_coverage.csv"))
-check(nrow(ann)==97 && !anyDuplicated(ann[c("filename","outcome","contrast_id")]),"Missing/duplicated annotations")
+check(nrow(ann)==105 && !anyDuplicated(ann[c("filename","outcome","contrast_id")]),"Missing/duplicated annotations")
 join_keys <- c("filename","hypothesis","outcome","model","contrast_id")
 check(nrow(anti_join(contract,ann,by=join_keys))==0 && nrow(anti_join(ann,contract,by=join_keys))==0,"Required annotation contract mismatch")
 aj <- inner_join(ann,pri,by=c("hypothesis","outcome","model","contrast_id"),suffix=c("","_source"))
@@ -152,6 +199,11 @@ for(stem in unique(contract$filename)) {
   }
 }
 for(h in c("H4","H5"))check(all(table(filter(ann,hypothesis==h)$outcome)==5),paste(h,"must show five comparisons in EACH panel"))
+check(sum(ann$hypothesis=="H7" & ann$annotation_type=="adjusted_slope")==8 &&
+  sum(ann$hypothesis=="H7" & ann$annotation_type=="slope_difference")==4,"H7 group slopes and differences must all be annotated")
+comparison <- read(file.path(plots,"data/model_participant_comparison.csv"))
+check(nrow(comparison)==105 && !anyDuplicated(comparison[c("hypothesis","outcome","contrast_id")]),
+  "Participant sensitivity comparison must cover exactly the primary contrasts")
 # Reconstruct the scatter fits from an independent condition reference grid.
 # In particular, a within-person band needs covariance of HP minus LP, rather
 # than adding two marginal interval widths or treating raw rows as independent.
@@ -166,7 +218,8 @@ for(o in c("advice_bias","advice_dprime")) {
   association_paths <- c(association_paths,normalizePath(model_path))
   model <- readRDS(model_path)
   check(setequal(as.integer(as.character(model.frame(model)$subject)),raw$participant_id),"H7 fit uses another cohort")
-  em <- emmeans(model,~pressure*reliability,at=list(trust_within=0,trust_between=0,block_position=0),lmer.df="satterthwaite")
+  em <- emmeans(model,~pressure*pattern*trust_within*trust_between,
+    at=list(trust_within=c(0,1),trust_between=c(0,1),block_position=0),lmer.df="satterthwaite")
   gd <- as.data.frame(em);beta <- lme4::fixef(model)
   a <- filter(b$data$associations,correction=="loglinear") %>%
     mutate(value=if(o=="advice_bias")automation_bias else dprime)
@@ -188,11 +241,14 @@ for(o in c("advice_bias","advice_dprime")) {
       pos_lp <- mean(a$block_position[a$pattern==pattern & a$pressure=="LP"])
       check(close(pred$block_position_HP,rep(pos_hp,60)) && close(pred$block_position_LP,rep(pos_lp,60)) &&
         close(pred$grand_mean_trust,rep(mean(a$trust),60)),"H7 reference covariates")
-      hp <- em@linfct[gd$pressure=="HP" & gd$reliability==if(pattern=="HP95_LP65")"95%" else "65%",]
-      lp <- em@linfct[gd$pressure=="LP" & gd$reliability==if(pattern=="HP95_LP65")"65%" else "95%",]
+      baseline <- gd$pattern==pattern & gd$trust_within==0 & gd$trust_between==0
+      hp <- em@linfct[gd$pressure=="HP" & baseline,]
+      lp <- em@linfct[gd$pressure=="LP" & baseline,]
+      other <- setdiff(c("trust_within","trust_between"),component)
+      slope_vector <- em@linfct[gd$pressure=="HP" & gd$pattern==pattern & gd[[component]]==1 & gd[[other]]==0,]-hp
       L <- matrix(if(component=="trust_within")hp-lp else (hp+lp)/2,nrow=60,ncol=length(beta),byrow=TRUE,
         dimnames=list(NULL,names(beta)))
-      L[,component] <- if(component=="trust_within")pred$x else pred$x-mean(a$trust)
+      L <- L + outer(if(component=="trust_within")pred$x else pred$x-mean(a$trust),slope_vector)
       L[,"block_position"] <- if(component=="trust_within")pos_hp-pos_lp else (pos_hp+pos_lp)/2
       estimate <- drop(L %*% beta);se <- sqrt(diag(L %*% em@V %*% t(L)))
       df <- apply(L,1,function(w)em@dffun(w,em@dfargs))
@@ -200,13 +256,13 @@ for(o in c("advice_bias","advice_dprime")) {
       if(all(pred$inference_available))check(close(pred$lower,estimate-qt(.975,df)*se) &&
         close(pred$upper,estimate+qt(.975,df)*se),"H7 pointwise confidence ribbons") else
         check(all(is.na(pred$lower) & is.na(pred$upper)),"Unavailable H7 inference has ribbons")
-      slope <- filter(pri,hypothesis=="H7",outcome==.env$o,contrast_id==.env$component)$estimate
+      slope <- filter(pri,hypothesis=="H7",outcome==.env$o,contrast_id==paste(component,pattern,sep="_"))$estimate
       check(close((tail(pred$estimate,1)-head(pred$estimate,1))/(tail(pred$x,1)-head(pred$x,1)),slope),"H7 line slope sign differs from primary test")
     }
   }
 }
 diag <- b$diagnostics
-check(all(is.na(r$p_raw[r$analysis=="mixed_model" & r$model %in% diag$model[!diag$inference_available]])),"Unusable model leaked p-values")
+check(all(is.na(r$p_raw[r$analysis %in% c("mixed_model","common_slope_sensitivity") & r$model %in% diag$model[!diag$inference_available]])),"Unusable model leaked p-values")
 ha <- readRDS(file.path(pdir,"historical_audit.rds"))
 for(pair in c("agreement","selectivity")) {
   ht <- b$historical[[paste0(pair,"_tests")]];w <- do.call(rbind,ha[[pair]])
@@ -226,6 +282,7 @@ for(nm in c("core_hypotheses","all_hypotheses")) {
   check(pages==if(nm=="core_hypotheses")10 else 18,"Combined PDF page count")
 }
 html <- paste(readLines(file.path(plots,"index.html")),collapse="\n")
+check(grepl("Common-slope sensitivity comparison",html,fixed=TRUE),"H7 report omits the common-slope comparison")
 links <- regmatches(html,gregexpr('(?:href|src)="[^"]+"',html,perl=TRUE))[[1]]
 links <- sub('^[^=]+="','',sub('"$','',links)); links <- links[!grepl("^(#|https?:)",links)]
 check(all(file.exists(file.path(plots,links))),"Broken report link")
@@ -241,6 +298,7 @@ if(file.exists(artifact_manifest)) {
 }
 cat("PASS:",n_participants,"participants; independent source scores, benchmark and history eligibility.\n")
 cat("PASS:",total,"mixed-model/cluster contrasts independently reconstructed; all Holm families.\n")
-cat("PASS: all 97 required primary annotations, including five in each H4/H5 panel.\n")
+cat("PASS: H7 group slopes and direct differences for both corrections and clustered sensitivity; separate common-slope families.\n")
+cat("PASS: all 105 required primary annotations, including five in each H4/H5 panel.\n")
 cat("PASS: four H7 scatter panels; fitted slopes and 480 pointwise confidence predictions independently reconstructed.\n")
 cat("PASS: 18 standalone PDF/PNG pairs; 10/18-page combined PDFs; report links.\n")

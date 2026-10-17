@@ -456,10 +456,10 @@ forward to this canonical builder; the primary analysis must be current first.
 | H4 | Response bias: advice acceptance and BLACK category preference | Five each |
 | H5 | Discrimination: advice selectivity and final stimulus discrimination | Five each |
 | H6 | Reported trust, perceived reliability and signed calibration error | Five, five and four respectively |
-| H7 | Within-person and between-person trust associations with advice bias/dprime | Two slopes per SDT outcome |
+| H7 | Within-person and between-person trust associations with advice bias/dprime | Four group slopes and two slope differences per SDT outcome |
 | H8 | Adjusted next-trial agreement after aid errors | Seven |
 
-This gives **97 primary comparisons** across ten figures: H1, H2a-H2c, H3-H8.
+This gives **105 primary comparisons** across ten figures: H1, H2a-H2c, H3-H8.
 The recurring five comparisons are 95%-65% at HP and LP, HP-LP at 65% and 95%,
 and their interaction. H2/H3 additionally test four condition effects against
 zero. H2 compensation compares aided HP with manual LP separately by allocation
@@ -486,10 +486,23 @@ Simple aided-condition comparisons at fixed pressure/reliability compare
 allocation groups; participant sensitivities retain the correct within-person
 covariance and between-group structure.
 
-H7 separates person-mean trust from block deviations and adjusts for
-`pressure * reliability` and block position. Both common slopes are primary;
-there are no extra pressure-specific slope tests. Trust is measured after each
-block, so these are associations, not causal effects. H7 scatter lines and shaded
+H7 separates person-mean trust from block deviations. Both slopes vary by
+allocation group (`HP95_LP65` versus `HP65_LP95`) in
+`SDT ~ pressure * pattern + (trust_within + trust_between) * pattern + block_position + (1|subject)`.
+Here `pressure * pattern` spans the same four aided-condition means as
+`pressure * reliability`. For each SDT outcome, the six-test Holm family includes
+two within-person group slopes, two between-person group slopes, and the direct
+group difference for each component (HP95/LP65 minus HP65/LP95). A significant
+slope in one group alone does not establish a difference between groups.
+The preceding common-slope models remain as `common_slope_sensitivity`, with
+separate two-test Holm families per SDT outcome and correction, saved fits and
+`common_slope_contrasts.csv`. The report includes their comparison table. This
+18 October 2026 revision followed inspection of common-slope plots and is
+retrospective, consistent with the analogous dynamic-reliability update. This
+study retains its repeated-block within/between-person model and participant
+random intercept, since trust is recorded after both aided blocks.
+Trust is measured after each block, so these are associations, not causal effects.
+H7 scatter lines and shaded
 pointwise 95% confidence bands come from these saved mixed models, with separate
 lines by allocation pattern over its observed trust range. Within-person panels
 predict the HP-minus-LP difference with trust deviations set to plus/minus half
@@ -527,7 +540,7 @@ Nonsignificant compensation/benchmark differences do not establish equivalence.
 
 **Validation and audit.** The validator independently reconstructs source counts,
 SDT scores, performance, benchmark differences, history eligibility, model contrast
-arithmetic, CIs and Holm adjustments. It requires all 97 registry annotations,
+arithmetic, CIs and Holm adjustments. It requires all 105 registry annotations,
 checks each against its model and plotted figure, verifies report links and PDF
 page counts, and checks input hashes. `tests/validate_time_pressure_hypotheses.R`
 is a compatibility entrypoint for this validator. The older component validators

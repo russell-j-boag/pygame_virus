@@ -69,7 +69,8 @@ plot_time_pressure_hypotheses <- function(base,plot_base,root,input=NULL,publish
       nrow(bundle$data$cohort_selection),paste(sprintf('%03d',bundle$data$exclusions$participant_id),collapse=', '),nrow(bundle$data$cohort)),
     '<p>Recorded ID 083 was reused for two runs. Run 20261015_125827 retains analysis ID 083; run 20261015_130522 is analysis ID 084. Both remain included as separate participants and retain the allocation actually administered under recorded ID 083. This identity correction is not an exclusion.</p>',
     '<p>Open diamonds show mixed-model estimates and pointwise 95% confidence intervals; faint points show raw participants. All tests are two-sided. Holm correction is applied separately within each hypothesis and outcome, including all H2 subfigures together. Stars: *** p&lt;.001, ** p&lt;.01, * p&lt;.05; ns: p&ge;.05. An unavailable test is not an ns result. The tables include exact raw and adjusted p-values, contrast weights, diagnostics and independently labelled sensitivity results.</p>',
-    '<p>H7 scatter plots show fitted lines and shaded pointwise 95% confidence bands from the same adjusted mixed models as the reported slopes. Each allocation pattern is shown over its observed trust range. Within-person panels predict HP minus LP; between-person panels average HP and LP. Block position is held at its observed mean within each pattern and pressure. Bands describe uncertainty in the population mean or mean change, rather than individual prediction intervals.</p>',
+    '<p>H7 allows both within-person and between-person trust slopes to vary by allocation group. For each SDT outcome, four group slopes and two direct slope differences share a six-test Holm family. Differences are HP95/LP65 minus HP65/LP95. A significant slope in one group alone does not establish a difference between groups. This 18 October 2026 update followed inspection of the common-slope plots and is retrospective. The preceding additive models remain as common-slope sensitivities with separate two-test Holm families per outcome and correction.</p>',
+    '<p>H7 scatter plots show fitted lines and shaded pointwise 95% confidence bands from the same adjusted mixed models as the reported group slopes. Each allocation pattern is shown over its observed trust range. Within-person panels predict HP minus LP; between-person panels average HP and LP. Block position is held at its observed mean within each pattern and pressure. Bands describe uncertainty in the population mean or mean change, rather than individual prediction intervals.</p>',
     '<p>All-trial accuracy includes timeouts. SDT describes answered trials: advice -c measures acceptance and advice d-prime measures selectivity; task -c measures BLACK preference and task d-prime measures final stimulus discrimination. These summarise the same decisions, not independent replications. Confidence-interval overlap is not a formal comparison; a nonsignificant gap is not evidence of equivalence.</p></div>',
     paste0('<nav>',paste0('<a href="#',unique(na.omit(catalog$hypothesis)),'">',unique(na.omit(catalog$hypothesis)),'</a>',collapse=' &nbsp; | &nbsp; '),' &nbsp; | &nbsp; <a href="#supporting">Supporting and historical figures</a></nav>'))
   if(nrow(bad))html <- c(html,paste0('<p class="warn">Primary inference is unavailable for ',esc(paste(bad$model,collapse=", ")),'. See <a href="data/primary/model_diagnostics.csv">model diagnostics</a>; sensitivities are separate analyses.</p>'))
@@ -95,6 +96,16 @@ plot_time_pressure_hypotheses <- function(base,plot_base,root,input=NULL,publish
         html <- c(html,paste0('<tr><td>',esc(q$outcome),'</td><td>',esc(q$contrast_id),'</td><td>',value,'</td><td>',primary_p_text(q$p_holm),'</td><td>',q$family_size,'</td></tr>'))
       }
       html <- c(html,'</table></details>')
+      if(r$hypothesis=="H7") {
+        common <- filter(bundle$results,hypothesis=="H7",analysis=="common_slope_sensitivity",correction=="loglinear")
+        html <- c(html,'<details><summary>Common-slope sensitivity comparison</summary><p>These preceding additive-model slopes use separate two-test Holm families per SDT outcome. They do not replace the group-specific primary tests. <a href="data/primary/common_slope_contrasts.csv">All common-slope results and SDT corrections</a>.</p><table><tr><th>Outcome</th><th>Component</th><th>Common slope [95% CI]</th><th>Holm p</th></tr>')
+        for(j in seq_len(nrow(common))) {
+          q <- common[j,]
+          html <- c(html,paste0('<tr><td>',esc(q$outcome),'</td><td>',esc(q$contrast_id),'</td><td>',
+            sprintf('%.3f [%.3f, %.3f]',q$estimate,q$lower,q$upper),'</td><td>',primary_p_text(q$p_holm),'</td></tr>'))
+        }
+        html <- c(html,'</table></details>')
+      }
     }
     html <- c(html,'</article>')
   }
