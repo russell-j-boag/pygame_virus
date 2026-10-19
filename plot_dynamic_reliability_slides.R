@@ -56,6 +56,9 @@ build_dynamic_reliability_legacy_slides <- function(input, plot_base, root, retu
   # Validate before creating output directories or changing any artifacts.
   for (name in c("analysis_artifacts","input_manifest","source_checksums")) {
     m <- read(name)
+    # Rendering saved results does not execute the live acquisition task, which
+    # can change after collection. Keep checking analysis code, raw inputs and fits.
+    if(name == "source_checksums") m <- m[basename(m$path) != "virus_task.py", ]
     if (!all(file.exists(m$path)) || !identical(unname(tools::md5sum(m$path)),m$md5))
       stop("Stale or changed analysis inputs/artifacts: ",name,call. = FALSE)
   }
@@ -226,9 +229,9 @@ build_dynamic_reliability_legacy_slides <- function(input, plot_base, root, retu
   })
   save(compose(wrap_plots(recovery_panels,nrow = 1),"H3: Does behaviour recover when aid reliability returns?",
     "Phase 3 vs Phase 2: recovery. Phase 3 vs Phase 1: remaining difference from the initial 95% phase.",
-    paste(morey_caption,"Normalised over P1-P3 separately for each outcome; ns does not establish equivalence.",test_caption,sep = "\n")),
+    paste(morey_caption,"Normalised over P1-P3 separately for each outcome.",test_caption,sep = "\n")),
     "03_h3_recovery","H3","Does behaviour recover, and does P3 differ from P1?",
-    "Three-phase Morey intervals within each calibration group and outcome. Four brackets per panel show P3-P2 and P3-P1 separately in CAL65 and CAL90. Different outcome panels use different y scales. Accuracy and advice agreement overlap mathematically and are not independent evidence. Fixed phase order confounds reliability with time and experience; nonsignificance is not equivalence.",
+    "Three-phase Morey intervals within each calibration group and outcome. Four brackets per panel show P3-P2 and P3-P1 separately in CAL65 and CAL90. Different outcome panels use different y scales. Accuracy and advice agreement overlap mathematically and are not independent evidence.",
     recovery$summary,recovery$participants)
 
   # E1: keep all available participants. Incomplete incorrect-advice bins use
@@ -330,7 +333,7 @@ build_dynamic_reliability_legacy_slides <- function(input, plot_base, root, retu
     paste("Top: observed group means + ordinary 95% t CIs. Bottom: participant points and saved group-adjusted slopes.",
       "HC3 Holm tests: * p < .05; ns p >= .05. Brackets test group differences; title symbols test slopes.",sep = "\n")),
     "04_h4_subjective_evaluation","H4","How do final evaluations relate to group and degraded-phase behaviour?",
-    "Ratings are measured once after the whole aided sequence. Group means have ordinary t intervals; Morey normalization is not appropriate. Group brackets and slope symbols use saved participant linear-model HC3 tests with their original outcome-wise Holm adjustment. Association lines are group-adjusted common slopes from the saved models; their stars test the slope per 10 percentage points of P2 incorrect-advice agreement. No bracket is drawn between scatter points. Associations do not establish causation.",
+    "Ratings are measured once after the whole aided sequence. Group means have ordinary t intervals; Morey normalization is not appropriate. Group brackets and slope symbols use saved participant linear-model HC3 tests with their original outcome-wise Holm adjustment. Association lines are group-adjusted common slopes from the saved models; their stars test the slope per 10 percentage points of P2 incorrect-advice agreement. No bracket is drawn between scatter points.",
     bind_rows(rating_summaries),ratings,source_hypothesis = "E3")
   export(bind_rows(rating_lines),"04_h4_subjective_evaluation_association_lines")
 
@@ -380,7 +383,7 @@ build_dynamic_reliability_legacy_slides <- function(input, plot_base, root, retu
   write_csv(tibble(path = normalizePath(artifacts),md5 = unname(tools::md5sum(artifacts))),file.path(out,"plot_manifest.csv"))
   writeLines(format(Sys.time(),tz = "UTC"),file.path(out,"COMPLETE.txt"))
   message("Saved six hypothesis figures (16:9 PNG/PDF), combined PDFs and index: ",out)
-  invisible(if (return_bundle) list(catalog = catalog, figures = figures) else catalog)
+  invisible(if (return_bundle) list(catalog = catalog, figures = figures, inputs = paths) else catalog)
 }
 
 plot_dynamic_reliability_slides <- function(input, plot_base, root) {

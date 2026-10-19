@@ -40,6 +40,7 @@ plot_dynamic_reliability_hypotheses <- function(base,plot_base,root,input=NULL,q
   root <- normalizePath(root);base <- normalizePath(base)
   source(file.path(root,"analyse_dynamic_reliability_primary.R"),local=TRUE)
   source(file.path(root,"R/dynamic_reliability_primary_plots.R"),local=TRUE)
+  source(file.path(root,"plot_dynamic_reliability_slides.R"),local=TRUE)
   input <- normalizePath(if(is.null(input))file.path(root,"data/data_virus_all.csv") else input)
   qc <- normalizePath(if(is.null(qc))file.path(root,"analysis_outputs/semester2_2026_qc") else qc)
   provenance <- dpr_verify_analysis(base)
@@ -53,26 +54,45 @@ plot_dynamic_reliability_hypotheses <- function(base,plot_base,root,input=NULL,q
   stage <- tempfile(".presentation_build_",tmpdir=plot_base);dir.create(file.path(stage,"data"),recursive=TRUE)
   message("Staged H1-H7 report: ",stage)
   source_paths <- c(provenance$path,file.path(primary,c("input_checksums.csv","artifact_manifest.csv","bundle.rds","contrast_audit.rds")),
-    file.path(root,c("plot_dynamic_reliability_hypotheses.R","R/dynamic_reliability_primary_plots.R","tests/validate_dynamic_reliability_primary.R")))
+    file.path(root,c("plot_dynamic_reliability_hypotheses.R","plot_dynamic_reliability_slides.R","R/dynamic_reliability_primary_plots.R","tests/validate_dynamic_reliability_primary.R")))
   start_hashes <- task_hashes(unique(source_paths))
   built <- dpr_plot_build(bundle,registry,stage)
   for(stem in names(built$figures))for(ext in c("pdf","png"))
     ggsave(file.path(stage,paste0(stem,".",ext)),built$figures[[stem]],width=12,height=6.75,dpi=300,bg="white",device=if(ext=="pdf")cairo_pdf else "png")
-  # Historical pages are copied byte-for-byte, preserving their former inference.
+  # Redraw historical pages from saved results, updating display text only.
   old_stems <- c("19_historical_incorrect_agreement_drop","20_historical_accuracy_and_agreement_recovery","21_historical_trust_and_incorrect_agreement")
   histories <- filter(catalog,role=="Historical")
   historical_manifest <- list()
+  legacy_stems <- c("01_h1_relative_competence","03_h3_recovery","04_h4_subjective_evaluation")
+  legacy <- list()
+  scratch <- tempfile("historical_figures_");dir.create(scratch)
+  on.exit(unlink(scratch,recursive=TRUE),add=TRUE)
+  for(sample in c("primary","all_participants")) {
+    legacy_input <- if(sample=="primary")file.path(base,"hypothesis_components/primary/analysis") else base
+    legacy[[sample]] <- build_dynamic_reliability_legacy_slides(legacy_input,file.path(scratch,sample),root,return_bundle=TRUE)
+    start_hashes <- distinct(bind_rows(start_hashes,task_hashes(legacy[[sample]]$inputs)),path,.keep_all=TRUE)
+  }
   for(sample in c("primary","all_participants"))for(i in seq_len(nrow(histories))) {
     prefix <- if(sample=="primary")"" else "sensitivity_";stem <- paste0(prefix,histories$filename[i])
     candidates <- file.path(plot_base,"presentation",paste0(prefix,c(histories$filename[i],old_stems[i])))
     found <- candidates[file.exists(paste0(candidates,".pdf")) & file.exists(paste0(candidates,".png"))][1]
     if(is.na(found))stop("Missing historical figure: ",stem,call.=FALSE)
+    members <- filter(bundle$membership,sample=="all_participants" | in_primary)
+    p <- legacy[[sample]]$figures[[legacy_stems[i]]]+plot_annotation(
+      title=c("19. Incorrect-advice agreement after the drop","20. Accuracy and agreement recovery",
+        "21. Final evaluations and incorrect-advice agreement")[i],
+      subtitle=paste0(if(sample=="primary")"" else "All-participant sensitivity; ",
+        "CAL65 n = ",sum(members$calibration_target_group=="CAL65"),", CAL90 n = ",sum(members$calibration_target_group=="CAL90")))
     for(ext in c("pdf","png")) {
-      src <- paste0(found,".",ext);dst <- file.path(stage,paste0(stem,".",ext));stopifnot(file.copy(src,dst))
-      historical_manifest[[length(historical_manifest)+1L]] <- tibble(path=paste0(stem,".",ext),sha256=task_sha(src))
+      dst <- file.path(stage,paste0(stem,".",ext))
+      ggsave(dst,p,width=12,height=6.75,dpi=300,bg="white",device=if(ext=="pdf")cairo_pdf else "png")
+      historical_manifest[[length(historical_manifest)+1L]] <- tibble(path=paste0(stem,".",ext),sha256=task_sha(dst))
     }
     for(path in list.files(file.path(dirname(found),"data"),pattern=paste0("^",basename(found),"_.*\\.csv$"),full.names=TRUE)) {
       target <- file.path("data",sub(basename(found),stem,basename(path),fixed=TRUE))
+      regenerated <- file.path(scratch,sample,"presentation/data",sub(basename(found),legacy_stems[i],basename(path),fixed=TRUE))
+      stopifnot(file.exists(regenerated),isTRUE(all.equal(read_csv(path,show_col_types=FALSE),
+        read_csv(regenerated,show_col_types=FALSE),check.attributes=FALSE)))
       stopifnot(file.copy(path,file.path(stage,target)))
       historical_manifest[[length(historical_manifest)+1L]] <- tibble(sha256=task_sha(path),path=target)
     }
@@ -123,8 +143,8 @@ dpr_report_html <- function(out,catalog,bundle,annotations) {
   prose <- c(H1="How do accuracy, discrimination and correct-response speed benefit from assistance at each reliability phase, and how do benefits differ by calibration group?",
     H2="Does the final human-plus-aid decision outperform following the aid alone? Accuracy includes timeouts; task SDT uses the same human-answered trials for both agents.",
     H3="How does the reliability drop alter advice acceptance, BLACK response preference, selective advice following and final stimulus discrimination?",
-    H4="Which behaviours recover when reliability returns, and which still differ from the initial high-reliability phase? A nonsignificant residual is not evidence of equivalence.",
-    H5="Does performance or advice following adjust gradually within a phase? Linear progress describes the phase trend, not a precise learning time.",
+    H4="Which behaviours recover when reliability returns, and which still differ from the initial high-reliability phase?",
+    H5="Does performance or advice following adjust gradually within a phase?",
     H6="How do calibration groups evaluate the aid after the complete sequence, and how accurate are their perceived reliability ratings?",
     H7="How are final trust and perceived-reliability error associated with whole-block advice acceptance and selectivity within each calibration group, and do those slopes differ between groups?")
   html <- c('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dynamic reliability: revised H1-H7 hypotheses</title>',
@@ -135,7 +155,7 @@ dpr_report_html <- function(out,catalog,bundle,annotations) {
     '<p><a href="core_hypotheses.pdf">11-page core PDF</a> | <a href="all_hypotheses.pdf">All 21 primary-sample figures</a> | <a href="sensitivity_hypotheses.pdf">21-page all-participant sensitivity</a> | <a href="hypothesis_mapping.csv">Hypothesis crosswalk</a></p>',
     '<div class="method"><p>The revised H1-H7 framework was agreed on 17 October 2026 after inspecting earlier results. It is retrospective, not preregistered. The hypotheses and correction families below replace the earlier presentation numbering; historical figures retain their original tests.</p>',
     '<p>Faint points show participants; open diamonds show fitted estimates with pointwise 95% intervals. Tests are two-sided, with Holm correction within hypothesis and outcome. *** p&lt;.001; ** p&lt;.01; * p&lt;.05; ns p&ge;.05. Unavailable inference is labelled unavailable. Sensitivity analyses do not replace primary inference.</p>',
-    '<p>Advice -c means acceptance; task -c means BLACK preference. Advice d-prime measures selective following; task d-prime measures final stimulus discrimination. These use the same responses and are not independent replications. Fixed phase order includes time, practice and fatigue; calibration groups differ in visual difficulty.</p></div>',
+    '<p>Advice -c means acceptance; task -c means BLACK preference. Advice d-prime measures selective following; task d-prime measures final stimulus discrimination. These use the same responses and are not independent replications.</p></div>',
     '<nav><a href="#H1">H1 Benefits</a> | <a href="#H2">H2 Human value</a> | <a href="#H3">H3 Drop</a> | <a href="#H4">H4 Recovery</a> | <a href="#H5">H5 Adaptation</a> | <a href="#H6">H6 Evaluations</a> | <a href="#H7">H7 Associations</a> | <a href="#supporting">Supporting</a> | <a href="#historical">Historical</a></nav>',
     '<details><summary>Methods, cohort decisions and diagnostics</summary>',
     paste0('<p>Excluded IDs: ',paste(bundle$membership$participant_id[!bundle$membership$in_primary],collapse=", "),'. Calibration, near-chance and anticipatory rules determine inclusion; manual target deviation remains diagnostic. QC selection is retrospective and includes post-exposure performance; compare the all-participant sensitivity.</p>'),
@@ -156,7 +176,9 @@ dpr_report_html <- function(out,catalog,bundle,annotations) {
       html <- c(html,paste0('<h2 id="',r$hypothesis,'">',r$hypothesis,'</h2><p>',prose[[r$hypothesis]],'</p>'));last <- r$hypothesis
     }
     if(i==12)html <- c(html,'<h2 id="supporting">Supporting analyses and sensitivities</h2>')
-    if(i==19)html <- c(html,'<h2 id="historical">Historical hypothesis formulations</h2><p>Original figures and tests are retained unchanged. Their hypothesis labels belong to the earlier framework.</p>')
+    if(i==19)html <- c(html,'<h2 id="historical">Historical hypothesis formulations</h2><p>Original plotted data and tests are retained, with updated display text. Their hypothesis labels belong to the earlier framework.</p>')
+    r$notes <- gsub("; nonsignificance is not equivalence|; the post block is not an untreated control","",r$notes)
+    r$notes <- sub("Original figure and test families retained unchanged", "Original plotted data and test families retained; display text updated",r$notes,fixed=TRUE)
     html <- c(html,paste0('<article><h3>',esc(r$title),'</h3><p class="meta">',esc(r$legacy_labels),' | ',esc(r$notes),'</p>',
       '<img loading="lazy" src="',r$filename,'.png" alt="',esc(r$title),'"><p>',links(r$filename),'</p>'))
     a <- filter(annotations,filename==r$filename)

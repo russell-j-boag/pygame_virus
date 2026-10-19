@@ -14,6 +14,8 @@ stopifnot(file.exists(file.path(input, "COMPLETE.txt")))
 read <- function(name) read_csv(file.path(input, paste0(name, ".csv")), show_col_types = FALSE)
 for (name in c("analysis_artifacts", "input_manifest", "source_checksums")) {
   m <- read(name)
+  # The live acquisition task is not an input to rendering saved results.
+  if (name == "source_checksums") m <- m[basename(m$path) != "virus_task.py", ]
   if (!all(file.exists(m$path)) || !identical(unname(tools::md5sum(m$path)), m$md5))
     stop("Stale or changed analysis inputs/artifacts: ", name, call. = FALSE)
 }
@@ -39,7 +41,7 @@ theme_findings <- function() theme_minimal(base_size = 12.5, base_family = "Helv
   strip.text=element_text(size=11, face="bold"), panel.spacing=grid::unit(1.3,"lines"),
   legend.position="bottom", legend.title=element_blank(), plot.margin=margin(12,16,10,12),
   plot.background=element_rect(fill="white", colour=NA))
-desc_caption <- paste0(N, " participants. Faint points/lines: individuals. Large points: equal-weight participant means.\nWhiskers: pointwise 95% t intervals. Fixed sequence: phase differences also include time and experience effects.")
+desc_caption <- paste0(N, " participants. Faint points/lines: individuals. Large points: equal-weight participant means.\nWhiskers: pointwise 95% t intervals.")
 effect_caption <- "Open diamonds: random-intercept mixed model. Filled circles: equal-weight participant sensitivity.\nWhiskers: pointwise 95% CIs; two-sided tests use Holm adjustment within outcome/family/method."
 export <- function(x, name) write_csv(x, file.path(out, "data", paste0(name, ".csv")))
 save <- function(plot, name, width=12, height=7) {
@@ -115,7 +117,7 @@ agreement_plot <- ggplot(a,aes(phase,100*agreement,colour=group)) +
   facet_wrap(~advice,labeller=as_labeller(c(Correct="Agreement with correct advice",Incorrect="Agreement with incorrect advice"))) +
   scale_colour_manual(values=colours) + scale_x_discrete(labels=c(P1="P1: 95%",P2="P2: 70%",P3="P3: 95%")) +
   theme_findings() + labs(title="Does aid agreement adjust to relative competence?",
-    subtitle="Answered trials only. Agreement is a behavioural proxy, not an advice-caused change of mind.",y="Agreement (%)",
+    subtitle="Answered trials only.",y="Agreement (%)",
     caption="Faint points/lines: individuals. Large points: equal-weight participant means; whiskers: pointwise 95% t intervals.")
 drop <- contrasts %>% filter(outcome=="agreement",family=="core",grepl("P2 - P1$",contrast))
 export(drop,"agreement_drop_contrasts")
@@ -125,7 +127,7 @@ save(agreement_plot / effect_plot(drop,"Change when reliability drops","P2 minus
 recovery <- contrasts %>% filter(family=="core",grepl("P3 - P[12]$",contrast))
 export(recovery,"recovery_contrasts")
 save(effect_plot(recovery,"Does behaviour recover when aid reliability returns?",
-  "P3 - P2 measures change after recovery; P3 - P1 measures the remaining difference. Nonsignificance is not equivalence."),"04_recovery",14,9)
+  "P3 - P2 measures change after recovery; P3 - P1 measures the remaining difference."),"04_recovery",14,9)
 
 trajectories <- read("descriptive_trajectories") %>% mutate(x=(match(phase,c("P1","P2","P3"))-1)*400+(bin-.5)*100)
 curves <- bind_rows(lapply(c("accuracy","agreement"),function(v) {
@@ -160,7 +162,7 @@ manual <- contrasts %>% filter(family=="manual_change")
 export(manual,"manual_change_contrasts")
 save(perf_plot("accuracy",TRUE) / perf_plot("mean_correct_rt",TRUE) +
   plot_annotation(title="Does manual performance change across the session?",
-    subtitle="These paired changes combine practice, fatigue and possible automation exposure effects.",theme=theme_findings()),"07_manual_pre_post",12,11)
+    subtitle="Paired changes from manual pre to manual post.",theme=theme_findings()),"07_manual_pre_post",12,11)
 
 ratings <- read("participant_ratings")
 export(ratings,"subjective_participants"); export(read("subjective_contrasts"),"subjective_contrasts")
@@ -193,7 +195,7 @@ subjective <- (rating_panel("trust","Final trust in the aid","Six-item mean trus
   (association_panel("trust","Trust and degraded-phase behaviour","Mean trust (1-5)") |
   association_panel("perceived_aid_error","Perceived accuracy and degraded-phase behaviour","Rating error (percentage points)")) +
   plot_annotation(title="How do participants evaluate the complete aided sequence?",
-    caption="Ratings were collected once after all 1,200 aided trials. Top: participant observations and means with pointwise 95% t intervals.\nBottom: group-adjusted linear associations, with a common slope. HC3 inference is in the report. Associations do not establish causation.",
+    caption="Ratings were collected once after all 1,200 aided trials. Top: participant observations and means with pointwise 95% t intervals.\nBottom: group-adjusted linear associations, with a common slope. HC3 inference is in the report.",
     theme=theme_findings())
 save(subjective,"08_subjective_evaluation",13,10)
 # Available self-ratings describe manual performance only, never individual aided phases.
@@ -217,7 +219,7 @@ writeLines(c('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="v
   '<title>Dynamic reliability: behavioural figures</title><style>body{font:16px Helvetica,Arial,sans-serif;color:#1C2D3E;background:#f7f9fb;margin:32px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:24px}article{background:white;padding:18px;border:1px solid #e4e9ed;border-radius:8px}h2{font-size:18px}img{width:100%;height:auto}a{color:#0072B2}p{line-height:1.5}header{max-width:1000px;margin-bottom:28px}</style>',
   '<header><h1>Dynamic reliability: behavioural figures</h1>',
   sprintf('<p>%d participants. CAL65 is blue; CAL90 is orange. Open diamonds show mixed-model estimates; filled circles show participant sensitivity estimates.</p>',N),
-  '<p>All hypotheses were specified after data collection. Convergence alone does not establish model adequacy; read participant sensitivities alongside mixed-model estimates. Phase order is fixed; agreement does not establish advice-caused switching. Confidence intervals are pointwise.</p>',
+  '<p>All hypotheses were specified after data collection. Convergence alone does not establish model adequacy; read participant sensitivities alongside mixed-model estimates. Confidence intervals are pointwise.</p>',
   '<p><a href="presentation/index.html">Revised H1-H7 report: 11 core pages with matched SDT views and cohort sensitivities</a>. Click any historical supporting figure below for its full-resolution PNG or PDF. Numerical panel data are in the <a href="data/">data folder</a>.</p></header><main>',
   cards,'</main></html>'),file.path(out,"index.html"))
 if (!components_only) {

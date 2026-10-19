@@ -4,6 +4,40 @@ dpr_theme <- function()theme_minimal(base_size=12,base_family="Helvetica")+theme
   plot.title=element_text(size=14,face="bold"),plot.subtitle=element_text(size=10),
   axis.title=element_text(size=11),axis.text=element_text(size=10),legend.position="bottom",
   plot.margin=margin(8,12,8,8),plot.caption=element_text(size=9,hjust=0),strip.text=element_text(face="bold"))
+# Recolour subtitle text after layout so its spacing and the collected legend
+# stay unchanged. Blank lines preserve each original multiline text position.
+dpr_colour_group_subtitles <- function(p,colours) {
+  recolour <- function(g) {
+    if(inherits(g,"text") && length(g$label)==1 && is.character(g$label)) {
+      lines <- strsplit(g$label,"\n",fixed=TRUE)[[1]]
+      if(length(lines)==3 && startsWith(lines[1],"CAL65:") && startsWith(lines[2],"CAL90:")) {
+        parts <- lapply(seq_along(lines),function(i) {
+          z <- g;z$label <- paste(ifelse(seq_along(lines)==i,lines,""),collapse="\n")
+          z$gp$col <- if(i<3)unname(colours[i]) else "#25323D"
+          z$name <- paste0(g$name,"_line",i);z
+        })
+        return(do.call(grid::grobTree,parts))
+      }
+      if(length(lines)==1 && grepl("CAL65 n = .*CAL90 n =",g$label)) {
+        chunks <- regmatches(g$label,regexpr("CAL65 n = [0-9]+, ",g$label))
+        prefix <- sub("CAL65 n = .*","",g$label)
+        labels <- c(prefix,chunks,sub(".*CAL90 n = ","CAL90 n = ",g$label))
+        parts <- list();offset <- grid::unit(0,"pt")
+        for(i in seq_along(labels))if(nzchar(labels[i])) {
+          z <- g;z$label <- labels[i];z$x <- g$x+offset;z$hjust <- 0
+          z$gp$col <- if(i==1)"#25323D" else unname(colours[i-1])
+          z$name <- paste0(g$name,"_group",i);parts[[length(parts)+1L]] <- z
+          offset <- offset+grid::grobWidth(z)
+        }
+        return(do.call(grid::grobTree,parts))
+      }
+    }
+    if(length(g$grobs))g$grobs <- lapply(g$grobs,recolour)
+    if(length(g$children))g$children <- do.call(grid::gList,lapply(g$children,recolour))
+    g
+  }
+  recolour(patchwork::patchworkGrob(p))
+}
 dpr_p_label <- function(p)ifelse(is.na(p),"unavailable",ifelse(p<.001,"***",ifelse(p<.01,"**",ifelse(p<.05,"*","ns"))))
 dpr_p_text <- function(p)ifelse(is.na(p),"unavailable",ifelse(p<.001,"< .001",sprintf("%.3f",p)))
 dpr_labels <- c(accuracy="All-trial accuracy",correct_rt="Correct-response RT",task_dprime="Task discrimination (d-prime)",
@@ -35,8 +69,8 @@ dpr_plot_build <- function(bundle,registry,out) {
     d <- bundle$data[[sample_name]]; means <- bundle$estimates[[sample_name]]
     tests <- filter(bundle$results,sample==sample_name,analysis=="primary",correction %in% c("none","loglinear"))
     members <- bundle$membership %>% filter(sample_name=="all_participants" | in_primary)
-    sample_label <- paste0(if(sample_name=="primary")"QC-retained primary sample" else "All-participant sensitivity",
-      "; CAL65 n = ",sum(members$calibration_target_group=="CAL65"),", CAL90 n = ",sum(members$calibration_target_group=="CAL90"))
+    sample_label <- paste0(if(sample_name=="primary")"" else "All-participant sensitivity; ",
+      "CAL65 n = ",sum(members$calibration_target_group=="CAL65"),", CAL90 n = ",sum(members$calibration_target_group=="CAL90"))
     prefix <- if(sample_name=="primary")"" else "sensitivity_"
     current_data <- current_raw <- current_tests <- list()
     register <- function(o,m,raw,t=tibble()) {
@@ -51,7 +85,7 @@ dpr_plot_build <- function(bundle,registry,out) {
       p <- p+plot_annotation(title=paste(strwrap(row$title,width=85),collapse="\n"),subtitle=subtitle,
         caption=paste(strwrap(note,width=155),collapse="\n"),
         theme=dpr_theme()+theme(plot.title=element_text(size=19,face="bold"),plot.subtitle=element_text(size=11)))
-      figures[[stem]] <<- p
+      figures[[stem]] <<- if(order==11)dpr_colour_group_subtitles(p,colours[GROUPS]) else p
       write_csv(bind_rows(current_data),file.path(out,"data",paste0(stem,"_data.csv")))
       write_csv(bind_rows(current_raw),file.path(out,"data",paste0(stem,"_participants.csv")))
       aa <- bind_rows(current_tests)
@@ -107,7 +141,7 @@ dpr_plot_build <- function(bundle,registry,out) {
       panels[[o]] <- gain_panel(raw,choose("H2",o),o,ylab=if(o=="accuracy_benchmark")"Human minus aid accuracy (pp)" else "Human minus matched aid (d-prime)")
     }
     finish(3,wrap_plots(panels,nrow=1,guides="collect"),paste(caption,
-      "Accuracy assumes timely aid on every trial; task d-prime matches precisely human-answered trials. No equivalence claim."))
+      "Accuracy assumes timely aid on every trial; task d-prime matches precisely human-answered trials."))
     trajectory_panel <- function(raw,m,o,levels,dimension="phase",descriptive=FALSE) {
       raw <- raw %>% filter(.data[[dimension]] %in% levels) %>% mutate(x=match(.data[[dimension]],levels)+ifelse(group=="CAL65",-.055,.055))
       m <- m %>% filter(.data[[dimension]] %in% levels) %>% mutate(x=match(.data[[dimension]],levels)+ifelse(group=="CAL65",-.055,.055))
@@ -152,8 +186,7 @@ dpr_plot_build <- function(bundle,registry,out) {
         register(o,tr$data,tr$raw,t)
       }
       finish(order,wrap_plots(panels,ncol=2,guides="collect"),paste(caption,
-        if(measure=="bias")"Advice -c: acceptance; task -c: BLACK preference." else "Advice selectivity and final task discrimination reuse the same decisions.",
-        if(h=="H3")"Three drop tests per outcome." else "Six recovery/residual tests per outcome; nonsignificance is not equivalence."))
+        if(measure=="bias")"Advice -c: acceptance; task -c: BLACK preference." else "Advice selectivity and final task discrimination reuse the same decisions."))
     }
     for(o in c("accuracy","agreement")) {
       raw <- filter(d$trajectories,outcome==o) %>% mutate(value=100*value,advice=if(o=="accuracy")"All" else as.character(advice))
@@ -181,8 +214,7 @@ dpr_plot_build <- function(bundle,registry,out) {
         labs(x=NULL,y=if(o=="accuracy")"Accuracy (%)" else "Agreement (%)")+dpr_theme()
       register(o,m,raw,t)
       finish(if(o=="accuracy")8 else 9,p,paste(caption,"Curves and bands: phase-specific model predictions; points: participant 100-trial bins.",
-        if(o=="accuracy")"Nine endpoint tests." else "One 18-test family across correct and incorrect advice. Empty advice bins are missing, not zero.",
-        "Linear progress does not estimate a precise learning time."))
+        if(o=="accuracy")"Nine endpoint tests." else "One 18-test family across correct and incorrect advice. Empty advice bins are missing, not zero."))
     }
     panels <- list()
     for(o in c("trust","perceived","signed_error")) {
@@ -226,8 +258,7 @@ dpr_plot_build <- function(bundle,registry,out) {
       }
       finish(order,wrap_plots(panels,ncol=2,guides="collect"),
         paste("Group-specific HC3 fits and pointwise 95% CIs; points: participants. Six-test Holm family per rating: two predictors x (two slopes + CAL90-minus-CAL65 difference).",
-          if(h=="H7")"SDT uses pooled whole-block counts, matching the final-rating scope." else "Supporting analysis: Phase 2 SDT predicts whole-block final ratings.",
-          "Associations are between participants and are not causal."))
+          if(h=="H7")"SDT uses pooled whole-block counts, matching the final-rating scope." else "Supporting analysis: Phase 2 SDT predicts whole-block final ratings."))
     }
     association_plot("H7",11)
     panels <- list()
@@ -236,11 +267,11 @@ dpr_plot_build <- function(bundle,registry,out) {
       m <- means[[paste("performance",o,if(o=="task_dprime")"loglinear" else "none",sep="_")]]
       tr <- trajectory_panel(raw,m,o,STAGES,"stage");panels[[o]] <- tr$plot;register(o,tr$data,tr$raw)
     }
-    finish(12,wrap_plots(panels,nrow=1,guides="collect"),paste(caption,"Descriptive synthesis of fitted stage means; hypothesis tests appear in H1-H4. Fixed order includes practice, time and fatigue."))
+    finish(12,wrap_plots(panels,nrow=1,guides="collect"),paste(caption,"Descriptive synthesis of fitted stage means; hypothesis tests appear in H1-H4."))
     panels <- list()
     for(o in c("accuracy","task_dprime","correct_rt"))panels[[o]] <- gain_panel(changes(o),choose("S2",o),o,levels="Manual post",
       ylab=if(o=="accuracy")"Manual post minus pre (pp)" else if(o=="task_dprime")"Manual post minus pre (d-prime)" else "Manual post / pre RT ratio")
-    finish(13,wrap_plots(panels,nrow=1,guides="collect"),paste(caption,"Supporting S2: three tests per outcome. Manual post is not an untreated control; nonsignificance is not equivalence."))
+    finish(13,wrap_plots(panels,nrow=1,guides="collect"),paste(caption,"Supporting S2: three tests per outcome."))
     panels <- list()
     for(o in c("completion","answered_accuracy")) {
       raw <- mutate(d$performance,value=100*.data[[o]])
