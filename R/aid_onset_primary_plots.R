@@ -133,7 +133,7 @@ ao_build_plots <- function(root,analysis,out) {
     f <- catalog[i,];rs <- filter(registry,figure==f$figure)
     message("Rendering ",f$figure)
     rp <- mp <- tp <- tibble()
-    subtitle <- "60 participants | Retrospective primary framework | No participant exclusions"
+    subtitle <- "60 participants"
     caption <- "Faint points: participants. Diamonds: model estimates with pointwise 95% CIs. AF = Aid-first; SF = Stimulus-first."
     if(f$section=="core" || f$order==11) {
       pieces <- lapply(seq_len(nrow(rs)),function(j) ao_panel(rs[j,],filter(raw,correction=="loglinear"),
