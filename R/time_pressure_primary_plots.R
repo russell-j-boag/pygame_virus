@@ -7,6 +7,24 @@ primary_plot_theme <- function() theme_minimal(base_size=12,base_family="Helveti
 primary_p_label <- function(p) ifelse(is.na(p),"unavailable",ifelse(p<.001,"***",ifelse(p<.01,"**",ifelse(p<.05,"*","ns"))))
 primary_p_text <- function(p) ifelse(is.na(p),"p unavailable",ifelse(p<.001,"p < .001",sprintf("p = %.3f",p)))
 primary_cell_index <- function(d) match(paste(d$pressure,d$reliability),c("HP 65%","HP 95%","LP 65%","LP 95%"))
+primary_colour_trust_subtitles <- function(p,colours) {
+  # Keep the multiline subtitle's measured space while colouring its lines.
+  # Grid uses big points for font sizes and line spacing.
+  recolour <- function(g) {
+    if(inherits(g,"text") && length(g$label)==1 && startsWith(g$label,"HP95/LP65:")) {
+      lines <- strsplit(g$label,"\n",fixed=TRUE)[[1]]
+      stopifnot(length(lines)==3)
+      g$label <- lines
+      g$y <- g$y + grid::unit((length(lines)-seq_along(lines)-(length(lines)-1)*g$vjust)*
+        g$gp$fontsize*g$gp$lineheight,"bigpts")
+      g$gp$col <- c(unname(colours[c("HP95_LP65","HP65_LP95")]),g$gp$col)
+    }
+    if(length(g$grobs))g$grobs <- lapply(g$grobs,recolour)
+    if(length(g$children))g$children <- do.call(grid::gList,lapply(g$children,recolour))
+    g
+  }
+  recolour(patchwork::patchworkGrob(p))
+}
 primary_trust_predictions <- function(model,associations,raw,component) {
   # Predict the exact quantities on the scatter axes from the saved H7 model.
   # Difference/mean vectors retain covariance between the two block predictions.
@@ -172,7 +190,7 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
     scale_fill_manual(values=c(choice_component="#6C75A3",completion_component="#A9B5BE"),labels=c("Choice","Completion"),name=NULL)+
     labs(title="Sources of accuracy gains",subtitle="Descriptive; no component tests",x=NULL,y="Contribution to gain (pp)")+primary_plot_theme()
   register(stem_for(4),"H2","decomposition",tibble(),components,cm)
-  add_figure(4,wrap_plots(panels,nrow=1),paste(common_caption,"Zero compensation means aided HP equals manual LP; nonsignificance does not establish equivalence. Decomposition is exact accounting, not causal mediation."))
+  add_figure(4,wrap_plots(panels,nrow=1),paste(common_caption,"Zero compensation means aided HP equals manual LP; nonsignificance does not establish equivalence. Decomposition is exact accounting."))
   # H3: accuracy and matched-task benchmarks.
   panels <- list()
   for(o in c("accuracy_benchmark","task_dprime_benchmark")) {
@@ -212,6 +230,7 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
   add_figure(8,wrap_plots(panels,nrow=1),paste(common_caption,"Trust and perceived reliability are separate outcomes. Positive calibration error indicates overestimation. Each outcome has its own Holm family."))
   # H7: raw change/mean scatters with predictions from the same adjusted models.
   panels <- association_predictions <- list()
+  group_colours <- c("HP95_LP65"="#1976A3","HP65_LP95"="#C56924")
   for(o in c("advice_bias","advice_dprime"))for(component in c("trust_within","trust_between")) {
     a <- filter(d$associations,correction=="loglinear") %>% mutate(value=if(o=="advice_bias")automation_bias else dprime)
     raw <- if(component=="trust_within")a %>% select(participant_id,pattern,pressure,trust,value) %>%
@@ -230,13 +249,14 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
     panels[[paste(o,component)]] <- ggplot(raw,aes(x,y,colour=pattern))+geom_hline(yintercept=0,linetype="dotted",colour="#BBC3C9")+
       geom_ribbon(data=pred,aes(x=x,ymin=lower,ymax=upper,fill=pattern,group=pattern),inherit.aes=FALSE,alpha=.12,colour=NA,show.legend=FALSE)+
       geom_line(data=pred,aes(x,estimate,group=pattern),linewidth=.8)+
-      geom_point(alpha=.55,size=1.8)+scale_colour_manual(values=c("HP95_LP65"="#1976A3","HP65_LP95"="#C56924"),name="Allocation pattern")+
-      scale_fill_manual(values=c("HP95_LP65"="#1976A3","HP65_LP95"="#C56924"),guide="none")+
+      geom_point(alpha=.55,size=1.8)+scale_colour_manual(values=group_colours,name="Allocation pattern")+
+      scale_fill_manual(values=group_colours,guide="none")+
       labs(title=title,subtitle=subtitle,x=if(component=="trust_within")"Trust difference (HP minus LP)" else "Mean trust across aided blocks",
         y=if(component=="trust_within")"SDT difference (HP minus LP)" else "Mean SDT score")+primary_plot_theme()
     register(stem_for(9),"H7",paste(o,component,sep="__"),t,raw,t)
   }
-  add_figure(9,wrap_plots(panels,ncol=2,guides="collect"),"Points: participants; lines/bands: group-specific adjusted fits and pointwise 95% CIs. Left: HP-LP difference; right: mean across HP/LP. Block position: pattern/pressure mean. Slopes are per trust point; difference = HP95/LP65 minus HP65/LP95. All p-values: Holm across four slopes and two differences per SDT outcome. Post-block associations are not causal effects.")
+  add_figure(9,wrap_plots(panels,ncol=2,guides="collect"),"Points: participants; lines/bands: group-specific adjusted fits and pointwise 95% CIs. Left: HP-LP difference; right: mean across HP/LP. Block position: pattern/pressure mean. Slopes are per trust point; difference = HP95/LP65 minus HP65/LP95. All p-values: Holm across four slopes and two differences per SDT outcome.")
+  figures[[stem_for(9)]] <- primary_colour_trust_subtitles(figures[[stem_for(9)]],group_colours)
   write_csv(bind_rows(association_predictions),file.path(out,"data",paste0(stem_for(9),"_fits.csv")))
   # H8: raw history patterns alongside the adjusted, standardised primary contrasts.
   raw <- d$sequence_raw %>% select(participant_id,pressure,reliability,previous_aid_error,agreement) %>%

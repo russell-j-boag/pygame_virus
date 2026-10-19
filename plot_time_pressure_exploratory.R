@@ -104,7 +104,7 @@ plot_exploratory <- function(base, plot_base, root) {
       scale_colour_manual(values = c(HP = "#C56924", LP = "#1976A3")) + scale_fill_manual(values = c(HP = "#C56924", LP = "#1976A3")) +
       theme_x() + theme(axis.title.x = element_text()) +
       labs(title = title, subtitle = "Conditional mixed-model associations within participants.", x = xlab, y = "Predicted agreement (%)",
-        caption = "Exploratory associations, not causal effects. Bands: pointwise model 95% CIs; curves span observed 10th-90th percentile score deviations.\nBetween-participant rating is held at its mean, block position at midpoint, and random intercept at zero. See participant-cluster sensitivity tests.")
+        caption = "Exploratory associations. Bands: pointwise model 95% CIs; curves span observed 10th-90th percentile score deviations.\nBetween-participant rating is held at its mean, block position at midpoint, and random intercept at zero. See participant-cluster sensitivity tests.")
     labels <- labeller(advice = c(Correct = "Correct advice", Incorrect = "Incorrect advice"),
                       reliability = c("65%" = "65% aid", "95%" = "95% aid"))
     p <- if (trust_axes) p +
@@ -113,7 +113,7 @@ plot_exploratory <- function(base, plot_base, root) {
       scale_x_continuous(breaks = scales::breaks_width(.5), expand = expansion(mult = .03)) +
       scale_y_continuous(breaks = scales::breaks_width(5), expand = expansion(mult = 0)) +
       labs(subtitle = sprintf("Each panel spans %g trust points and %g agreement percentage points; axis ranges differ.", x_span, span),
-        caption = "Exploratory associations, not causal effects. Equal axis spans permit slope comparisons; read each panel's axis labels.\nBands: pointwise model 95% CIs. Curves cover observed central score ranges; other predictors are held fixed. See participant-cluster sensitivity tests.")
+        caption = "Exploratory associations. Equal axis spans permit slope comparisons; read each panel's axis labels.\nBands: pointwise model 95% CIs. Curves cover observed central score ranges; other predictors are held fixed. See participant-cluster sensitivity tests.")
     else p + facet_grid(advice ~ reliability, scales = "free_x", labeller = labels) + coord_cartesian(ylim = c(0,100))
     if (!isTRUE(status$inference_available)) p <- p + labs(
       subtitle = "Model failed numerical checks; estimates and intervals require caution. Inferential p-values are withheld.")
@@ -142,7 +142,7 @@ plot_exploratory <- function(base, plot_base, root) {
     "H6  Where does the accuracy gain arise?", "Automation minus manual at the same pressure, decomposed within participants.",
     c(completion_component = "#BA9B53", choice_component = "#1976A3"),
     c(completion_component = "Response completion", choice_component = "Accuracy among responses"),
-    "Exploratory. Bars: symmetric decomposition of the accuracy gain; diamonds: total gain and pointwise 95% CI.\nThe components sum exactly to each participant's gain. This is an accounting decomposition, not causal mediation.")
+    "Exploratory. Bars: symmetric decomposition of the accuracy gain; diamonds: total gain and pointwise 95% CI.\nThe components sum exactly to each participant's gain.")
   p6 <- b$plot; export(b$bars, "H6_components"); export(b$net, "H6_net")
   save <- function(p, stem, width = 13, height = 7) {
     ggsave(file.path(out, paste0(stem, ".pdf")), p, device = cairo_pdf, width = width, height = height, bg = "white")
@@ -165,11 +165,11 @@ plot_exploratory <- function(base, plot_base, root) {
     "Participant means and pointwise 95% CIs. Advice agreement is a behavioural proxy; the always-follow benchmark assumes timely responses.", "slide_4_selectivity_benchmark")
   slide(p3 + labs(subtitle = "Perceived minus realised aid accuracy."), p4 + labs(subtitle = "Equal axis spans; ranges follow the observed values.\nBands are model 95% CIs."),
     "Exploratory: awareness, trust, and behaviour",
-    "Left: paired participants and mean rating errors. Right: trust deviation from each participant's mean, over the observed central score range.\nPost-block ratings support associations, not causal mediation; participant-cluster sensitivity tests accompany model estimates.", "slide_5_awareness_trust")
+    "Left: paired participants and mean rating errors. Right: trust deviation from each participant's mean, over the observed central score range.\nParticipant-cluster sensitivity tests accompany model estimates.", "slide_5_awareness_trust")
   slide(p5 + labs(subtitle = "Next-trial agreement following wrong vs correct advice."),
         p6 + labs(subtitle = "Decomposition of automation-minus-manual accuracy."),
     "Exploratory: error adjustment and the source of accuracy gains",
-    "Pointwise 95% CIs. Error-adjustment estimates control previous participant error and trial position.\nCompletion and choice-accuracy contributions sum to the total gain; neither decomposition nor lag associations establish causal mediation.", "slide_6_adjustment_completion")
+    "Pointwise 95% CIs. Error-adjustment estimates control previous participant error and trial position.\nCompletion and choice-accuracy contributions sum to the total gain.", "slide_6_adjustment_completion")
   source_paths <- unique(c(consumed, file.path(root, "plot_time_pressure_exploratory.R")))
   write_csv(tibble(path = source_paths, md5 = unname(tools::md5sum(source_paths))), file.path(out, "data/input_checksums.csv"))
   files <- sort(list.files(out, "\\.(pdf|png)$", full.names = TRUE))
