@@ -775,3 +775,13 @@ short of the 95% aid alone on matched answered trials. These are exploratory,
 conditional discrimination results. All 44 Holm decisions agree between the
 loglinear and extreme-only corrections; this does not remove other SDT assumptions
 or uncertainty about timeout selection.
+
+Current hypothesis-report error bars use vertical caps spanning 3%
+of each panel's plotting width, `linewidth = 0.70`, and no caps on horizontal
+change/difference intervals. Cap lengths scale with panel size, independently of
+axis range. Diamond sizes and outlines also scale with panel width, at 120% of
+dynamic-reliability H1b's original marker proportions. `Rscript tests/test_report_errorbars.R` checks the drawing geometry.
+
+Cap lengths and diamond sizes are multiplied by the number of horizontal panels
+(including nested facets), so side-by-side layouts retain comparable sizes.
+Vertical stacking adds no multiplier; spanning panels use their occupied column share.

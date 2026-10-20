@@ -1,3 +1,98 @@
+# Vertical caps occupy 3% of panel width, corrected for horizontal panel count.
+# Panel-relative units preserve these proportions across layouts and axis ranges.
+report_errorbar_cap_fraction <- .03
+report_errorbar_linewidth <- .70
+report_errorbar_geom <- ggplot2::ggproto("GeomReportErrorbar",ggplot2::GeomErrorbar,
+  draw_panel=function(data,panel_params,coord,lineend="butt",width=NULL,flipped_aes=FALSE,horizontal_panels=1) {
+    if(!nrow(data))return(grid::zeroGrob())
+    data <- coord$transform(data,panel_params)
+    horizontal <- xor(flipped_aes,inherits(coord,"CoordFlip"))
+    half <- grid::unit(report_errorbar_cap_fraction*horizontal_panels/2,"npc")
+    gp <- grid::gpar(col=scales::alpha(data$colour,data$alpha),
+      lwd=data$linewidth*ggplot2::.pt,lty=data$linetype,lineend=lineend)
+    if(horizontal) {
+      low <- grid::unit(data$xmin,"native");high <- grid::unit(data$xmax,"native")
+      centre <- grid::unit(data$y,"native")
+      stem <- grid::segmentsGrob(low,centre,high,centre,gp=gp,name="dpr.errorbar.stem")
+      # Horizontal change/difference intervals use an uncapped line segment.
+      return(grid::grobTree(stem,name="dpr.errorbar"))
+    } else {
+      low <- grid::unit(data$ymin,"native");high <- grid::unit(data$ymax,"native")
+      centre <- grid::unit(data$x,"native")
+      stem <- grid::segmentsGrob(centre,low,centre,high,gp=gp,name="dpr.errorbar.stem")
+      a <- grid::segmentsGrob(centre-half,low,centre+half,low,gp=gp,name="dpr.errorbar.cap.lower")
+      b <- grid::segmentsGrob(centre-half,high,centre+half,high,gp=gp,name="dpr.errorbar.cap.upper")
+    }
+    grid::grobTree(stem,a,b,name="dpr.errorbar")
+  })
+# Scale diamond size and outline together, 20% larger than the original H1b marker
+# (size 3.4, stroke .9) in its 783.78125-point-wide plotting panel.
+# Resolve physical dimensions at draw time, inside the actual panel viewport.
+report_diamond_scale <- 1.20
+report_diamond_reference_mm <- 783.78125 * 25.4 / 72
+report_make_diamonds <- function(x) {
+  horizontal_panels <- if(is.null(x$horizontal_panels))1 else x$horizontal_panels
+  ratio <- horizontal_panels * report_diamond_scale * grid::convertWidth(grid::unit(1,"npc"),"mm",valueOnly=TRUE)/report_diamond_reference_mm
+  d <- x$data
+  marks <- grid::pointsGrob(d$x,d$y,pch=23,
+    gp=grid::gpar(col=scales::alpha(d$colour,d$alpha),fill=scales::alpha(d$fill,d$alpha),
+      fontsize=(3.4*ggplot2::.pt+.9*ggplot2::.stroke/2)*ratio,
+      lwd=.9*ggplot2::.stroke/2*ratio),name="dpr.diamond.points")
+  grid::setChildren(x,grid::gList(marks))
+}
+registerS3method("makeContent","report_scaled_diamonds",report_make_diamonds,envir=asNamespace("grid"))
+report_diamond_geom <- ggplot2::ggproto("GeomReportDiamond",ggplot2::GeomPoint,
+  draw_panel=function(data,panel_params,coord,na.rm=FALSE,horizontal_panels=1) {
+    if(!nrow(data))return(grid::zeroGrob())
+    grid::gTree(data=coord$transform(data,panel_params),horizontal_panels=horizontal_panels,cl="report_scaled_diamonds",name="dpr.diamonds")
+  })
+# A full-width panel has factor one; each side-by-side subdivision contributes
+# its column count. Explicit spanning panels use only their occupied width share.
+report_patch_columns <- function(p) {
+  layout <- p$patches$layout
+  n <- length(p$patches$plots)+as.integer(!inherits(p,"plot_filler"))
+  if(!is.null(layout$design)) {
+    design <- as.data.frame(unclass(layout$design))
+    return(max(design$r)/(design$r-design$l+1))
+  }
+  nc <- layout$ncol;nr <- layout$nrow
+  if(is.null(nc) && length(layout$widths)>1)nc <- length(layout$widths)
+  if(is.null(nr) && length(layout$heights)>1)nr <- length(layout$heights)
+  rep(ggplot2::wrap_dims(n,nrow=nr,ncol=nc)[2],n)
+}
+# Clone only interval and diamond layers; preserve other marks and data.
+# Patchwork columns and facet columns multiply; vertical stacking adds no factor.
+report_style_errorbars <- function(p,horizontal_panels=1) {
+  if(!inherits(p,"ggplot"))return(p)
+  own_panels <- horizontal_panels
+  if(inherits(p,"patchwork")) {
+    factors <- report_patch_columns(p)
+    p$patches$plots <- lapply(seq_along(p$patches$plots),function(i)
+      report_style_errorbars(p$patches$plots[[i]],horizontal_panels*factors[i]))
+    if(!inherits(p,"plot_filler"))own_panels <- horizontal_panels*tail(factors,1)
+  }
+  if(!inherits(p$facet,"FacetNull") && length(p$layers)) {
+    layout <- ggplot2::ggplot_build(p)$layout$layout
+    own_panels <- own_panels*max(layout$COL)
+  }
+  p$layers <- lapply(p$layers,function(layer) {
+    bar <- inherits(layer$geom,"GeomErrorbar")
+    diamond <- inherits(layer$geom,"GeomPoint") && identical(as.numeric(layer$aes_params$shape),23)
+    if(!bar && !diamond)return(layer)
+    styled <- ggplot2::ggproto(NULL,layer)
+    styled$geom_params <- utils::modifyList(layer$geom_params,list(horizontal_panels=own_panels))
+    if(bar) {
+      styled$geom <- report_errorbar_geom
+      styled$aes_params <- utils::modifyList(layer$aes_params,list(linewidth=report_errorbar_linewidth))
+    } else {
+      styled$geom <- report_diamond_geom
+      styled$aes_params <- utils::modifyList(layer$aes_params,list(size=3.4,stroke=.9))
+    }
+    styled
+  })
+  p
+}
+
 # Plot-only consumers of the revised primary analysis bundle.
 primary_plot_theme <- function() theme_minimal(base_size=12,base_family="Helvetica") + theme(
   text=element_text(colour="#25323D"),panel.grid.minor=element_blank(),panel.grid.major.x=element_blank(),
@@ -96,14 +191,17 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
     base <- if(ratio)1 else 0
     rg <- range(c(raw$value,means$lower,means$upper,if(zero)base),finite=TRUE);span <- max(diff(rg),.15)
     axis_breaks <- pretty(rg,n=5);axis_breaks <- axis_breaks[axis_breaks>=rg[1] & axis_breaks<=rg[2]]
-    top <- rg[2]+.1*span; tick <- .025*span
+    # Match Virus/ATC: a common reference-test row above all data, below comparison brackets.
+    reference_y <- rg[2]+.12*span
+    top <- rg[2]+if(any(grepl("^cell_",t$contrast_id))) .20*span else .1*span
+    tick <- .025*span
     # These pairings are design cells, not participant-paired significance tests.
     links <- tibble(contrast_id=c("reliability_HP","reliability_LP","pressure_65","pressure_95","interaction"),
       x1=c(1,3,1,2,1),x2=c(2,4,3,4,4),text=c("HP","LP","65%","95%","Interaction")) %>% inner_join(t,by="contrast_id")
     if(!brackets)links <- links[0,]
     links <- links %>% mutate(y=top+seq_len(n())*.13*span,label=paste0(text,": ",primary_p_label(p_holm)))
     zeros <- t %>% filter(grepl("^cell_",contrast_id)) %>% mutate(x=match(contrast_id,means$contrast_id),
-      y=means$upper[x]+.035*span,label=primary_p_label(p_holm))
+      y=reference_y,label=primary_p_label(p_holm))
     stopifnot(setequal(c(links$contrast_id,zeros$contrast_id),t$contrast_id),
       !anyDuplicated(c(links$contrast_id,zeros$contrast_id)))
     p <- ggplot()+geom_hline(yintercept=base,linetype="dotted",colour="#AEB7BE")+
@@ -114,7 +212,7 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
       scale_colour_manual(values=colours,guide="none")+scale_x_continuous(breaks=1:4,labels=c("HP\n65%","HP\n95%","LP\n65%","LP\n95%"),limits=c(.65,4.35))+
       scale_y_continuous(breaks=axis_breaks)+
       labs(title=title,x=NULL,y=ylab)+primary_plot_theme()
-    if(nrow(zeros))p <- p+geom_text(data=zeros,aes(x,y,label=label),size=3.2,vjust=0)
+    if(nrow(zeros))p <- p+geom_text(data=zeros,aes(x,y,label=label),inherit.aes=FALSE,size=3.7,vjust=-.1)
     if(nrow(links))p <- p+geom_segment(data=links,aes(x=x1,xend=x2,y=y,yend=y),linewidth=.4)+
       geom_segment(data=links,aes(x=x1,xend=x1,y=y,yend=y-tick),linewidth=.4)+
       geom_segment(data=links,aes(x=x2,xend=x2,y=y,yend=y-tick),linewidth=.4)+
@@ -160,7 +258,7 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
         if(o=="accuracy")"Aided minus manual (percentage points)" else if(o=="task_dprime")"Aided minus manual (d-prime)" else "Geometric mean RT ratio",ratio=o=="correct_rt",zero=TRUE)
       register(stem_for(order),"H2",o,t,raw,m)
     }
-    add_figure(order,wrap_plots(panels,nrow=1),paste(common_caption,"Cell labels test no aid effect; brackets compare gains. Interaction compares the two reliability effects.",
+    add_figure(order,wrap_plots(panels,nrow=1),paste(common_caption,"Aligned labels above the data test no aid effect; higher brackets compare gains. Interaction compares the two reliability effects.",
       if(order==3)"Ratios below 1 indicate faster responses. Tests use log ratios; moderation contrasts are ratios of ratios." else "Accuracy includes timeouts; task d-prime uses answered trials."))
   }
   panels <- list()

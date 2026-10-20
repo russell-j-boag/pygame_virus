@@ -39,7 +39,7 @@ plot_time_pressure_hypotheses <- function(base,plot_base,root,input=NULL,publish
   stopifnot(!anyDuplicated(catalog$filename),identical(catalog$order,as.numeric(seq_len(nrow(catalog)))))
   stage <- tempfile(".presentation_build_",tmpdir=plot_base);dir.create(file.path(stage,"data"),recursive=TRUE)
   message("Building staged report: ",stage)
-  built <- primary_plot_build(bundle,registry,stage,association_models);figures <- built$figures
+  built <- primary_plot_build(bundle,registry,stage,association_models);figures <- lapply(built$figures,report_style_errorbars)
   for(stem in names(figures))for(ext in c("pdf","png"))ggsave(file.path(stage,paste0(stem,".",ext)),figures[[stem]],
     width=12,height=6.75,dpi=300,bg="white",device=if(ext=="pdf")cairo_pdf else "png")
   # Historical measures are also regenerated from the included cohort; no old
