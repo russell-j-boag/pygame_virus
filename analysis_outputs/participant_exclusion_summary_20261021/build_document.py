@@ -87,9 +87,14 @@ doc.add_paragraph('Both participants are retained in the primary analyses. This 
 doc.add_paragraph('The current combined dataset contains 87 distinct runs, 86 original recorded IDs and 87 unique corrected analysis IDs. Recorded ID 083 is the only reused ID; 084 is absent only from the original recorded IDs and is present in the corrected analysis dataset.')
 doc.add_paragraph('Identity sources: config/participant_identity_corrections.csv; analysis_outputs/semester2_2026_qc/identity_corrections_summary.csv; data/semester2_2026_data/data_virus_all.csv.','SourceNote')
 doc.add_paragraph('Remaining participant IDs to collect', 'Heading 2')
-doc.add_paragraph('Uncollected allocations: 084, 088, 089, 090, 091, 092, 093, 094, 095 and 096 (10 participants).', 'Normal')
+p=doc.add_paragraph(style='Normal')
+p.add_run('Re-collect: ').bold=True
+p.add_run('004, 010 and 048 (3 participants).')
+p=doc.add_paragraph(style='Normal')
+p.add_run('New participants: ').bold=True
+p.add_run('084, 088, 089, 090, 091, 092, 093, 094, 095 and 096 (10 participants; uncollected task IDs up to 096).')
 doc.add_paragraph('A true task participant 084 is still needed: O21 × HP65_LP95 × flipped keys. The existing analysis ID 084 received task ID 083’s allocation.', 'Normal')
-doc.add_paragraph('If replacing the three excluded participants as well, add allocations 004, 010 and 048, bringing the total to 13 collections.', 'Normal')
+doc.add_paragraph('Total remaining: 13 collections (3 re-collections and 10 new participants).', 'Normal')
 doc.add_paragraph('Collection status checked against the raw exports on 21 October 2026.', 'SourceNote')
 doc.add_paragraph('Reading the plots', 'Heading 2')
 doc.add_paragraph('Each plot shows the full recorded sequence, including calibration, with trial-level RTs, fast-response rates and accuracy in 50-trial bins. Plot headline statistics pool all 1,600 experimental trials; the table reports the specific scopes that triggered exclusion. Binned patterns are descriptive and do not independently trigger exclusion.')
