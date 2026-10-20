@@ -215,6 +215,23 @@ ao_context <- function(d,outcome,title) {
   list(plot=p,raw=r,means=m)
 }
 ao_html <- function(x) {x <- gsub("&","&amp;",x,fixed=TRUE);x <- gsub("<","&lt;",x,fixed=TRUE);gsub(">","&gt;",x,fixed=TRUE)}
+# Overall subtitles name measures; sample and method details belong in captions.
+ao_measure_subtitles <- c(
+  "01_h1_performance"="Final accuracy and task discrimination",
+  "02_h2_beyond_aid"="Final accuracy and task discrimination",
+  "03_h3_bias"="Advice acceptance and task response preference",
+  "04_h4_discrimination"="Advice selectivity and task discrimination",
+  "05_h5a_switching"="Response changes",
+  "06_h5b_revision_quality"="Beneficial and harmful revisions",
+  "07_h6_selective_uptake"="Final advice uptake",
+  "08_h7_subjective"="Trust and perceived accuracy",
+  "09_s1_decision_context"="Initial and final accuracy and task discrimination",
+  "10_s2_task_bias_context"="Initial and final task response preference",
+  "11_s3_advice_accuracy"="Final accuracy with correct and incorrect advice",
+  "12_s4_sdt_correction"="Advice and task SDT timing contrasts",
+  "13_s5_inference_sensitivity"="Holm-adjusted p-values"
+)
+
 ao_build_plots <- function(root,analysis,out) {
   read <- function(name) read_csv(file.path(analysis,paste0(name,".csv")),show_col_types=FALSE)
   ao_check(file.exists(file.path(analysis,"VALIDATED.txt")),"Run tests/validate_aid_onset_primary.R before plotting")
@@ -234,7 +251,8 @@ ao_build_plots <- function(root,analysis,out) {
     f <- catalog[i,];rs <- filter(registry,figure==f$figure)
     message("Rendering ",f$figure)
     rp <- mp <- tp <- tibble()
-    subtitle <- "60 participants"
+    subtitle <- unname(ao_measure_subtitles[[f$figure]])
+    context_note <- ""
     caption <- "Faint points and lines: participants. Diamonds: model estimates with pointwise 95% CIs. AF = Aid-first; SF = Stimulus-first."
     if(f$section=="core" || f$order==11) {
       pieces <- lapply(seq_len(nrow(rs)),function(j) ao_panel(rs[j,],filter(raw,correction=="loglinear"),
@@ -245,12 +263,12 @@ ao_build_plots <- function(root,analysis,out) {
       caption <- paste(caption,"Holm within outcome: *** p < .001; ** p < .01; * p < .05; ns p >= .05. Binary estimates condition on zero participant random effect.",sep="\n")
       if(f$order==2) caption <- paste(caption,"Cell labels test human-minus-aid against zero; brackets compare the two timing advantages.",sep="\n")
       if(any(tp$sensitivity_disagreement)) caption <- paste(caption,"[a] Model and paired-participant significance differ; see S5 and the sensitivity tables.",sep="\n")
-      if(f$order==11) subtitle <- "Supporting tests | Manual uses the same all-trial data in both panels; it has no advice-correctness category"
+      if(f$order==11) context_note <- "Supporting tests. Manual uses the same all-trial data in both panels; it has no advice-correctness category."
     } else if(f$order %in% c(9,10)) {
       pieces <- lapply(seq_len(nrow(rs)),function(j) ao_context(context,rs$outcome[j],rs$panel_title[j]))
       p <- wrap_plots(lapply(pieces,`[[`,"plot"),nrow=1)
       rp <- bind_rows(lapply(pieces,`[[`,"raw"));mp <- bind_rows(lapply(pieces,`[[`,"means"))
-      subtitle <- "Supporting descriptive context | 60 participants | Matched valid initial/final response pairs"
+      context_note <- "Supporting descriptive context. Matched valid initial/final response pairs."
       caption <- "Faint points and lines: participants; lines connect conditions within each decision. Large symbols: equally weighted participant means with pointwise 95% t CIs; no additional hypothesis tests.\nAid-first initial decisions already follow advice exposure. These within-trial changes do not share an independent baseline."
     } else if(f$order==12) {
       tp <- tests %>% filter(comparison=="SF_minus_AF",outcome %in% c("advice_bias","task_bias","advice_dprime","task_dprime","task_dprime_advantage")) %>%
@@ -261,7 +279,7 @@ ao_build_plots <- function(root,analysis,out) {
         geom_point(position=position_dodge(.45),size=3)+scale_color_manual(values=c(loglinear="#1976A3",extreme_only="#C56924"),
           labels=c(loglinear="Loglinear (primary)",extreme_only="Extreme-only (sensitivity)"),name=NULL)+ao_theme()+
         labs(x="Stimulus-first - Aid-first",y=NULL)+theme(axis.title.x=element_text(),panel.grid.major.y=element_blank())
-      subtitle <- "Supporting sensitivity | Identical model specifications and contrast families under each correction"
+      context_note <- "Supporting sensitivity. Identical model specifications and contrast families under each correction."
       caption <- "Points and intervals: model contrasts with pointwise 95% CIs. Holm adjustment is repeated separately under each correction.\nThese are sensitivity checks on the same responses, not independent confirmatory evidence. Numerical tests accompany this figure."
     } else {
       a <- primary %>% select(contrast_id,hypothesis,outcome,comparison,p_holm,estimate,inference_available) %>% mutate(method="Mixed model")
@@ -280,9 +298,11 @@ ao_build_plots <- function(root,analysis,out) {
           labs(x="Holm-adjusted p (log scale)",y=NULL)
       })
       p <- wrap_plots(pieces,nrow=1,guides="collect") & theme(legend.position="bottom")
-      subtitle <- "Supporting sensitivity | All 28 unique primary comparisons | Same within-outcome Holm families"
+      context_note <- "Supporting sensitivity. All 28 unique primary comparisons; same within-outcome Holm families."
       caption <- "Dots left of .05 meet the adjusted threshold; values below 1e-8 are shown at the left edge. Paired tests weight each participant equally.\nBinary model and paired estimates target different summaries; disagreements are retained. Paired inference never substitutes for unavailable primary inference."
     }
+    caption <- paste(paste0("N = ",f$n_participants," participants."),context_note,caption)
+    caption <- paste(strwrap(caption,width=155),collapse="\n")
     p <- p+plot_annotation(title=f$title,subtitle=subtitle,caption=caption,
       theme=theme(plot.title=element_text(size=20,face="bold",color="#172B3A"),plot.subtitle=element_text(size=11,color="#526572",margin=margin(b=12)),
         plot.caption=element_text(size=8.8,hjust=0,color="#526572",lineheight=1.25),plot.margin=margin(18,22,14,22)))
