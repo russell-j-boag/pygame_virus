@@ -1,0 +1,4 @@
+# Internal document render checks; retain locally.
+qa/
+qa_final/
+~$*.docx

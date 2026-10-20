@@ -1,0 +1,104 @@
+{
+  "selected_participants": 60,
+  "selected_runs": 60,
+  "duplicated_trial_keys": 0,
+  "raw_id_run_pairs": 63,
+  "repeated_raw_ids": {
+    "14": {
+      "20260727_110459": {
+        "selected": false,
+        "files": [
+          "delta_p014_20260727_110459_b00_PRACTICE.csv",
+          "results_p014_20260727_110459_b00_PRACTICE.csv",
+          "results_p014_20260727_110459_b01_AUTOMATION.csv",
+          "results_p014_20260727_110459_b01_AUTOMATION_POSTBLOCK_SLIDERS.csv",
+          "results_p014_20260727_110459_b02_AUTOMATION.csv",
+          "results_p014_20260727_110459_b02_AUTOMATION_POSTBLOCK.csv",
+          "results_p014_20260727_110459_b02_AUTOMATION_POSTBLOCK_SLIDERS.csv"
+        ]
+      },
+      "20260730_085751": {
+        "selected": true,
+        "files": [
+          "delta_p014_20260730_085751_b00_PRACTICE.csv",
+          "results_p014_20260730_085751_b00_ALL.csv",
+          "results_p014_20260730_085751_b00_POSTBLOCK_ALL.csv",
+          "results_p014_20260730_085751_b00_POSTBLOCK_SLIDERS_ALL.csv",
+          "results_p014_20260730_085751_b00_PRACTICE.csv",
+          "results_p014_20260730_085751_b01_AUTOMATION.csv",
+          "results_p014_20260730_085751_b01_AUTOMATION_POSTBLOCK_SLIDERS.csv",
+          "results_p014_20260730_085751_b02_AUTOMATION.csv",
+          "results_p014_20260730_085751_b02_AUTOMATION_POSTBLOCK.csv",
+          "results_p014_20260730_085751_b02_AUTOMATION_POSTBLOCK_SLIDERS.csv",
+          "results_p014_20260730_085751_b03_AUTOMATION.csv",
+          "results_p014_20260730_085751_b03_AUTOMATION_POSTBLOCK.csv",
+          "results_p014_20260730_085751_b03_AUTOMATION_POSTBLOCK_SLIDERS.csv"
+        ]
+      }
+    },
+    "53": {
+      "20260827_125739": {
+        "selected": false,
+        "files": [
+          "results_p053_20260827_125739_b00_PRACTICE.csv"
+        ]
+      },
+      "20260827_131135": {
+        "selected": true,
+        "files": [
+          "delta_p053_20260827_131135_b00_PRACTICE.csv",
+          "results_p053_20260827_131135_b00_ALL.csv",
+          "results_p053_20260827_131135_b00_POSTBLOCK_ALL.csv",
+          "results_p053_20260827_131135_b00_POSTBLOCK_SLIDERS_ALL.csv",
+          "results_p053_20260827_131135_b00_PRACTICE.csv",
+          "results_p053_20260827_131135_b01_AUTOMATION.csv",
+          "results_p053_20260827_131135_b01_AUTOMATION_POSTBLOCK_SLIDERS.csv",
+          "results_p053_20260827_131135_b02_AUTOMATION.csv",
+          "results_p053_20260827_131135_b02_AUTOMATION_POSTBLOCK.csv",
+          "results_p053_20260827_131135_b02_AUTOMATION_POSTBLOCK_SLIDERS.csv",
+          "results_p053_20260827_131135_b03_AUTOMATION.csv",
+          "results_p053_20260827_131135_b03_AUTOMATION_POSTBLOCK.csv",
+          "results_p053_20260827_131135_b03_AUTOMATION_POSTBLOCK_SLIDERS.csv"
+        ]
+      }
+    },
+    "59": {
+      "20260903_120309": {
+        "selected": false,
+        "files": [
+          "delta_p059_20260903_120309_b00_PRACTICE.csv",
+          "results_p059_20260903_120309_b00_ALL.csv",
+          "results_p059_20260903_120309_b00_POSTBLOCK_ALL.csv",
+          "results_p059_20260903_120309_b00_POSTBLOCK_SLIDERS_ALL.csv",
+          "results_p059_20260903_120309_b00_PRACTICE.csv",
+          "results_p059_20260903_120309_b01_AUTOMATION.csv",
+          "results_p059_20260903_120309_b01_AUTOMATION_POSTBLOCK.csv",
+          "results_p059_20260903_120309_b01_AUTOMATION_POSTBLOCK_SLIDERS.csv",
+          "results_p059_20260903_120309_b02_AUTOMATION.csv",
+          "results_p059_20260903_120309_b02_AUTOMATION_POSTBLOCK_SLIDERS.csv",
+          "results_p059_20260903_120309_b03_AUTOMATION.csv",
+          "results_p059_20260903_120309_b03_AUTOMATION_POSTBLOCK.csv",
+          "results_p059_20260903_120309_b03_AUTOMATION_POSTBLOCK_SLIDERS.csv"
+        ]
+      },
+      "20260924_110831": {
+        "selected": true,
+        "files": [
+          "delta_p059_20260924_110831_b00_PRACTICE.csv",
+          "results_p059_20260924_110831_b00_ALL.csv",
+          "results_p059_20260924_110831_b00_POSTBLOCK_ALL.csv",
+          "results_p059_20260924_110831_b00_POSTBLOCK_SLIDERS_ALL.csv",
+          "results_p059_20260924_110831_b00_PRACTICE.csv",
+          "results_p059_20260924_110831_b01_AUTOMATION.csv",
+          "results_p059_20260924_110831_b01_AUTOMATION_POSTBLOCK.csv",
+          "results_p059_20260924_110831_b01_AUTOMATION_POSTBLOCK_SLIDERS.csv",
+          "results_p059_20260924_110831_b02_AUTOMATION.csv",
+          "results_p059_20260924_110831_b02_AUTOMATION_POSTBLOCK_SLIDERS.csv",
+          "results_p059_20260924_110831_b03_AUTOMATION.csv",
+          "results_p059_20260924_110831_b03_AUTOMATION_POSTBLOCK.csv",
+          "results_p059_20260924_110831_b03_AUTOMATION_POSTBLOCK_SLIDERS.csv"
+        ]
+      }
+    }
+  }
+}
