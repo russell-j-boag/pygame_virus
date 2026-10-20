@@ -188,33 +188,48 @@ dpr_plot_build <- function(bundle,registry,out) {
       finish(order,wrap_plots(panels,ncol=2,guides="collect"),paste(caption,
         if(measure=="bias")"Advice -c: acceptance; task -c: BLACK preference." else "Advice selectivity and final task discrimination reuse the same decisions."))
     }
-    for(o in c("accuracy","agreement")) {
-      raw <- filter(d$trajectories,outcome==o) %>% mutate(value=100*value,advice=if(o=="accuracy")"All" else as.character(advice))
-      m <- means[[paste0(o,"_trend")]] %>% mutate(advice=if(o=="accuracy")"All" else as.character(advice))
+    for(o in c("accuracy","agreement","correct_rt")) {
+      rt <- o=="correct_rt"
+      raw <- filter(d$trajectories,outcome==o) %>%
+        mutate(value=if(rt)exp(value) else 100*value,advice=if(o!="agreement")"All" else as.character(advice))
+      m <- means[[paste0(o,"_quadratic_trend")]] %>% mutate(advice=if(o!="agreement")"All" else as.character(advice))
+      if(rt)for(v in c("estimate","lower","upper"))m[[v]] <- exp(m[[v]])
       t <- choose("H5",o)
-      # Match the zoom across phases and cohorts, retaining every participant bin
-      # (the all-participant minima are about 42-43%). Incorrect advice keeps 0-100%.
-      bounds <- tibble(advice=unique(raw$advice)) %>%
-        mutate(bottom=ifelse(advice=="Incorrect",0,40),top=ifelse(advice=="Incorrect",135,118))
-      aa <- t %>% mutate(line=match(group,c(GROUPS,"CAL90 - CAL65")),
-        y=ifelse(advice=="Incorrect",126-(line-1)*7,114-(line-1)*4),
-        label=paste(ifelse(group=="CAL90 - CAL65","Group difference",group),dpr_p_label(p_holm)))
+      if(rt) {
+        allraw <- filter(bundle$data$all_participants$trajectories,outcome==o)
+        allfit <- bundle$estimates$all_participants[[paste0(o,"_quadratic_trend")]]
+        rg <- range(c(exp(allraw$value),exp(allfit$lower),exp(allfit$upper),m$lower,m$upper),finite=TRUE)
+        span <- max(diff(rg),.1)
+        bounds <- tibble(advice="All",bottom=max(0,rg[1]-.04*span),top=rg[2]+.35*span,
+          text_top=rg[2]+.28*span,text_step=.10*span)
+      } else bounds <- tibble(advice=unique(raw$advice)) %>%
+        mutate(bottom=ifelse(advice=="Incorrect",0,40),top=if(o=="agreement")140 else 118,
+          text_top=if(o=="agreement")132 else 114,text_step=if(o=="agreement")9 else 4)
+      aa <- t %>% select(group,phase,advice,estimand,p_holm) %>%
+        mutate(symbol=dpr_p_label(p_holm)) %>% select(-p_holm) %>%
+        pivot_wider(names_from=estimand,values_from=symbol) %>% left_join(bounds,by="advice") %>%
+        mutate(line=match(group,c(GROUPS,"CAL90 - CAL65")),y=text_top-(line-1)*text_step,
+          label=paste0(ifelse(group=="CAL90 - CAL65","Difference",group),": S-M ",middle_start,"; M-E ",end_middle,"; Curve ",curvature))
       p <- ggplot(raw,aes(progress,value,colour=group))+
         geom_blank(data=bounds,aes(x=0,y=bottom),inherit.aes=FALSE)+
         geom_blank(data=bounds,aes(x=0,y=top),inherit.aes=FALSE)+
         geom_line(aes(group=participant_id),alpha=.07,linewidth=.22)+geom_point(alpha=.13,size=.8)+
         geom_ribbon(data=m,aes(x=progress,y=NULL,ymin=lower,ymax=upper,fill=group,group=group),alpha=.12,colour=NA)+
         geom_line(data=m,aes(progress,estimate,group=group),linewidth=.8)+
-        geom_point(data=filter(m,progress %in% c(0,1)),aes(progress,estimate),shape=23,fill="white",size=2.3)+
-        geom_text(data=aa,aes(x=.03,y=y,label=label,colour=group),inherit.aes=FALSE,hjust=0,size=3,show.legend=FALSE)+
+        geom_point(data=filter(m,progress %in% c(0,.5,1)),aes(progress,estimate),shape=23,fill="white",size=2.3)+
+        geom_text(data=aa,aes(x=.02,y=y,label=label,colour=group),inherit.aes=FALSE,hjust=0,size=2.8,show.legend=FALSE)+
         facet_grid(advice~phase,scales="free_y",labeller=labeller(phase=c(P1="Phase 1: 95%",P2="Phase 2: 70%",P3="Phase 3: 95%")))+
         scale_colour_manual(values=colours,breaks=GROUPS,name=NULL)+scale_fill_manual(values=colours,guide="none")+
         scale_x_continuous(breaks=c(0,.5,1),labels=c("Start","Middle","End"))+
-        scale_y_continuous(breaks=function(limits)if(limits[1]>0)seq(40,100,10) else seq(0,100,25))+
-        labs(x=NULL,y=if(o=="accuracy")"Accuracy (%)" else "Agreement (%)")+dpr_theme()
+        labs(x=NULL,y=if(rt)"Correct-response RT (s; geometric mean)" else if(o=="accuracy")"Accuracy (%)" else "Agreement (%)")+dpr_theme()
+      if(!rt)p <- p+scale_y_continuous(breaks=function(limits)if(limits[1]>0)seq(40,100,10) else seq(0,100,25))
       register(o,m,raw,t)
-      finish(if(o=="accuracy")8 else 9,p,paste(caption,"Curves and bands: phase-specific model predictions; points: participant 100-trial bins.",
-        if(o=="accuracy")"Nine endpoint tests." else "One 18-test family across correct and incorrect advice. Empty advice bins are missing, not zero."))
+      # Stable catalog keys: insert H5c between H5b and H6 without renumbering other keys.
+      finish(switch(o,accuracy=8,agreement=9,correct_rt=9.5),p,paste(
+        "Quadratic curves and pointwise 95% bands; participant 100-trial bins. S-M: middle minus start; M-E: end minus middle; Curve: quadratic coefficient on",
+        if(rt)"log-RT scale." else "log-odds scale.",
+        if(o=="agreement")"Holm across 54 tests (both advice types)." else "Holm across 27 tests.",
+        "*** p<.001; ** p<.01; * p<.05; ns p>=.05. Difference: CAL90 minus CAL65. Curvature alone does not establish a plateau."))
     }
     panels <- list()
     for(o in c("trust","perceived","signed_error")) {

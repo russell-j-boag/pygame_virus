@@ -49,7 +49,7 @@ plot_dynamic_reliability_hypotheses <- function(base,plot_base,root,input=NULL,q
   registry <- read_csv(file.path(root,"config/hypothesis_figures.csv"),show_col_types=FALSE,na="")
   registry$contrast_ids[is.na(registry$contrast_ids)] <- ""
   catalog <- registry %>% distinct(order,filename,title,role,hypothesis,legacy_labels,notes) %>% arrange(order)
-  stopifnot(nrow(catalog)==21,sum(catalog$role=="Core")==11,!anyDuplicated(catalog$filename))
+  stopifnot(nrow(catalog)==22,sum(catalog$role=="Core")==12,!anyDuplicated(catalog$filename))
   dir.create(plot_base,recursive=TRUE,showWarnings=FALSE);plot_base <- normalizePath(plot_base)
   stage <- tempfile(".presentation_build_",tmpdir=plot_base);dir.create(file.path(stage,"data"),recursive=TRUE)
   message("Staged H1-H7 report: ",stage)
@@ -79,8 +79,8 @@ plot_dynamic_reliability_hypotheses <- function(base,plot_base,root,input=NULL,q
     if(is.na(found))stop("Missing historical figure: ",stem,call.=FALSE)
     members <- filter(bundle$membership,sample=="all_participants" | in_primary)
     p <- legacy[[sample]]$figures[[legacy_stems[i]]]+plot_annotation(
-      title=c("19. Incorrect-advice agreement after the drop","20. Accuracy and agreement recovery",
-        "21. Final evaluations and incorrect-advice agreement")[i],
+      title=c("20. Incorrect-advice agreement after the drop","21. Accuracy and agreement recovery",
+        "22. Final evaluations and incorrect-advice agreement")[i],
       subtitle=paste0(if(sample=="primary")"" else "All-participant sensitivity; ",
         "CAL65 n = ",sum(members$calibration_target_group=="CAL65"),", CAL90 n = ",sum(members$calibration_target_group=="CAL90")))
     for(ext in c("pdf","png")) {
@@ -144,15 +144,15 @@ dpr_report_html <- function(out,catalog,bundle,annotations) {
     H2="Does the final human-plus-aid decision outperform following the aid alone? Accuracy includes timeouts; task SDT uses the same human-answered trials for both agents.",
     H3="How does the reliability drop alter advice acceptance, BLACK response preference, selective advice following and final stimulus discrimination?",
     H4="Which behaviours recover when reliability returns, and which still differ from the initial high-reliability phase?",
-    H5="Does performance or advice following adjust gradually within a phase?",
+    H5="How do accuracy, advice following and correct-response speed change from start to middle and from middle to end of each phase, and is there added quadratic curvature? Phase-centred quadratic models were adopted on 20 October 2026 after inspecting the linear trajectories. The two change contrasts use predictions at trial positions 1, 200.5 and 400; the midpoint lies between trials 200 and 201. Models use all eligible individual trials and figures retain four 100-trial bins. This split was selected retrospectively after inspecting the trajectories. Both changes and curvature share a Holm family of 27 tests for accuracy/RT or 54 for agreement. Curvature is tested on log-odds or log-RT scales; a curved trajectory or nonsignificant late slope does not establish a plateau.",
     H6="How do calibration groups evaluate the aid after the complete sequence, and how accurate are their perceived reliability ratings?",
     H7="How are final trust and perceived-reliability error associated with whole-block advice acceptance and selectivity within each calibration group, and do those slopes differ between groups?")
   html <- c('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dynamic reliability: revised H1-H7 hypotheses</title>',
     '<style>body{font:17px/1.55 system-ui,sans-serif;color:#25323d;max-width:1250px;margin:32px auto;padding:0 24px}h1{font-size:34px}h2{margin-top:45px}h3{font-size:23px}img{width:100%;border:1px solid #dce4e9}article{margin:30px 0 48px}a{color:#1976a3}.meta{font-size:14px;color:#566372}nav,.method{padding:18px;background:#f0f5f7}details{margin:15px 0}summary{cursor:pointer;font-weight:600}table{border-collapse:collapse;font-size:13px;width:100%}td,th{padding:7px;border-bottom:1px solid #dde5e9;text-align:left}.warn{background:#fff1db;padding:15px}</style></head><body>',
     '<h1>Adapting to changing aid reliability</h1>',
     '<p>How does relative human-aid competence shape the benefits of assistance, adaptation to a reliability drop, and recovery when reliability returns?</p>',
-    sprintf('<p><strong>%d QC-retained participants throughout the primary analyses; all %d as matched sensitivity.</strong> Seven revised hypotheses, 11 core figures, and 125 primary comparisons per cohort.</p>',sum(bundle$membership$in_primary),nrow(bundle$membership)),
-    '<p><a href="core_hypotheses.pdf">11-page core PDF</a> | <a href="all_hypotheses.pdf">All 21 primary-sample figures</a> | <a href="sensitivity_hypotheses.pdf">21-page all-participant sensitivity</a> | <a href="hypothesis_mapping.csv">Hypothesis crosswalk</a></p>',
+    sprintf('<p><strong>%d QC-retained participants throughout the primary analyses; all %d as matched sensitivity.</strong> Seven revised hypotheses, 12 core figures, and 206 primary comparisons per cohort.</p>',sum(bundle$membership$in_primary),nrow(bundle$membership)),
+    '<p><a href="core_hypotheses.pdf">12-page core PDF</a> | <a href="all_hypotheses.pdf">All 22 primary-sample figures</a> | <a href="sensitivity_hypotheses.pdf">22-page all-participant sensitivity</a> | <a href="hypothesis_mapping.csv">Hypothesis crosswalk</a></p>',
     '<div class="method"><p>The revised H1-H7 framework was agreed on 17 October 2026 after inspecting earlier results. It is retrospective, not preregistered. The hypotheses and correction families below replace the earlier presentation numbering; historical figures retain their original tests.</p>',
     '<p>Faint points show participants; open diamonds show fitted estimates with pointwise 95% intervals. Tests are two-sided, with Holm correction within hypothesis and outcome. *** p&lt;.001; ** p&lt;.01; * p&lt;.05; ns p&ge;.05. Unavailable inference is labelled unavailable. Sensitivity analyses do not replace primary inference.</p>',
     '<p>Advice -c means acceptance; task -c means BLACK preference. Advice d-prime measures selective following; task d-prime measures final stimulus discrimination. These use the same responses and are not independent replications.</p></div>',
@@ -175,8 +175,8 @@ dpr_report_html <- function(out,catalog,bundle,annotations) {
     if(r$role=="Core" && r$hypothesis!=last) {
       html <- c(html,paste0('<h2 id="',r$hypothesis,'">',r$hypothesis,'</h2><p>',prose[[r$hypothesis]],'</p>'));last <- r$hypothesis
     }
-    if(i==12)html <- c(html,'<h2 id="supporting">Supporting analyses and sensitivities</h2>')
-    if(i==19)html <- c(html,'<h2 id="historical">Historical hypothesis formulations</h2><p>Original plotted data and tests are retained, with updated display text. Their hypothesis labels belong to the earlier framework.</p>')
+    if(i==which(primary$role=="Supporting")[1])html <- c(html,'<h2 id="supporting">Supporting analyses and sensitivities</h2>')
+    if(i==which(primary$role=="Historical")[1])html <- c(html,'<h2 id="historical">Historical hypothesis formulations</h2><p>Original plotted data and tests are retained, with updated display text. Their hypothesis labels belong to the earlier framework.</p>')
     r$notes <- gsub("; nonsignificance is not equivalence|; the post block is not an untreated control","",r$notes)
     r$notes <- sub("Original figure and test families retained unchanged", "Original plotted data and test families retained; display text updated",r$notes,fixed=TRUE)
     html <- c(html,paste0('<article><h3>',esc(r$title),'</h3><p class="meta">',esc(r$legacy_labels),' | ',esc(r$notes),'</p>',
@@ -185,9 +185,35 @@ dpr_report_html <- function(out,catalog,bundle,annotations) {
     if(nrow(a)) {
       html <- c(html,'<details><summary>Tests shown in this figure</summary><table><tr><th>Outcome</th><th>Comparison</th><th>Group</th><th>Estimate [95% CI]</th><th>Holm p</th><th>Family size</th></tr>')
       for(j in seq_len(nrow(a))) {
-        q <- a[j,];v <- if(q$outcome=="correct_rt")sprintf("%.3f [%.3f, %.3f] ratio",q$ratio,q$ratio_lower,q$ratio_upper) else sprintf("%.3f [%.3f, %.3f]",q$estimate,q$lower,q$upper)
+        q <- a[j,];v <- if(q$outcome=="correct_rt" && q$estimand!="curvature")sprintf("%.3f [%.3f, %.3f] ratio",q$ratio,q$ratio_lower,q$ratio_upper) else sprintf("%.3f [%.3f, %.3f] %s",q$estimate,q$lower,q$upper,if(q$estimand=="curvature")q$inference_scale else "")
         if(!q$inference_available)v <- paste(v,"(inference unavailable)")
         html <- c(html,paste0('<tr><td>',esc(q$outcome),'</td><td>',esc(q$comparison),'</td><td>',esc(q$group),'</td><td>',v,'</td><td>',p_text(q$p_holm),'</td><td>',q$family_size,'</td></tr>'))
+      }
+      html <- c(html,'</table></details>')
+    }
+    if(identical(r$hypothesis,"H5")) {
+      outcome <- unique(a$outcome)
+      html <- c(html,'<details><summary>Linear-only sensitivity and trajectory shape</summary>',
+        '<p>Linear-only endpoint tests use separate Holm families (9 accuracy, 18 agreement, 9 RT). Participant linear slopes accompany these fits only and do not validate quadratic curvature. Shape intervals are pointwise and descriptive; fitted reversals are point estimates, not additional tests.</p>',
+        '<p><a href="data/analysis/h5_linear_sensitivity.csv">Linear model and participant sensitivity tests</a> | <a href="data/analysis/primary/shape_summaries.csv">Primary slope summaries</a> | <a href="data/analysis/all_participants/shape_summaries.csv">All-participant slope summaries</a></p>',
+        '<table><tr><th>Sample</th><th>Method</th><th>Phase / advice</th><th>Group</th><th>Linear net change [95% CI]</th><th>Holm p</th></tr>')
+      linear <- filter(bundle$results,hypothesis=="H5",outcome==!!outcome,analysis %in% c("linear_sensitivity","linear_participant_sensitivity"))
+      for(j in seq_len(nrow(linear))) {
+        q <- linear[j,];v <- if(outcome=="correct_rt")sprintf("%.3f [%.3f, %.3f] ratio",q$ratio,q$ratio_lower,q$ratio_upper) else sprintf("%.2f [%.2f, %.2f] pp",q$estimate,q$lower,q$upper)
+        html <- c(html,paste0('<tr><td>',esc(q$sample),'</td><td>',esc(q$analysis),'</td><td>',q$phase,' / ',q$advice,
+          '</td><td>',esc(q$group),'</td><td>',v,'</td><td>',p_text(q$p_holm),'</td></tr>'))
+      }
+      html <- c(html,'</table><p>Slopes below are per full-phase unit of progress. Model slopes are log odds (accuracy/agreement) or log RT. Response slopes are percentage points (accuracy/agreement) or seconds (geometric RT). A reversal is flagged only when the fitted turning point lies strictly inside the phase.</p>',
+        '<table><tr><th>Sample</th><th>Phase / advice</th><th>Group</th><th>Position</th><th>Model slope [95% CI]</th><th>Response slope [95% CI]</th><th>Fitted reversal</th></tr>')
+      for(sample_name in c("primary","all_participants")) {
+        shape <- filter(bundle$data[[sample_name]]$shape_summaries,outcome==!!outcome)
+        for(j in seq_len(nrow(shape))) {
+          q <- shape[j,]
+          html <- c(html,paste0('<tr><td>',sample_name,'</td><td>',q$phase,' / ',if(is.na(q$advice))"All" else q$advice,
+            '</td><td>',q$group,'</td><td>',q$position,'</td><td>',sprintf('%.3f [%.3f, %.3f]',q$model_estimate,q$model_lower,q$model_upper),
+            '</td><td>',sprintf('%.3f [%.3f, %.3f]',q$response_estimate,q$response_lower,q$response_upper),'</td><td>',
+            if(q$reversal_within_phase)sprintf('At %.1f%% of phase',100*q$turning_progress) else 'None within phase','</td></tr>'))
+        }
       }
       html <- c(html,'</table></details>')
     }

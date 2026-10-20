@@ -27,15 +27,17 @@ stopifnot(setequal(bundle$membership$participant_id,unique(raw$participant_id)),
   setequal(bundle$membership$participant_id[!bundle$membership$in_primary],excluded),
   all(qc$participant_id[qc$manual_target=="flag" & !qc$exclude_by_rules] %in% bundle$membership$participant_id[bundle$membership$in_primary]))
 required <- registry %>% filter(role=="Core") %>% separate_rows(contrast_ids,sep="\\|") %>% rename(contrast_id=contrast_ids)
-stopifnot(nrow(required)==125,!anyDuplicated(required[c("hypothesis","outcome","contrast_id")]),
-  n_distinct(registry$filename)==21,n_distinct(registry$filename[registry$role=="Core"])==11)
+stopifnot(nrow(required)==206,!anyDuplicated(required[c("hypothesis","outcome","contrast_id")]),
+  n_distinct(registry$filename)==22,n_distinct(registry$filename[registry$role=="Core"])==12)
 trial <- filter(raw,block!="CALIBRATION") %>% mutate(group=calibration_target_group,
   stage=case_when(block=="MANUAL" & manual_segment=="PRE_AUTOMATION"~"Manual pre",
     block=="MANUAL"~"Manual post",reliability_phase_idx==1~"P1",reliability_phase_idx==2~"P2",TRUE~"P3"),
   phase=ifelse(block=="AUTOMATION",stage,NA_character_),answered=response!="TIMEOUT",
   accuracy=as.numeric(answered & response==stimulus),agreement=ifelse(block=="AUTOMATION" & answered,as.numeric(response==aid_label),NA_real_),
   advice=ifelse(block=="AUTOMATION",ifelse(aid_label==stimulus,"Correct","Incorrect"),NA_character_),
-  progress=(trial_in_reliability_phase-1)/399)
+  progress=(trial_in_reliability_phase-1)/399,x=(trial_in_reliability_phase-200.5)/399,
+  valid_correct_rt=accuracy==1 & is.finite(rt_s) & rt_s>0,
+  log_rt=ifelse(accuracy==1 & is.finite(rt_s) & rt_s>0,log(pmax(rt_s,.Machine$double.xmin)),NA_real_))
 rate <- function(k,n,co)if(co=="loglinear")(k+.5)/(n+1) else ifelse(k==0,.5/n,ifelse(k==n,1-.5/n,k/n))
 models <- new.env(parent=emptyenv())
 getmodel <- function(sample,name) {
@@ -130,7 +132,8 @@ for(sample_name in c("primary","all_participants")) {
     m <- getmodel(sample_name,a$model);r <- filter(results,sample==sample_name,analysis==a$analysis,
       hypothesis==a$hypothesis,outcome==a$outcome,correction==a$correction,model==a$model)
     r <- r[match(names(a$spec$weights),r$contrast_id),];stopifnot(!anyNA(r$contrast_id))
-    stopifnot(a$scale==if(a$outcome %in% c("accuracy","agreement","accuracy_benchmark"))100 else 1)
+    curvature <- "estimand" %in% names(a$spec$metadata) && all(a$spec$metadata$estimand=="curvature")
+    stopifnot(a$scale==if(a$outcome %in% c("accuracy","agreement","accuracy_benchmark") && !curvature)100 else 1)
     # Derive the intended weights independently from the registered contrast IDs.
     grid <- as.data.frame(a$em@grid)
     for(id in names(a$spec$weights)) {
@@ -145,7 +148,13 @@ for(sample_name in c("primary","all_participants")) {
         g <- if(a$hypothesis=="H5")parts[3] else parts[2]
         one <- function(group_name) {
           if(a$hypothesis=="H5")return(as.numeric(grid$group==group_name & grid$phase==parts[2] &
-            if(parts[1]=="All")TRUE else grid$advice==parts[1])*ifelse(grid$progress==1,1,-1))
+            if(parts[1]=="All")TRUE else grid$advice==parts[1]) * {
+              position <- if("x" %in% names(grid))grid$x+.5 else grid$progress
+              if(parts[4]=="curvature")ifelse(position==.5,-4,2) else
+                if(parts[4]=="middle_start")as.numeric(position==.5)-as.numeric(position==0) else
+                if(parts[4]=="end_middle")as.numeric(position==1)-as.numeric(position==.5) else
+                as.numeric(position==1)-as.numeric(position==0)
+            })
           dim <- if(a$hypothesis %in% c("H1","S2"))"stage" else "phase"
           as.numeric(grid$group==group_name & grid[[dim]]==parts[3])-
             if(parts[4]=="zero")0 else as.numeric(grid$group==group_name & grid[[dim]]==parts[4])
@@ -170,7 +179,8 @@ for(sample_name in c("primary","all_participants")) {
       V <- if(inherits(m,"merMod"))as.matrix(vcov(m)) else hc3(m)
       theta <- drop(X%*%B)
       if(inherits(m,"glmerMod")) {
-        theta <- plogis(theta);J <- X*as.numeric(theta*(1-theta));covariance <- J%*%V%*%t(J);df <- Inf
+        if(curvature)J <- X else {theta <- plogis(theta);J <- X*as.numeric(theta*(1-theta))}
+        covariance <- J%*%V%*%t(J);df <- Inf
       } else {covariance <- X%*%V%*%t(X);df <- if(inherits(m,"merMod"))NA_real_ else df.residual(m)}
     }
     for(j in seq_len(nrow(r))) {
@@ -184,15 +194,17 @@ for(sample_name in c("primary","all_participants")) {
       } else stopifnot(is.na(r$p_raw[j]),is.na(r$lower[j]),is.na(r$upper[j]))
     }
     # Participant contrasts: independently calculate one change per person, then t tests.
-    rs <- filter(results,sample==sample_name,analysis=="participant_sensitivity",hypothesis==a$hypothesis,
+    rs <- filter(results,sample==sample_name,analysis==if(a$hypothesis=="H5")"linear_participant_sensitivity" else "participant_sensitivity",hypothesis==a$hypothesis,
       outcome==a$outcome,correction==a$correction,model==a$model)
     if(nrow(rs))for(i in seq_len(nrow(rs))) {
       z <- rs[i,];meta <- a$spec$metadata[match(z$contrast_id,a$spec$metadata$contrast_id),]
       if(a$hypothesis=="H5") {
         x <- filter(tr,!is.na(phase),phase==meta$phase)
         if(a$outcome=="agreement")x <- filter(x,answered,advice==meta$advice)
+        if(a$outcome=="correct_rt")x <- filter(x,valid_correct_rt)
+        response <- if(a$outcome=="correct_rt")"log_rt" else a$outcome
         values <- x %>% group_by(participant_id,group) %>%
-          summarise(value=coef(lm(.data[[a$outcome]]~progress))[2],.groups="drop")
+          summarise(value=if(n_distinct(progress)>=2)coef(lm(.data[[response]]~progress))[2] else NA_real_,.groups="drop") %>% filter(is.finite(value))
       } else {
         src <- if(a$hypothesis=="H2") {if(a$outcome=="accuracy_benchmark")d$benchmark else filter(d$task_benchmark,correction==a$correction)} else
           if(a$hypothesis %in% c("H3","H4")) {
@@ -213,8 +225,60 @@ for(sample_name in c("primary","all_participants")) {
       near(z$estimate,estimate*a$scale);near(z$lower,tt$conf.int[1]*a$scale);near(z$upper,tt$conf.int[2]*a$scale);near(z$p_raw,tt$p.value)
     }
   }
+  # Audit all H5 rows, scheduled x and RT eligibility against raw trials.
+  h5 <- filter(results,sample==sample_name,hypothesis=="H5",analysis=="primary")
+  stopifnot(setequal(h5$estimand,c("middle_start","end_middle","curvature")),nrow(h5)==108,all(h5$family_size==ifelse(h5$outcome=="agreement",54,27)),
+    all(h5$inference_scale[h5$estimand=="curvature"]==ifelse(h5$outcome[h5$estimand=="curvature"]=="correct_rt","log_rt_quadratic","log_odds_quadratic")))
+  for(o in c("accuracy","agreement","correct_rt")) {
+    name <- paste0(o,"_quadratic_trend");m <- getmodel(sample_name,name)
+    source <- filter(tr,!is.na(phase))
+    if(o=="agreement")source <- filter(source,answered)
+    if(o=="correct_rt")source <- filter(source,valid_correct_rt)
+    mf <- model.frame(m)
+    stopifnot(nrow(mf)==nrow(source),any(grepl("I(x^2)",attr(terms(m),"term.labels"),fixed=TRUE)))
+    near(mf$x,source$x)
+    near(model.response(mf),source[[if(o=="correct_rt")"log_rt" else o]])
+    bins <- source %>% mutate(bin=ceiling(trial_in_reliability_phase/100)) %>%
+      group_by(across(all_of(c("participant_id","group","phase",if(o=="agreement")"advice","bin")))) %>%
+      summarise(expected_value=mean(.data[[if(o=="correct_rt")"log_rt" else o]]),expected_n=n(),expected_progress=mean(progress),.groups="drop")
+    actual <- filter(d$trajectories,outcome==o)
+    joined_bins <- inner_join(actual,bins,by=c("participant_id","group","phase",if(o=="agreement")"advice","bin"))
+    stopifnot(nrow(joined_bins)==nrow(bins),nrow(actual)==nrow(bins))
+    near(joined_bins$value,joined_bins$expected_value);near(joined_bins$n,joined_bins$expected_n)
+    near(joined_bins$progress,joined_bins$expected_progress)
+    # Finite differences independently verify the exact polynomial derivatives,
+    # response-scale Jacobians and their covariance-based intervals.
+    shape <- filter(d$shape_summaries,outcome==o);B <- fixef(m);V <- as.matrix(vcov(m))
+    design <- function(g)model.matrix(delete.response(terms(m)),g,
+      contrasts.arg=attr(model.matrix(m),"contrasts"))[,names(B),drop=FALSE]
+    X <- design(shape);h <- 1e-5
+    D <- (design(transform(shape,x=x+h))-design(transform(shape,x=x-h)))/(2*h)
+    eta <- drop(X%*%B);slope <- drop(D%*%B)
+    near(shape$model_estimate,slope,tol=1e-7)
+    response_slope <- function(b) {
+      e <- drop(X%*%b);v <- drop(D%*%b)
+      if(o=="correct_rt")exp(e)*v else 100*plogis(e)*(1-plogis(e))*v
+    }
+    J <- sapply(seq_along(B),function(j){hi <- lo <- B;hi[j]<-hi[j]+h;lo[j]<-lo[j]-h;(response_slope(hi)-response_slope(lo))/(2*h)})
+    near(shape$response_estimate,response_slope(B),tol=1e-7)
+    for(kind in c("model","response")) {
+      M <- if(kind=="model")D else J;se <- sqrt(rowSums((M%*%V)*M))
+      df <- if(o!="correct_rt")rep(Inf,nrow(M)) else vapply(seq_len(nrow(M)),function(i)lmerTest::contest1D(m,L=M[i,])$df,numeric(1))
+      near(shape[[paste0(kind,"_se")]],se,tol=1e-6)
+      near(shape[[paste0(kind,"_df")]],df,tol=1e-5)
+      value <- shape[[paste0(kind,"_estimate")]]
+      near(shape[[paste0(kind,"_lower")]],ifelse(shape$inference_available,value-qt(.975,df)*se,NA_real_),tol=1e-6)
+      near(shape[[paste0(kind,"_upper")]],ifelse(shape$inference_available,value+qt(.975,df)*se,NA_real_),tol=1e-6)
+    }
+    Q <- (design(transform(shape,x=.5))-2*design(transform(shape,x=0))+design(transform(shape,x=-.5)))/.5
+    curvature <- drop(Q%*%B)
+    middle_slope <- drop((design(transform(shape,x=.5))-design(transform(shape,x=-.5)))%*%B)
+    turn <- ifelse(abs(curvature)>1e-12,.5-middle_slope/(2*curvature),NA_real_)
+    near(shape$quadratic,curvature);near(shape$turning_progress,turn)
+    stopifnot(identical(unname(shape$reversal_within_phase),unname(!is.na(turn) & turn>0 & turn<1)))
+  }
   rp <- filter(results,sample==sample_name,analysis=="primary",correction %in% c("none","loglinear"),grepl("^H",hypothesis))
-  stopifnot(nrow(rp)==125,nrow(inner_join(required,rp,by=c("hypothesis","outcome","model","contrast_id")))==125)
+  stopifnot(nrow(rp)==206,nrow(inner_join(required,rp,by=c("hypothesis","outcome","model","contrast_id")))==206)
   association_tests <- filter(results,sample==sample_name,hypothesis %in% c("H7","S7"))
   stopifnot(all(association_tests$family_size[association_tests$analysis=="primary"]==6),
     all(association_tests$family_size[association_tests$analysis=="common_slope_sensitivity"]==2),
@@ -230,7 +294,8 @@ phase <- filter(results,hypothesis %in% c("H3","H4"))
 for(d in split(phase,interaction(phase$sample,phase$outcome,phase$correction,phase$analysis,drop=TRUE))) {
   stopifnot(nrow(d)==9);near(d$p_holm_joint_H3_H4,p.adjust(d$p_raw,"holm",n=9))
 }
-rt <- filter(results,outcome=="correct_rt")
+rt <- filter(results,outcome=="correct_rt",estimand!="curvature")
+stopifnot(all(is.na(filter(results,estimand=="curvature")$ratio)))
 near(rt$ratio,exp(rt$estimate));near(rt$ratio_lower,exp(rt$lower));near(rt$ratio_upper,exp(rt$upper))
 # Stale-input rejection occurs before plotting or model fitting.
 fixture <- tempfile("dpr_stale_");dir.create(file.path(fixture,"primary"),recursive=TRUE)
@@ -239,16 +304,16 @@ write_csv(tibble(path=inputs$path[1],sha256=paste(rep("0",64),collapse="")),file
 write_csv(tibble(path=character(),sha256=character()),file.path(fixture,"primary/artifact_manifest.csv"))
 failure <- tryCatch({dpr_verify_analysis(fixture);NULL},error=identity);unlink(fixture,recursive=TRUE)
 stopifnot(inherits(failure,"error"),grepl("before plotting",conditionMessage(failure)))
-cat("PASS: both cohorts; independent raw confusion counts, pooled SDT, performance, benchmarks and ratings; 125 primary comparisons/cohort; direct coefficient/covariance/df/HC3 tests; participant sensitivities; Holm families, signs, RT ratios and stale-input rejection.\n")
+cat("PASS: both cohorts; independent raw confusion counts, pooled SDT, performance, benchmarks and ratings; 206 primary comparisons/cohort; direct coefficient/covariance/df/HC3 tests; participant sensitivities; Holm families, signs, RT ratios and stale-input rejection.\n")
 if(analysis_only)quit(status=0)
 catalog <- read(file.path(out,"figure_catalog.csv"));aa <- read(file.path(out,"data/revised_annotations.csv"))
-stopifnot(nrow(catalog)==42,sum(catalog$role=="Core")==22,!anyDuplicated(catalog$filename))
+stopifnot(nrow(catalog)==44,sum(catalog$role=="Core")==24,!anyDuplicated(catalog$filename))
 for(sample_name in c("primary","all_participants")) {
   cat <- filter(catalog,sample==sample_name)
   stopifnot(identical(sub("^sensitivity_","",cat$filename),unique(registry$filename)),
     all(cat$n_participants==if(sample_name=="primary")sum(bundle$membership$in_primary) else nrow(bundle$membership)))
   an <- filter(aa,sample==sample_name,grepl("^H",hypothesis))
-  stopifnot(nrow(an)==125,!anyDuplicated(an[c("hypothesis","outcome","contrast_id")]))
+  stopifnot(nrow(an)==206,!anyDuplicated(an[c("hypothesis","outcome","contrast_id")]))
   supported <- registry %>% filter(annotation=="supporting_tests") %>% separate_rows(contrast_ids,sep="\\|") %>% rename(contrast_id=contrast_ids)
   actual <- filter(aa,sample==sample_name,hypothesis %in% c("S2","S7"))
   stopifnot(nrow(supported)==21,nrow(actual)==21,
@@ -301,9 +366,10 @@ for(i in which(catalog$role!="Historical")) {
       rows_equal(raw,src,c("participant_id","group","phase"),"value")
       expected <- means[[paste0("aided_",o,"_loglinear")]] %>% filter(phase %in% unique(raw$phase))
       rows_equal(fit,expected,c("group","phase"),c("estimate","lower","upper"))
-    } else if(row$order %in% c(8,9)) {
-      src <- filter(d$trajectories,outcome==o) %>% mutate(value=100*value,advice=if(o=="accuracy")"All" else as.character(advice))
-      expected <- means[[paste0(o,"_trend")]] %>% mutate(advice=if(o=="accuracy")"All" else as.character(advice))
+    } else if(row$order %in% c(8,9,9.5)) {
+      src <- filter(d$trajectories,outcome==o) %>% mutate(value=if(o=="correct_rt")exp(value) else 100*value,advice=if(o!="agreement")"All" else as.character(advice))
+      expected <- means[[paste0(o,"_quadratic_trend")]] %>% mutate(advice=if(o!="agreement")"All" else as.character(advice))
+      if(o=="correct_rt")for(v in c("estimate","lower","upper"))expected[[v]] <- exp(expected[[v]])
       rows_equal(raw,src,c("participant_id","group","phase","advice","bin"),c("value","progress","n"))
       rows_equal(fit,expected,c("group","phase","advice","progress"),c("estimate","lower","upper"))
     } else if(row$order==10) {
@@ -357,8 +423,14 @@ expected_pdfs <- c(paste0(catalog$filename,".pdf"),"core_hypotheses.pdf","all_hy
 stopifnot(setequal(list.files(out,pattern="\\.pdf$"),expected_pdfs))
 for(path in file.path(out,expected_pdfs)) {
   info <- system2("pdfinfo",shQuote(path),stdout=TRUE);pages <- as.integer(sub("^Pages:\\s+","",grep("^Pages:",info,value=TRUE)))
-  want <- if(basename(path)=="core_hypotheses.pdf")11 else if(basename(path) %in% c("all_hypotheses.pdf","sensitivity_hypotheses.pdf"))21 else 1
+  want <- if(basename(path)=="core_hypotheses.pdf")12 else if(basename(path) %in% c("all_hypotheses.pdf","sensitivity_hypotheses.pdf"))22 else 1
   stopifnot(pages==want,any(grepl("^Page size: +864 x 486 pts",info)))
+  if(grepl("H05[abc]_",basename(path))) {
+    label <- gsub("[[:space:]]+"," ",paste(system2("pdftotext",c(shQuote(path),"-"),stdout=TRUE),collapse=" "))
+    for(wanted in c("S-M","M-E","100-trial bins","middle minus start","end minus middle"))
+      stopifnot(grepl(wanted,label,fixed=TRUE))
+    stopifnot(!grepl("Early change",label,fixed=TRUE),!grepl("50-trial bins",label,fixed=TRUE))
+  }
   bbox <- system2("pdftotext",c("-bbox",shQuote(path),"-"),stdout=TRUE);words <- bbox[grepl("<word xMin=",bbox)]
   coord <- function(name)as.numeric(sub(paste0('.*',name,'="([^"]+)".*'),'\\1',words))
   if(!length(words) || min(coord("xMin"))<0 || min(coord("yMin"))<0 || max(coord("xMax"))>864 || max(coord("yMax"))>486)
@@ -376,4 +448,4 @@ if(file.exists(file.path(out,"data/artifact_manifest.csv"))) {
   actual <- list.files(out,recursive=TRUE,full.names=TRUE);actual <- actual[actual!=file.path(out,"data/artifact_manifest.csv")]
   stopifnot(setequal(substring(actual,nchar(out)+2),m$path))
 }
-cat("PASS: complete registry-to-annotation mapping; 42 PNGs, 45 PDFs; 11/21/21 bundle pages; historical bytes, source table copies, text bounds, HTML links and provenance.\n")
+cat("PASS: complete registry-to-annotation mapping; 44 PNGs, 47 PDFs; 12/22/22 bundle pages; historical bytes, source table copies, text bounds, HTML links and provenance.\n")

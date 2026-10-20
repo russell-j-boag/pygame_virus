@@ -11,10 +11,55 @@ source(file.path(DPR_ROOT, "R/dynamic_reliability_cohorts.R"), local=TRUE)
 source(file.path(DPR_ROOT, "R/dynamic_reliability_primary_analysis.R"), local=TRUE)
 rm(.dpr_files, .dpr_file)
 
+# Historical acquisition code is not executed when reanalysing recorded trials.
+# Match the existing saved-slide policy; retain strict raw/fit/analysis checks.
+dpr_verify_historical <- function(base,root) {
+  for(name in c("input_manifest","analysis_artifacts"))
+    dynamic_verify_md5(file.path(base,paste0(name,".csv")))
+  m <- read_csv(file.path(base,"source_checksums.csv"),show_col_types=FALSE)
+  check(all(c("path","md5") %in% names(m)) && all(file.exists(m$path)),"Missing historical source")
+  m$current_md5 <- unname(tools::md5sum(m$path))
+  m$acquisition_only <- m$path==file.path(root,"python/virus_task.py")
+  check(all(m$md5==m$current_md5 | m$acquisition_only),"Historical analysis source changed")
+  m$historical_analysis <- base
+  m
+}
+
+# Reuse only intact revised fits with unchanged recorded data and historical sources.
+# Copy to an immutable archive so provenance paths survive replacement of primary/.
+dpr_trend_cache <- function(base,root) {
+  previous <- file.path(base,"primary")
+  if(!file.exists(file.path(previous,"COMPLETE.txt")))return(NULL)
+  files <- tryCatch({
+    artifacts <- read_csv(file.path(previous,"artifact_manifest.csv"),show_col_types=FALSE)
+    check(all(file.exists(file.path(previous,artifacts$path))) &&
+      identical(vapply(file.path(previous,artifacts$path),task_sha,character(1),USE.NAMES=FALSE),artifacts$sha256),
+      "Previous revised artifact hashes differ")
+    inputs <- read_csv(file.path(previous,"input_checksums.csv"),show_col_types=FALSE)
+    revised <- file.path(root,c("analyse_dynamic_reliability_primary.R","R/dynamic_reliability_primary_analysis.R","config/hypothesis_figures.csv"))
+    unchanged <- filter(inputs,!path %in% revised)
+    check(all(file.exists(unchanged$path)) &&
+      identical(vapply(unchanged$path,task_sha,character(1),USE.NAMES=FALSE),unchanged$sha256),
+      "Previous fit data or historical sources differ")
+    models <- filter(artifacts,grepl("/models/((accuracy|agreement|correct_rt)_quadratic_trend|correct_rt_trend)\\.rds$",path))
+    check(nrow(models)==8,"Expected six quadratic and two linear RT fits")
+    models
+  },error=function(e){message("Trend cache rejected; refitting: ",conditionMessage(e));NULL})
+  if(is.null(files))return(NULL)
+  archive <- file.path(base,"archive");dir.create(archive,showWarnings=FALSE)
+  cache <- tempfile("trend_fit_cache_",tmpdir=archive);dir.create(cache)
+  for(p in c(files$path,"artifact_manifest.csv","input_checksums.csv")) {
+    target <- file.path(cache,p);dir.create(dirname(target),recursive=TRUE,showWarnings=FALSE)
+    stopifnot(file.copy(file.path(previous,p),target))
+  }
+  files$path <- file.path(cache,files$path)
+  check(identical(vapply(files$path,task_sha,character(1),USE.NAMES=FALSE),files$sha256),"Cache copy differs")
+  list(path=cache,files=files)
+}
+
 run_dynamic_reliability_primary <- function(base, input, qc, root=DPR_ROOT) {
   base <- normalizePath(base); input <- normalizePath(input); qc <- normalizePath(qc)
-  for (name in c("input_manifest", "source_checksums", "analysis_artifacts"))
-    dynamic_verify_md5(file.path(base, paste0(name, ".csv")))
+  historical_sources <- dpr_verify_historical(base,root)
   selected <- task_read_inputs(input, qc)
   manifest <- read_csv(file.path(base, "input_manifest.csv"), show_col_types=FALSE)
   check(setequal(manifest$participant_id, selected$membership$participant_id), "Historical and QC cohorts differ")
@@ -32,7 +77,14 @@ run_dynamic_reliability_primary <- function(base, input, qc, root=DPR_ROOT) {
   sources <- file.path(root, c("analyse_dynamic_reliability_primary.R", "R/dynamic_reliability_primary_analysis.R",
     "analyse_dynamic_reliability.R", "analyse_dynamic_reliability_sdt.R", "analyse_dynamic_reliability_task_sdt.R",
     "R/dynamic_reliability_cohorts.R", "config/hypothesis_figures.csv"))
-  provenance <- task_hashes(unique(c(sources, selected$inputs, manifest$path, file.path(base, "input_manifest.csv"))))
+  historical_dirs <- c(base,file.path(base,"hypothesis_components/primary/analysis"))
+  historical_manifests <- unlist(lapply(historical_dirs,function(d)file.path(d,
+    paste0(c("input_manifest","source_checksums","analysis_artifacts"),".csv"))))
+  provenance <- task_hashes(unique(c(sources, selected$inputs, manifest$path, historical_manifests,
+    file.path(root,"python/virus_task.py"))))
+  trend_cache <- dpr_trend_cache(base,root)
+  if(!is.null(trend_cache))provenance <- bind_rows(provenance,task_hashes(c(trend_cache$files$path,
+    file.path(trend_cache$path,c("artifact_manifest.csv","input_checksums.csv")))))
   stage <- tempfile(".primary_build_", tmpdir=base); dir.create(stage)
   message("Revised analysis staging directory: ", stage)
   # Keep a failed build for diagnosis; it never replaces the preceding analysis.
@@ -60,9 +112,8 @@ run_dynamic_reliability_primary <- function(base, input, qc, root=DPR_ROOT) {
     pick <- function(d) droplevels(filter(d, participant_id %in% ids))
     out <- file.path(stage, sample_name); dir.create(file.path(out, "models"), recursive=TRUE)
     cached <- if (sample_name=="primary") file.path(base, "hypothesis_components/primary/analysis") else base
-    if (dir.exists(cached)) for (name in c("input_manifest", "source_checksums", "analysis_artifacts"))
-      dynamic_verify_md5(file.path(cached, paste0(name, ".csv")))
-    z <- dpr_analyse_sample(pick(trials), pick(scores), pick(advice), pick(ratings), out, cached, sample_name)
+    if (dir.exists(cached))historical_sources <- bind_rows(historical_sources,dpr_verify_historical(cached,root))
+    z <- dpr_analyse_sample(pick(trials), pick(scores), pick(advice), pick(ratings), out, cached, sample_name,if(!is.null(trend_cache))trend_cache$path else NULL)
     bundle$data[[sample_name]] <- z$data
     for (name in c("results", "estimates", "diagnostics", "audit", "model_index")) bundle[[name]][[sample_name]] <- z[[name]]
     write_csv(pick(counts), file.path(out, "task_counts.csv"))
@@ -72,11 +123,15 @@ run_dynamic_reliability_primary <- function(base, input, qc, root=DPR_ROOT) {
   bundle$model_index <- bind_rows(bundle$model_index)
   for (sample_name in c("primary", "all_participants")) {
     r <- filter(bundle$results, sample==sample_name, analysis=="primary", correction %in% c("none", "loglinear"), grepl("^H", hypothesis))
-    check(nrow(r)==125, "The revised framework must contain 125 primary comparisons per cohort")
+    check(nrow(r)==206, "The revised framework must contain 206 primary comparisons per cohort")
   }
+  if(!is.null(trend_cache))write_csv(trend_cache$files,file.path(stage,"reused_fit_checksums.csv"))
   write_csv(bundle$membership, file.path(stage, "cohort_membership.csv"))
+  write_csv(distinct(historical_sources),file.path(stage,"historical_source_audit.csv"))
   write_csv(bundle$results, file.path(stage, "contrasts.csv"))
   write_csv(filter(bundle$results,analysis=="common_slope_sensitivity"),file.path(stage,"common_slope_contrasts.csv"))
+  write_csv(filter(bundle$results,hypothesis=="H5",analysis %in% c("linear_sensitivity","linear_participant_sensitivity")),
+    file.path(stage,"h5_linear_sensitivity.csv"))
   write_csv(bundle$diagnostics, file.path(stage, "model_diagnostics.csv"))
   write_csv(bundle$model_index, file.path(stage, "model_index.csv"))
   saveRDS(bundle$audit, file.path(stage, "contrast_audit.rds"))

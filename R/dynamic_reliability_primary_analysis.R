@@ -17,16 +17,66 @@ dpr_specs <- function(grid, pairs, dimension="stage", prefix="", advice_value=NA
   }
   list(weights=weights, metadata=bind_rows(metadata))
 }
-dpr_trend_specs <- function(grid) {
+dpr_trend_specs <- function(grid, estimand="end_start") {
+  stopifnot(estimand %in% c("end_start","middle_start","end_middle","curvature"))
   weights <- list(); metadata <- list()
   for(a in if("advice" %in% names(grid))ADVICE else "All")for(p in c("P1","P2","P3"))for(g in c(GROUPS,"CAL90 - CAL65")) {
+    progress <- if("x" %in% names(grid))grid$x+.5 else grid$progress
+    w <- switch(estimand,
+      curvature=ifelse(progress==.5,-4,2),
+      middle_start=as.numeric(progress==.5)-as.numeric(progress==0),
+      end_middle=as.numeric(progress==1)-as.numeric(progress==.5),
+      end_start=as.numeric(progress==1)-as.numeric(progress==0))
     cell <- function(gr)as.numeric(grid$group==gr & grid$phase==p &
-      if(a=="All")TRUE else grid$advice==a)*ifelse(grid$progress==1,1,-1)
-    id <- paste(a,p,g,"end_start",sep="__")
+      if(a=="All")TRUE else grid$advice==a)*w
+    id <- paste(a,p,g,estimand,sep="__")
     weights[[id]] <- if(g=="CAL90 - CAL65")cell("CAL90")-cell("CAL65") else cell(g)
-    metadata[[id]] <- tibble(contrast_id=id,group=g,phase=p,advice=a,comparison=paste(p,"end minus start"))
+    metadata[[id]] <- tibble(contrast_id=id,group=g,phase=p,advice=a,estimand=estimand,
+      comparison=paste(p,switch(estimand,curvature="quadratic coefficient",
+        middle_start="middle minus start",end_middle="end minus middle",end_start="end minus start")))
   }
   list(weights=weights, metadata=bind_rows(metadata))
+}
+# Exact polynomial derivatives; response-scale uncertainty uses the delta method.
+# These pointwise intervals describe shape and are not additional hypothesis tests.
+dpr_shape <- function(model, outcome, usable=TRUE) {
+  binary <- outcome!="correct_rt"
+  frame <- model.frame(model)
+  cells <- unique(frame[intersect(c("group","phase","advice"),names(frame))])
+  B <- fixef(model);V <- as.matrix(vcov(model))
+  design <- function(x) {
+    grid <- transform(cells,x=x)
+    model.matrix(delete.response(terms(model)),grid,
+      contrasts.arg=attr(model.matrix(model),"contrasts"))[,names(B),drop=FALSE]
+  }
+  X0 <- design(-.5);Xm <- design(0);X1 <- design(.5)
+  L <- X1-X0;Q <- 2*X0-4*Xm+2*X1
+  linear <- drop(L%*%B);quadratic <- drop(Q%*%B)
+  turn <- ifelse(abs(quadratic)>1e-12,-linear/(2*quadratic),NA_real_)
+  bind_rows(lapply(c(-.5,0,.5),function(x) {
+    X <- design(x);D <- L+2*x*Q
+    eta <- drop(X%*%B);slope <- drop(D%*%B)
+    if(binary) {
+      p <- plogis(eta);value <- 100*p*(1-p)*slope
+      J <- 100*(D*as.numeric(p*(1-p))+X*as.numeric(slope*p*(1-p)*(1-2*p)))
+    } else {
+      value <- exp(eta)*slope;J <- (D+X*slope)*exp(eta)
+    }
+    interval <- function(M,estimate) {
+      se <- sqrt(rowSums((M%*%V)*M))
+      df <- if(binary)rep(Inf,nrow(M)) else vapply(seq_len(nrow(M)),function(i)
+        lmerTest::contest1D(model,L=M[i,])$df,numeric(1))
+      tibble(estimate,se,df,lower=if(usable)estimate-qt(.975,df)*se else NA_real_,
+        upper=if(usable)estimate+qt(.975,df)*se else NA_real_)
+    }
+    a <- interval(D,slope);b <- interval(J,value)
+    names(a) <- paste0("model_",names(a));names(b) <- paste0("response_",names(b))
+    bind_cols(as_tibble(cells),tibble(x=x,progress=x+.5,position=c("Start","Middle","End")[match(x,c(-.5,0,.5))],
+      outcome=outcome,model_scale=if(binary)"log_odds_per_phase" else "log_rt_per_phase",
+      response_scale=if(binary)"percentage_points_per_phase" else "seconds_per_phase",
+      quadratic=quadratic,turning_progress=turn+.5,
+      reversal_within_phase=!is.na(turn) & turn>-.5 & turn<.5,inference_available=usable),a,b)
+  }))
 }
 dpr_association_specs <- function(grid,predictor,scope,common=FALSE) {
   if(common)return(list(weights=setNames(list(1),predictor),metadata=tibble(contrast_id=predictor,
@@ -130,18 +180,24 @@ dpr_participant <- function(data,value,grid,spec,scale=1) {
       p_raw=p,inference_available=ok,n_participants=nrow(x)),spec$metadata,by="contrast_id")
   }))
 }
-dpr_analyse_sample <- function(trials,scores,advice,ratings,out,cached,sample_name) {
+dpr_analyse_sample <- function(trials,scores,advice,ratings,out,cached,sample_name,trend_cache=NULL) {
   tables <- means <- audit <- diagnostics <- model_index <- list()
-  add <- function(em,spec,h,o,name,correction="none",scale=1,ok=TRUE,participant=NULL,value=NULL,analysis="primary") {
-    key <- paste(h,o,name,analysis,sep="__")
-    tables[[key]] <<- dpr_table(em,spec,scale,ok) %>% mutate(hypothesis=h,outcome=o,model=name,correction,analysis=analysis)
+  add <- function(em,spec,h,o,name,correction="none",scale=1,ok=TRUE,participant=NULL,value=NULL,analysis="primary",inference_scale=NULL) {
+    kind <- if("estimand" %in% names(spec$metadata))unique(spec$metadata$estimand) else "contrast"
+    key <- paste(h,o,name,analysis,kind,sep="__")
+    tables[[key]] <<- dpr_table(em,spec,scale,ok) %>% mutate(hypothesis=h,outcome=o,model=name,correction,analysis=analysis,
+        inference_scale=if(is.null(inference_scale))if(o=="correct_rt")"log_rt" else if(scale==100)"percentage_points" else "outcome_units" else inference_scale)
     if(!is.null(participant))tables[[paste0(key,"__participant")]] <<-
       dpr_participant(participant,value,as.data.frame(em),spec,scale) %>%
-      mutate(hypothesis=h,outcome=o,model=name,correction,analysis="participant_sensitivity")
-    audit[[key]] <<- list(em=em,spec=spec,scale=scale,model=name,hypothesis=h,outcome=o,correction=correction,usable=ok,analysis=analysis)
+      mutate(hypothesis=h,outcome=o,model=name,correction,analysis=if(h=="H5")"linear_participant_sensitivity" else "participant_sensitivity")
+    audit[[key]] <<- list(em=em,spec=spec,scale=scale,model=name,hypothesis=h,outcome=o,correction=correction,usable=ok,analysis=analysis,
+      inference_scale=if(is.null(inference_scale))if(scale==100)"percentage_points" else "outcome_units" else inference_scale)
   }
   fit <- function(name,formula,d,binary=FALSE,cache_name=NULL) {
-    z <- dpr_fit(name,formula,d,binary,out,if(!is.null(cache_name))file.path(cached,"models",paste0(cache_name,".rds")) else NULL)
+    cache_path <- if((grepl("_quadratic_trend$",name) || name=="correct_rt_trend") && !is.null(trend_cache))
+      file.path(trend_cache,sample_name,"models",paste0(name,".rds")) else
+      if(!is.null(cache_name))file.path(cached,"models",paste0(cache_name,".rds")) else NULL
+    z <- dpr_fit(name,formula,d,binary,out,cache_path)
     diagnostics[[name]] <<- z$diagnostics
     model_index[[name]] <<- tibble(model=name,path=paste(sample_name,"models",paste0(name,".rds"),sep="/"),formula=paste(deparse(formula),collapse=""))
     if(is.null(z$model))stop("Model failed; preceding analysis preserved. See diagnostics for ",name,call.=FALSE)
@@ -189,24 +245,44 @@ dpr_analyse_sample <- function(trials,scores,advice,ratings,out,cached,sample_na
       h,o,name,co,1,z$diagnostics$inference_available,d,"value")
     means[[name]] <- dpr_means(em,1,z$diagnostics$inference_available)
   }
-  trajectories <- list(); slopes <- list()
-  for(o in c("accuracy","agreement")) {
-    d <- if(o=="accuracy")aided else answered
-    formula <- if(o=="accuracy")accuracy~group*phase*progress+(1|subject) else agreement~group*phase*advice*progress+(1|subject)
-    name <- paste0(o,"_trend");z <- fit(name,formula,d,TRUE,name)
-    spec <- if(o=="accuracy")~group*phase*progress else ~group*phase*advice*progress
-    em <- regrid(emmean(z$model,spec,at=list(progress=c(0,1))),transform="response")
-    keys <- intersect(c("participant_id","subject","group","phase","advice"),all.vars(formula))
-    keys <- unique(c("participant_id",keys))
-    sl <- d %>% group_by(across(all_of(keys))) %>% summarise(slope=if(n_distinct(progress)>=2)
-      unname(coef(lm(.data[[o]]~progress))[2]) else NA_real_,.groups="drop")
-    # Linear-probability slopes remain an explicitly different sensitivity estimand.
-    pp <- bind_rows(mutate(sl,progress=0,value=0),mutate(sl,progress=1,value=slope))
-    add(em,dpr_trend_specs(as.data.frame(em)),"H5",o,name,"none",100,z$diagnostics$inference_available,pp,"value")
-    curves <- regrid(emmean(z$model,spec,at=list(progress=seq(0,1,length.out=41))),transform="response")
-    means[[name]] <- dpr_means(curves,100,z$diagnostics$inference_available)
+  trajectories <- slopes <- shapes <- list()
+  for(o in c("accuracy","agreement","correct_rt")) {
+    d <- (if(o=="accuracy")aided else if(o=="agreement")answered else filter(aided,valid_correct_rt)) %>%
+      mutate(x=progress-.5)
+    binary <- o!="correct_rt";response <- if(binary)o else "log_rt"
+    factors <- if(o=="agreement")"group*phase*advice" else "group*phase"
+    spec <- as.formula(paste("~",factors,"* x"))
+    name <- paste0(o,"_quadratic_trend")
+    formula <- as.formula(paste(response,"~",factors,"* (x + I(x^2)) + (1|subject)"))
+    z <- fit(name,formula,d,binary);ok <- z$diagnostics$inference_available
+    em <- emmean(z$model,spec,at=list(x=c(-.5,0,.5)),data=d)
+    endpoints <- if(binary)regrid(em,transform="response") else em
+    for(kind in c("middle_start","end_middle"))
+      add(endpoints,dpr_trend_specs(as.data.frame(endpoints),kind),"H5",o,name,scale=if(binary)100 else 1,ok=ok)
+    add(em,dpr_trend_specs(as.data.frame(em),"curvature"),"H5",o,name,ok=ok,
+      inference_scale=if(binary)"log_odds_quadratic" else "log_rt_quadratic")
+    curves <- emmean(z$model,spec,at=list(x=seq(-.5,.5,length.out=41)),data=d)
+    if(binary)curves <- regrid(curves,transform="response")
+    means[[name]] <- dpr_means(curves,if(binary)100 else 1,ok) %>% mutate(progress=x+.5)
+    shapes[[o]] <- dpr_shape(z$model,o,ok) %>% mutate(model=name)
+    keys <- c("participant_id","subject","group","phase",if(o=="agreement")"advice")
     trajectories[[o]] <- d %>% group_by(across(all_of(c(keys,"bin")))) %>%
-      summarise(value=mean(.data[[o]]),n=n(),progress=mean(progress),.groups="drop") %>% mutate(outcome=o)
+      summarise(value=mean(.data[[response]]),n=n(),progress=mean(progress),.groups="drop") %>% mutate(outcome=o)
+    # Preserve linear-only endpoint and participant-slope sensitivity estimands.
+    linear_formula <- as.formula(paste(response,"~",factors,"* progress + (1|subject)"))
+    linear_name <- paste0(o,"_trend")
+    zz <- fit(linear_name,linear_formula,d,binary,if(binary)linear_name else NULL)
+    linear_spec <- as.formula(paste("~",factors,"* progress"))
+    le <- emmean(zz$model,linear_spec,at=list(progress=c(0,1)))
+    if(binary)le <- regrid(le,transform="response")
+    sl <- d %>% group_by(across(all_of(keys))) %>% summarise(slope=if(n_distinct(progress)>=2)
+      unname(coef(lm(.data[[response]]~progress))[2]) else NA_real_,.groups="drop")
+    pp <- bind_rows(mutate(sl,progress=0,value=0),mutate(sl,progress=1,value=slope))
+    add(le,dpr_trend_specs(as.data.frame(le)),"H5",o,linear_name,scale=if(binary)100 else 1,
+      ok=zz$diagnostics$inference_available,participant=pp,value="value",analysis="linear_sensitivity")
+    lc <- emmean(zz$model,linear_spec,at=list(progress=seq(0,1,length.out=41)))
+    if(binary)lc <- regrid(lc,transform="response")
+    means[[linear_name]] <- dpr_means(lc,if(binary)100 else 1,zz$diagnostics$inference_available)
     slopes[[o]] <- mutate(sl,outcome=o)
   }
   for(o in c("trust","perceived","signed_error")) {
@@ -246,14 +322,16 @@ dpr_analyse_sample <- function(trials,scores,advice,ratings,out,cached,sample_na
   }
   results <- bind_rows(tables) %>% mutate(sample=sample_name) %>%
     group_by(sample,hypothesis,outcome,correction,analysis) %>% mutate(family_size=n(),p_holm=p.adjust(p_raw,"holm",n=n())) %>% ungroup() %>%
-    mutate(ratio=ifelse(outcome=="correct_rt",exp(estimate),NA_real_),ratio_lower=ifelse(outcome=="correct_rt",exp(lower),NA_real_),
-      ratio_upper=ifelse(outcome=="correct_rt",exp(upper),NA_real_))
+    mutate(estimand=coalesce(estimand,"contrast"),
+      ratio=ifelse(outcome=="correct_rt" & estimand!="curvature",exp(estimate),NA_real_),
+      ratio_lower=ifelse(outcome=="correct_rt" & estimand!="curvature",exp(lower),NA_real_),
+      ratio_upper=ifelse(outcome=="correct_rt" & estimand!="curvature",exp(upper),NA_real_))
   combined <- filter(results,hypothesis %in% c("H3","H4")) %>% group_by(sample,outcome,correction,analysis) %>%
     mutate(p_holm_joint_H3_H4=p.adjust(p_raw,"holm",n=9)) %>% ungroup() %>%
     select(sample,hypothesis,outcome,correction,analysis,contrast_id,p_holm_joint_H3_H4)
   results <- left_join(results,combined,by=c("sample","hypothesis","outcome","correction","analysis","contrast_id"))
   data <- list(performance=perf,task_scores=scores,advice_scores=advice,ratings=ratings,benchmark=benchmark,task_benchmark=taskbench,
-    trajectories=bind_rows(trajectories),slopes=bind_rows(slopes),associations=bind_rows(associations),association_predictions=bind_rows(predictions))
+    trajectories=bind_rows(trajectories),slopes=bind_rows(slopes),shape_summaries=bind_rows(shapes),associations=bind_rows(associations),association_predictions=bind_rows(predictions))
   for(name in names(data))write_csv(data[[name]],file.path(out,paste0(name,".csv")))
   list(data=data,results=results,estimates=means,audit=audit,diagnostics=bind_rows(diagnostics)%>%mutate(sample=sample_name),
     model_index=bind_rows(model_index)%>%mutate(sample=sample_name))
@@ -264,8 +342,12 @@ dpr_methods <- function()c(
   "H1: aided phases versus manual pre; each group and CAL90-minus-CAL65 changes. Nine tests each for accuracy, task d-prime and correct RT.",
   "H2: human-minus-aid performance in each phase and between groups. Nine tests each for all-trial accuracy and matched-human-answered task d-prime.",
   "H3: P2-P1 drop. Three tests per advice/task bias/discrimination outcome. H4: P3-P2 recovery and P3-P1 residual difference, six tests per outcome.",
-  "H5: within-phase end-start changes in each group and group differences. Accuracy: nine tests. Agreement: 18 tests across correct/incorrect advice together.",
-  "H6: CAL90-CAL65 trust, perceived reliability and signed calibration error; signed error also versus zero in both groups. H7: CAL65 slope, CAL90 slope and their difference for each SDT predictor; six-test Holm family per rating outcome, 12 H7 tests and 125 primary tests per cohort.",
+  "H5 revision agreed 20 October 2026 after inspecting linear trajectories; retrospective. x=(trial_in_reliability_phase-200.5)/399, using scheduled trial positions, ranges from -0.5 to 0.5 within each phase. Full group/phase interactions with x and I(x^2), plus advice correctness for agreement.",
+  "H5a accuracy and H5c correct RT: 27 tests each; H5b agreement: 54 across correct/incorrect advice together. Each family jointly adjusts nine (or 18) middle-minus-start changes, nine (or 18) end-minus-middle changes and nine (or 18) quadratic coefficients, including direct CAL90-minus-CAL65 comparisons. Start, middle and end correspond to scheduled trial positions 1, 200.5 and 400 (x=-0.5, 0, 0.5). The midpoint is a model prediction between trials 200 and 201; models use all eligible individual trials and plots retain four 100-trial bins. Splitting the change contrast was selected retrospectively.",
+  "H5 curvature uses model-scale start/midpoint/end weights [2,-4,2] to estimate the quadratic coefficient. Accuracy/agreement curvature is in log odds; RT curvature is in log RT, not an endpoint RT ratio. Accuracy/agreement changes within each half are percentage points; RT changes within each half are log ratios, displayed as middle/start and end/middle ratios.",
+  "H5 shape summaries export exact start/midpoint/end derivatives with pointwise delta-method intervals on model and response scales, without p-values. Fitted reversals are descriptive point estimates. Curvature or a nonsignificant late slope does not establish a plateau. RT curves and bins show geometric means in seconds.",
+  "H5 linear-only fits and participant linear slopes remain separate linear_sensitivity and linear_participant_sensitivity analyses, with separate endpoint-only Holm families; they do not validate quadratic curvature.",
+  "H6: CAL90-CAL65 trust, perceived reliability and signed calibration error; signed error also versus zero in both groups. H7: CAL65 slope, CAL90 slope and their difference for each SDT predictor; six-test Holm family per rating outcome, 12 H7 tests and 206 primary tests per cohort.",
   "H7 uses whole-block pooled advice-correctness confusion counts before SDT correction/transformation, not averages of phase SDT. P2 associations are supporting S7.",
   "Repeated outcomes: participant-random-intercept mixed models. Accuracy/agreement: logistic; correct positive finite RT: linear model of log RT; SDT/benchmark differences: linear mixed models.",
   "Identical historical trial-level fits may be reused only after exact formula, model-frame and source/artifact checks. All revised contrast families are recomputed.",
@@ -273,8 +355,8 @@ dpr_methods <- function()c(
   "Common-slope rating ~ group + centred SDT score fits are retained as common_slope_sensitivity, with separate two-test Holm families per rating and scope. The H7/S7 interaction update was requested after viewing the common-slope plots; it is retrospective.",
   "All tests two-sided. Holm separately within hypothesis/outcome/sample/correction/method. H3/H4 also export a joint nine-test adjustment per outcome. No study-wide error-control claim.",
   "Primary CIs are ordinary pointwise model-based 95% intervals. Model probabilities condition on zero participant random effect; they are not population-marginal probabilities.",
-  "Accuracy/agreement contrasts use response-scale percentage points. RT contrasts use log ratios and are displayed as ratios; between-group moderation is a ratio of ratios.",
-  "Participant sensitivities use equally weighted individual scores, paired changes within groups and Welch comparisons between groups. H5 linear-probability slopes differ from nonlinear model endpoint estimands.",
+  "Accuracy/agreement change contrasts use response-scale percentage points. RT change contrasts use log ratios and are displayed as ratios; between-group moderation is a ratio of ratios.",
+  "Participant sensitivities use equally weighted individual scores, paired changes within groups and Welch comparisons between groups. H5 participant linear-probability slopes accompany only linear-model sensitivities and differ from nonlinear model endpoint estimands.",
   "Loglinear SDT correction (k+0.5)/(n+1) primary; extreme-only correction sensitivity. Advice -c is acceptance; task -c is BLACK preference; advice d-prime is selective following; task d-prime is final stimulus discrimination.",
   "SDT includes answered trials regardless of RT; timeouts excluded. Accuracy includes timeouts as incorrect. The aid accuracy benchmark assumes timely advice on every trial; task benchmark uses precisely human-answered trials.",
   "Convergence, singularity, rank, gradient, residual and conditional cell diagnostics are recorded. Unavailable primary inference remains unavailable; sensitivities never silently replace it.",

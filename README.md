@@ -385,7 +385,7 @@ Its story is: **How does relative human-aid competence shape the benefits of
 assistance, adaptation to a reliability drop, and recovery when reliability returns?**
 The H1-H7 framework was agreed on 17 October 2026 after inspecting earlier results;
 it is retrospective, not preregistered. It replaces the earlier presentation
-numbering with **11 core pages**, while preserving historical analyses.
+numbering with **12 core pages**, while preserving historical analyses.
 
 | Hypothesis | Primary question and comparisons | Figures / tests |
 | --- | --- | --- |
@@ -393,11 +393,11 @@ numbering with **11 core pages**, while preserving historical analyses.
 | H2 | Human value beyond following the aid: human-minus-aid accuracy and task d-prime in each phase and between groups | One figure; nine tests per outcome |
 | H3 | P2-P1 changes after the reliability drop: advice acceptance, BLACK preference, advice selectivity and task discrimination | H3a bias, H3b discrimination; three tests per outcome |
 | H4 | P3-P2 recovery and P3-P1 residual change in the same four SDT outcomes | H4a bias, H4b discrimination; six tests per outcome |
-| H5 | Within-phase start-to-end accuracy and agreement changes, within groups and between groups | H5a accuracy: nine tests; H5b agreement: 18 tests across correct/incorrect advice together |
+| H5 | Within-phase start-to-middle and middle-to-end changes and quadratic curvature, within groups and between groups | H5a accuracy: 27 tests; H5b agreement: 54 across both advice types; H5c correct RT: 27 |
 | H6 | Final trust, perceived reliability and signed perceived-minus-realised error: group differences, plus error versus zero in each group | One figure; five tests |
 | H7 | Associations of final trust/error with whole-block advice acceptance and selectivity within each group, and group differences in slopes | One figure; 12 tests: two group slopes and their difference for each rating/predictor |
 
-There are **125 primary comparisons per cohort**. `config/hypothesis_figures.csv`
+There are **206 primary comparisons per cohort**. `config/hypothesis_figures.csv`
 is the panel-level contract for ordering, filenames, model, outcome, exact contrasts,
 correction family and historical sources. The report exports that contract and
 `hypothesis_mapping.csv`; it does not silently relabel historical tests as new ones.
@@ -413,10 +413,17 @@ Selection is retrospective and includes post-exposure performance; compare both 
 finite RT uses a linear mixed model of log RT. Repeated SDT scores and human-minus-aid
 differences use linear mixed models. All include participant random intercepts.
 Performance uses `group * stage`, aided SDT/benchmark models use `group * phase`,
-and H5 adds phase-specific linear progress and its full interactions, including
-advice correctness for agreement. New SDT and benchmark models are fitted. Existing
+and H5 uses `x = (trial_in_reliability_phase - 200.5) / 399`, centred at the
+scheduled phase midpoint and spanning -0.5 to 0.5. H5 includes `x + I(x^2)`
+with full group/phase interactions, plus advice correctness for agreement.
+Centring does not change when trials are excluded. The quadratic revision and
+correct-RT companion were agreed on 20 October 2026 after inspecting linear
+trajectories; this extension is also retrospective. New SDT and benchmark models are fitted. Existing
 trial-level fits may be reused only when source/artifact checks, exact formulas
-and model frames agree; all revised contrasts are recomputed.
+and model frames agree; all revised contrasts are recomputed. Historical
+acquisition code is not executed in reanalysis: its saved and current hashes are
+recorded in `historical_source_audit.csv`, while raw inputs, analysis sources and
+saved artifacts must still match exactly.
 
 Final ratings are measured once per participant, so H6/H7 use participant-level
 linear models with HC3 covariance and residual-df t inference. H6 uses group-only
@@ -432,6 +439,30 @@ includes expandable common-slope comparison tables. The interaction update follo
 inspection of the common-slope plots and is retrospective. There are no within-person trust effects,
 phase-specific ratings, or causal interpretations of these associations.
 
+**H5 change and shape.** Each phase supplies two group estimates and their direct
+CAL90-minus-CAL65 difference for middle-minus-start change, end-minus-middle change,
+and curvature. Start, middle and end are model predictions at scheduled trial
+positions 1, 200.5 and 400 (`x = -0.5, 0, 0.5`). The midpoint lies between trials
+200 and 201. Models still use all eligible individual trials; descriptive plots
+retain four 100-trial bins per phase. Splitting the change comparison was selected
+retrospectively after inspecting the trajectories. Changes within each half
+use percentage points for accuracy/agreement and log ratios for correct RT
+(displayed as middle/start and end/middle ratios; group differences are ratios of
+ratios). Curvature is the
+quadratic coefficient on the log-odds or log-RT scale, calculated from fitted
+start/midpoint/end values with weights `[2, -4, 2]`. It is not a percentage-point
+change or an endpoint RT ratio. Logistic predictions can already flatten without
+a quadratic term; this test asks whether there is added curvature on the model scale.
+
+Start/midpoint/end slopes have descriptive pointwise intervals on both model and
+response scales, and fitted turning points inside each phase are identified.
+Curvature, or a nonsignificant late slope, does not establish a plateau. Interpret
+slope direction and reversals alongside the curves. Correct-RT curves and participant
+100-trial bins show geometric means in seconds. Empty bins remain missing.
+Linear-only fits retain separate endpoint-only Holm families (9 accuracy, 18
+agreement, 9 RT); their participant sensitivities are separately labelled.
+The report links these tests and slope tables under each H5 figure.
+
 **Estimands and inference.** Accuracy includes timeouts as incorrect. SDT excludes
 timeouts but retains answered trials regardless of RT. Advice -c measures acceptance;
 task -c measures BLACK preference; advice d-prime describes selective following;
@@ -442,16 +473,18 @@ uses exactly human-answered trials for both human and aid.
 
 All tests are two-sided, with Holm adjustment within hypothesis, outcome, sample,
 correction and inferential method. H3/H4 also export a joint nine-test adjustment
-per SDT outcome. H5 agreement retains one 18-test family. H7 and supporting S7 each
+per SDT outcome. H5 jointly adjusts middle-minus-start change, end-minus-middle change and quadratic curvature:
+27 tests each for accuracy and correct RT, and 54 for agreement across both advice types. H7 and supporting S7 each
 have six tests per rating outcome: two predictors multiplied by two group slopes
 and their direct difference. A significant slope in only one group does not establish
 a slope difference; the interaction contrast tests that. Participant sensitivities use paired changes within groups and
-Welch comparisons between groups; H5 participant linear-probability slopes differ
-from nonlinear model endpoint estimands. Sensitivities never replace primary inference.
+Welch comparisons between groups. H5 retains participant linear-probability
+slopes alongside the separate linear-only sensitivity fits; these differ from
+nonlinear model endpoint estimands and do not validate quadratic curvature. Sensitivities never replace primary inference.
 No study-wide multiplicity-control claim is made.
 
-Accuracy/agreement contrasts are response-scale percentage points. Model probabilities
-condition on zero participant random effect. RT effects are ratios from log contrasts;
+Accuracy/agreement endpoint contrasts are response-scale percentage points. Model probabilities
+condition on zero participant random effect. RT endpoint effects are ratios from log contrasts;
 group differences are ratios of ratios. All primary intervals are pointwise 95% fitted-model
 intervals, not Morey intervals. Numerical convergence does not establish adequacy:
 convergence, singularity, rank, gradients, conditional cell dispersion, residual spread
@@ -473,7 +506,7 @@ Rscript tests/validate_dynamic_reliability_primary.R
 The analysis accepts `[analysis_dir] [combined_csv] [qc_dir]`, defaults to the current
 semester-2 locations, and writes a separate `analysis_outputs/semester2_2026_behavioural/primary/`
 collection containing both cohorts, model objects, data, diagnostics, contrast audits,
-125 primary tests per cohort, supporting/sensitivity tests and source/artifact hashes.
+206 primary tests per cohort, supporting/sensitivity tests and source/artifact hashes.
 It reconciles current collation with exact historical raw runs and rating files.
 Previous revised analyses are archived on rerun; failed builds remain unpublished.
 Raw exports, canonical CSVs, historical analyses and old component outputs are preserved.
@@ -486,8 +519,8 @@ the preceding report if the directory move fails. Successful publication archive
 the preceding presentation intact. Existing slides/SDT plotting entrypoints forward
 to the revised builder; the revised analysis must be current first.
 
-The report contains `core_hypotheses.pdf` (11 pages), `all_hypotheses.pdf` (21 pages),
-and `sensitivity_hypotheses.pdf` (21 corresponding all-participant pages). There is
+The report contains `core_hypotheses.pdf` (12 pages), `all_hypotheses.pdf` (22 pages),
+and `sensitivity_hypotheses.pdf` (22 corresponding all-participant pages). There is
 one gallery, with the matching sensitivity expandable below every primary figure.
 All figures have 12 x 6.75-inch vector PDFs and 3600 x 2025 PNGs. New figures share
 white backgrounds, typography, faint participant data, open diamonds for fitted
@@ -499,12 +532,12 @@ Seven supporting pages show full-sequence context, manual pre/post comparisons
 (three tests per outcome), completion/answered accuracy, correction sensitivity,
 model/participant sensitivity, cohort sensitivity, and Phase-2 evaluation associations.
 Three historical pages retain original incorrect-agreement, recovery and rating-agreement
-figures byte-for-byte with their original correction families and labels.
+plotted data and correction families; display text follows the current report order.
 
 The independent validator reconstructs raw confusion counts, pooled scores, performance,
 benchmarks and ratings; checks model contrasts from coefficients/covariance, HC3 arithmetic,
 Satterthwaite df, participant tests, transformations and Holm families; and requires every
-one of the 125 primary annotations per cohort. It also verifies saved figure data,
+one of the 206 primary annotations per cohort. It also verifies saved figure data,
 cohort identities, source copies, historical bytes, report links, PDF counts/dimensions,
 text bounds and input/artifact hashes. Rendered visual inspection is a separate step.
 `tests/validate_dynamic_reliability_hypotheses.R` is a compatibility entrypoint for this
