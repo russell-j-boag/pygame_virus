@@ -149,6 +149,28 @@ primary_trust_predictions <- function(model,associations,raw,component) {
       grand_mean_trust=grand_trust,n_participants=nrow(participants))
   }))
 }
+# Overall subtitles name measures; sample and method details belong in captions.
+primary_measure_subtitles <- c(
+  "H01_manual_pressure"="Accuracy, task discrimination and correct response time",
+  "H02a_aid_gain_accuracy_task_dprime"="Accuracy and task discrimination",
+  "H02b_aid_response_speed"="Correct response time",
+  "H02c_compensation_completion_choice"="Accuracy and task discrimination gains, response completion and choice accuracy",
+  "H03_human_value_beyond_aid"="Accuracy and task discrimination",
+  "H04_aid_and_task_bias"="Advice acceptance and task response preference",
+  "H05_aid_and_task_discrimination"="Advice selectivity and task discrimination",
+  "H06_trust_and_reliability_awareness"="Trust, perceived reliability and calibration error",
+  "H07_trust_and_aid_sdt"="Advice acceptance and selectivity",
+  "H08_adjustment_after_aid_errors"="Agreement with advice",
+  "S01_sdt_overview"="Advice and task response bias and discrimination",
+  "S02_sdt_contrasts"="Advice and task response bias and discrimination",
+  "S03_task_manual_context"="Task response preference and discrimination",
+  "S04_sdt_correction_sensitivity"="SDT contrasts and trust-association slopes",
+  "S05_model_participant_sensitivity"="Standardised contrast estimates and Holm decisions",
+  "S06_completion_accuracy_context"="Response completion, all-trial accuracy and answered-trial accuracy",
+  "S07_historical_conditional_agreement"="Agreement with correct and incorrect advice",
+  "S08_historical_agreement_selectivity"="Correct-minus-incorrect advice agreement"
+)
+
 primary_plot_build <- function(bundle,registry,out,association_models) {
   d <- bundle$data; results <- bundle$results; estimates <- bundle$estimates
   primary <- results %>% filter(analysis=="mixed_model",correction %in% c("none","loglinear"))
@@ -178,8 +200,9 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
     plotdata[[key]] <<- as_tibble(means) %>% mutate(filename=stem,outcome=o)
   }
   stem_for <- function(order)registry$filename[match(order,registry$order)]
-  add_figure <- function(order,p,caption,subtitle=NULL) {
+  add_figure <- function(order,p,caption) {
     row <- registry[match(order,registry$order),]
+    subtitle <- unname(primary_measure_subtitles[[row$filename]])
     title <- paste(strwrap(row$title,width=88),collapse="\n")
     figures[[row$filename]] <<- p + plot_annotation(title=title,subtitle=subtitle,
       caption=paste(strwrap(paste0("N = ",nrow(d$cohort),"; reviewed participant exclusions applied. ",caption),width=153),collapse="\n"),theme=primary_plot_theme()+theme(plot.title=element_text(size=19,face="bold"),plot.subtitle=element_text(size=11)))
