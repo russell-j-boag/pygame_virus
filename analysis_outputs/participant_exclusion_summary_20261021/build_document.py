@@ -125,6 +125,19 @@ doc.add_paragraph('These are repeated IDs across raw runs, not duplicate IDs amo
 doc.add_paragraph('Identity check sources: data/data_virus_all.csv; data/collation_manifest.csv; CSV filenames and row metadata in output/semester2_2026_data/. The collation script selects the latest available complete export set for each ID and stops if that selected run is missing an export family.','SourceNote')
 
 doc.add_page_break()
+doc.add_paragraph('Remaining participant IDs to collect', 'Heading 2')
+collected_ids = {int(r['participant_id']) for r in read_csv(ROOT/'data/collation_manifest.csv')}
+assert collected_ids == set(range(1, 61))
+target_n = 60
+new_ids = sorted(set(range(1, target_n + 1)) - collected_ids)
+p = doc.add_paragraph()
+p.add_run('Re-collect: ').bold = True
+p.add_run(', '.join(f'{pid:03d}' for pid in ids) + ' (5 participants, if the candidate exclusions are confirmed).')
+p = doc.add_paragraph()
+p.add_run('New participants: ').bold = True
+p.add_run(', '.join(f'{pid:03d}' for pid in new_ids) if new_ids else 'None. All IDs 001-060 have been collected.')
+doc.add_paragraph('Total remaining: 5 re-collections if all five candidates are excluded and replaced, to retain the target of 60 participants. The five candidates remain included in the current analysis. Participant 059 already has a retained replacement and does not need re-collection.')
+doc.add_paragraph('Collection status checked against data/collation_manifest.csv on 21 October 2026. Target: 60 retained participants.', 'SourceNote')
 doc.add_paragraph('Review criteria','Heading 2')
 doc.add_paragraph('Anticipatory responding required ≥20% of all scope trials with RT <200 ms, ≥20 fast responses, and ≤55% accuracy on those fast responses, jointly within the same decision and scope. Near-chance performance meant ≤55% overall accuracy, counting timeouts as incorrect. These retrospective descriptive screens were agreed on 17 October 2026; they were not preregistered exclusions or evidence of equivalence to chance.')
 doc.add_paragraph('Decision 1 and Decision 2 were screened separately for each 260-trial main condition, the 520 pooled aided trials and all 780 main trials. Timeouts never count as fast; exactly 200 ms is not fast. Short RTs require interpretation: Aid-first Decision 1 can be prepared from preceding advice, and Decision 2 can be prepared before its response screen.')
