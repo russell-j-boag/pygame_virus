@@ -114,6 +114,11 @@ doc.add_paragraph('Assessed whole scopes were full calibration, each manual segm
 doc.add_paragraph('Six participants met the near-chance criterion and five met the anticipatory criterion; four met both, giving seven unique exclusions. Eleven participants had manual-target deviations, which were diagnostic only. The six with diagnostic flags only (001, 021, 025, 037, 063 and 085) remain in the primary sample.')
 doc.add_paragraph('These are retrospective descriptive criteria, not preregistered exclusions or evidence of equivalence to chance. They include post-exposure performance; the all-participant analyses provide a sensitivity check for this selection.')
 
+doc.add_paragraph('Remaining participant IDs to collect','Heading 2')
+doc.add_paragraph('The target is 96 retained participants. With 82 currently retained, 14 further participants are required: seven replacements for exclusions and seven new participants, assuming all pass QC.')
+doc.add_paragraph('Re-collect: 023, 049, 051, 065, 075, 079, 081.\nNew participants: 090, 091, 092, 093, 094, 095, 096.')
+doc.add_paragraph('Collection target and replacement plan confirmed by the researcher on 21 October 2026. These IDs are outstanding collection slots, not completed replacement runs.','SourceNote')
+
 doc.add_paragraph('Reading the diagnostic plots','Heading 2')
 doc.add_paragraph('The following pages reproduce the saved individual plots for all seven excluded participants, including the two excluded only for near-chance performance. Each shows the full sequence including calibration, trial-level RTs, and fast-response rates and accuracy in 50-trial bins. Headline statistics pool the 1,600 experimental trials; the table identifies the relevant decision scopes. Binned patterns do not independently trigger exclusion.')
 doc.add_paragraph('The plots retain their original audit wording, “no participants are excluded”. This describes the standalone QC report, which leaves source data intact. The current primary analyses apply the seven exclusions documented here; the all-participant sensitivity retains everyone.')
@@ -144,6 +149,7 @@ with ZipFile(target) as z:
 assert len(Document(target).tables)==1
 sources=[membership_path,QC/'manifest.json',QC/'scope_metrics.csv',QC/'flagged_checks.csv',QC/'exclusion_summary.json',ROOT/'participant_qc/config.json']+[QC/f'individual/p{pid:03d}_diagnostics.png' for pid in ids]
 qa={'participant_ids':ids,'source_n':89,'primary_n':82,'input_matches_qc_manifest':True,'embedded_source_images_verified':7,'source_sha256':{str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}}
+qa['collection_plan'] = {'target_retained_n':96,'currently_retained_n':82,'remaining_n':14,'replacement_ids':ids,'new_ids':list(range(90,97)),'assumption':'All 14 further participants pass QC','confirmed_on':'2026-10-21'}
 (OUT/'source_verification.json').write_text(json.dumps(qa,indent=2)+'\n')
 print(target)
 print('Verified 7 primary exclusions, source input hash, 1 table and 7 byte-identical source diagnostic plots.')

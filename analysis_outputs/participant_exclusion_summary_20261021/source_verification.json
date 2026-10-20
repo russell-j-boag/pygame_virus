@@ -27,8 +27,34 @@
     "analysis_outputs/semester2_2026_qc/individual/p079_diagnostics.png": "66f7be66cee1f4b56c8aa05fe82c7414699a019d0e44203a63dc3cdf34aef16a",
     "analysis_outputs/semester2_2026_qc/individual/p081_diagnostics.png": "bc3e1403ef357c1a5f301baf5f56b9b16bb1e836c7d042d8ec83c392ee9d24ef"
   },
+  "collection_plan": {
+    "target_retained_n": 96,
+    "currently_retained_n": 82,
+    "remaining_n": 14,
+    "replacement_ids": [
+      23,
+      49,
+      51,
+      65,
+      75,
+      79,
+      81
+    ],
+    "new_ids": [
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96
+    ],
+    "assumption": "All 14 further participants pass QC",
+    "confirmed_on": "2026-10-21"
+  },
   "rendered_pages": 9,
-  "visual_review": "All nine pages inspected; table, captions, figures and page furniture fit without clipping or overlap.",
+  "visual_review": "Updated page 2 inspected; no clipping or overlap. All eight other pages are pixel-identical to the previously inspected render.",
   "source_files_unchanged": true,
-  "docx_sha256": "7972ac179c15c2c81d91c3ed7e7393be414680715aec6bb21ceee24f6ed84929"
+  "existing_document_content_preserved_except_requested_wording": true,
+  "docx_sha256": "3d2ec8b42356818320a3a0a4a085f74016e4c5a18b159dd72bf4ab4b12642dee"
 }
