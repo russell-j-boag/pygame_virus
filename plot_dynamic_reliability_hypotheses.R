@@ -78,12 +78,13 @@ plot_dynamic_reliability_hypotheses <- function(base,plot_base,root,input=NULL,q
     candidates <- file.path(plot_base,"presentation",paste0(prefix,c(histories$filename[i],old_stems[i])))
     found <- candidates[file.exists(paste0(candidates,".pdf")) & file.exists(paste0(candidates,".png"))][1]
     if(is.na(found))stop("Missing historical figure: ",stem,call.=FALSE)
-    members <- filter(bundle$membership,sample=="all_participants" | in_primary)
+    historical_caption <- paste(dpr_sample_caption(bundle$membership,sample),
+      legacy[[sample]]$figures[[legacy_stems[i]]]$patches$annotation$caption)
     p <- legacy[[sample]]$figures[[legacy_stems[i]]]+plot_annotation(
       title=c("20. Incorrect-advice agreement after the drop","21. Accuracy and agreement recovery",
         "22. Final evaluations and incorrect-advice agreement")[i],
-      subtitle=paste0(if(sample=="primary")"" else "All-participant sensitivity; ",
-        "CAL65 n = ",sum(members$calibration_target_group=="CAL65"),", CAL90 n = ",sum(members$calibration_target_group=="CAL90")))
+      subtitle=unname(dpr_measure_subtitles[[histories$filename[i]]]),
+      caption=paste(strwrap(historical_caption,width=155),collapse="\n"))
     p <- dpr_style_errorbars(p)
     for(ext in c("pdf","png")) {
       dst <- file.path(stage,paste0(stem,".",ext))

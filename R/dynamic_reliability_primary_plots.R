@@ -155,6 +155,39 @@ dpr_comparison <- function(results,kind,sample_name) {
       decision=case_when(!available_reference | !available_comparison | is.na(p_reference) | is.na(p_comparison)~"Unavailable",
         p_reference<.05 & p_comparison>=.05~"Primary only",p_reference>=.05 & p_comparison<.05~"Comparison only",TRUE~"Same decision"))
 }
+# Overall subtitles name measures; sample and method details belong in captions.
+dpr_measure_subtitles <- c(
+  "H01a_aid_benefits_accuracy_discrimination"="Accuracy and task discrimination",
+  "H01b_aid_benefits_response_speed"="Correct response time",
+  "H02_human_value_beyond_aid"="Accuracy and task discrimination",
+  "H03a_drop_bias"="Advice acceptance and task response preference",
+  "H03b_drop_discrimination"="Advice selectivity and task discrimination",
+  "H04a_recovery_bias"="Advice acceptance and task response preference",
+  "H04b_recovery_discrimination"="Advice selectivity and task discrimination",
+  "H05a_within_phase_accuracy"="Accuracy",
+  "H05b_within_phase_agreement"="Agreement with advice",
+  "H05c_within_phase_correct_rt"="Correct response time",
+  "H06_final_evaluations"="Trust, perceived reliability and calibration error",
+  "H07_evaluations_and_whole_block_advice_sdt"="Trust and perceived reliability error",
+  "S01_full_sequence"="Accuracy, task discrimination and correct response time",
+  "S02_manual_pre_post"="Accuracy, task discrimination and correct response time",
+  "S03_completion_and_answered_accuracy"="Response completion and answered-trial accuracy",
+  "S04_correction_sensitivity"="Holm-adjusted p-values and decision agreement",
+  "S05_model_participant_sensitivity"="Holm-adjusted p-values and decision agreement",
+  "S06_cohort_sensitivity"="Holm-adjusted p-values and decision agreement",
+  "S07_phase2_evaluation_associations"="Trust and perceived reliability error",
+  "S08_historical_incorrect_agreement"="Agreement with incorrect advice",
+  "S09_historical_accuracy_agreement_recovery"="Accuracy and agreement with correct and incorrect advice",
+  "S10_historical_rating_agreement_associations"="Trust and perceived reliability error"
+)
+
+dpr_sample_caption <- function(membership,sample) {
+  members <- membership[sample=="all_participants" | membership$in_primary,]
+  paste0(if(sample=="primary")"QC-retained sample" else "All-participant sensitivity",
+    "; N = ",nrow(members),"; CAL65 n = ",sum(members$calibration_target_group=="CAL65"),
+    ", CAL90 n = ",sum(members$calibration_target_group=="CAL90"),".")
+}
+
 dpr_plot_build <- function(bundle,registry,out) {
   figures <- list(); annotations <- list()
   colours <- c(CAL65="#0072B2",CAL90="#D55E00","CAL90 - CAL65"="#334858")
@@ -162,9 +195,7 @@ dpr_plot_build <- function(bundle,registry,out) {
   for(sample_name in c("primary","all_participants")) {
     d <- bundle$data[[sample_name]]; means <- bundle$estimates[[sample_name]]
     tests <- filter(bundle$results,sample==sample_name,analysis=="primary",correction %in% c("none","loglinear"))
-    members <- bundle$membership %>% filter(sample_name=="all_participants" | in_primary)
-    sample_label <- paste0(if(sample_name=="primary")"" else "All-participant sensitivity; ",
-      "CAL65 n = ",sum(members$calibration_target_group=="CAL65"),", CAL90 n = ",sum(members$calibration_target_group=="CAL90"))
+    sample_label <- dpr_sample_caption(bundle$membership,sample_name)
     prefix <- if(sample_name=="primary")"" else "sensitivity_"
     current_data <- current_raw <- current_tests <- list()
     register <- function(o,m,raw,t=tibble()) {
@@ -174,10 +205,13 @@ dpr_plot_build <- function(bundle,registry,out) {
       current_raw[[o]] <<- mutate(as_tibble(raw),outcome=o)
       if(nrow(t))current_tests[[o]] <<- t
     }
-    finish <- function(order,p,note,subtitle=sample_label) {
+    finish <- function(order,p,note) {
       row <- registry[match(order,registry$order),];stem <- paste0(prefix,row$filename)
+      subtitle <- unname(dpr_measure_subtitles[[row$filename]])
+      cohort_note <- if(order==17)paste(dpr_sample_caption(bundle$membership,"primary"),
+        dpr_sample_caption(bundle$membership,"all_participants")) else sample_label
       p <- p+plot_annotation(title=paste(strwrap(row$title,width=85),collapse="\n"),subtitle=subtitle,
-        caption=paste(strwrap(note,width=155),collapse="\n"),
+        caption=paste(strwrap(paste(cohort_note,note),width=155),collapse="\n"),
         theme=dpr_theme()+theme(plot.title=element_text(size=19,face="bold"),plot.subtitle=element_text(size=11)))
       figures[[stem]] <<- if(order==11)dpr_colour_group_subtitles(p,colours[GROUPS]) else p
       write_csv(bind_rows(current_data),file.path(out,"data",paste0(stem,"_data.csv")))
@@ -410,8 +444,7 @@ dpr_plot_build <- function(bundle,registry,out) {
       register(kind,counts,comp)
       finish(match(kind,c("correction","participant","sample"))+14,p1+p2+plot_layout(widths=c(1,1.15)),
         paste0(nrow(comp)," primary comparisons; ",sum(comp$direction_changed,na.rm=TRUE)," estimate-direction changes. Dotted lines: p=.05; display capped at p=1e-12. Exact estimates and p-values are exported. ",
-          if(kind=="participant")"Participant contrasts can target different estimands; neither method substitutes for the other." else "Sensitivity results do not replace primary inference."),
-        if(kind=="sample")paste0("Matched QC-retained (",sum(bundle$membership$in_primary),") and all-participant (",nrow(bundle$membership),") analyses") else sample_label)
+          if(kind=="participant")"Participant contrasts can target different estimands; neither method substitutes for the other." else "Sensitivity results do not replace primary inference."))
     }
     association_plot("S7",18)
   }
