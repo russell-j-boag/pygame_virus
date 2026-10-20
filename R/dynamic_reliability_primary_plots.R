@@ -1,4 +1,98 @@
 # Plot-only consumers of the revised analysis bundle.
+# Vertical caps occupy 3% of panel width, corrected for horizontal panel count.
+# Panel-relative units preserve these proportions across layouts and axis ranges.
+dpr_errorbar_cap_fraction <- .03
+dpr_errorbar_linewidth <- .70
+dpr_errorbar_geom <- ggplot2::ggproto("GeomDprErrorbar",ggplot2::GeomErrorbar,
+  draw_panel=function(data,panel_params,coord,lineend="butt",width=NULL,flipped_aes=FALSE,horizontal_panels=1) {
+    if(!nrow(data))return(grid::zeroGrob())
+    data <- coord$transform(data,panel_params)
+    horizontal <- xor(flipped_aes,inherits(coord,"CoordFlip"))
+    half <- grid::unit(dpr_errorbar_cap_fraction*horizontal_panels/2,"npc")
+    gp <- grid::gpar(col=scales::alpha(data$colour,data$alpha),
+      lwd=data$linewidth*ggplot2::.pt,lty=data$linetype,lineend=lineend)
+    if(horizontal) {
+      low <- grid::unit(data$xmin,"native");high <- grid::unit(data$xmax,"native")
+      centre <- grid::unit(data$y,"native")
+      stem <- grid::segmentsGrob(low,centre,high,centre,gp=gp,name="dpr.errorbar.stem")
+      # Horizontal change/difference intervals use an uncapped line segment.
+      return(grid::grobTree(stem,name="dpr.errorbar"))
+    } else {
+      low <- grid::unit(data$ymin,"native");high <- grid::unit(data$ymax,"native")
+      centre <- grid::unit(data$x,"native")
+      stem <- grid::segmentsGrob(centre,low,centre,high,gp=gp,name="dpr.errorbar.stem")
+      a <- grid::segmentsGrob(centre-half,low,centre+half,low,gp=gp,name="dpr.errorbar.cap.lower")
+      b <- grid::segmentsGrob(centre-half,high,centre+half,high,gp=gp,name="dpr.errorbar.cap.upper")
+    }
+    grid::grobTree(stem,a,b,name="dpr.errorbar")
+  })
+# Scale diamond size and outline together, 20% larger than the original H1b marker
+# (size 3.4, stroke .9) in its 783.78125-point-wide plotting panel.
+# Resolve physical dimensions at draw time, inside the actual panel viewport.
+dpr_diamond_scale <- 1.20
+dpr_diamond_reference_mm <- 783.78125 * 25.4 / 72
+dpr_make_diamonds <- function(x) {
+  horizontal_panels <- if(is.null(x$horizontal_panels))1 else x$horizontal_panels
+  ratio <- horizontal_panels * dpr_diamond_scale * grid::convertWidth(grid::unit(1,"npc"),"mm",valueOnly=TRUE)/dpr_diamond_reference_mm
+  d <- x$data
+  marks <- grid::pointsGrob(d$x,d$y,pch=23,
+    gp=grid::gpar(col=scales::alpha(d$colour,d$alpha),fill=scales::alpha(d$fill,d$alpha),
+      fontsize=(3.4*ggplot2::.pt+.9*ggplot2::.stroke/2)*ratio,
+      lwd=.9*ggplot2::.stroke/2*ratio),name="dpr.diamond.points")
+  grid::setChildren(x,grid::gList(marks))
+}
+registerS3method("makeContent","dpr_scaled_diamonds",dpr_make_diamonds,envir=asNamespace("grid"))
+dpr_diamond_geom <- ggplot2::ggproto("GeomDprDiamond",ggplot2::GeomPoint,
+  draw_panel=function(data,panel_params,coord,na.rm=FALSE,horizontal_panels=1) {
+    if(!nrow(data))return(grid::zeroGrob())
+    grid::gTree(data=coord$transform(data,panel_params),horizontal_panels=horizontal_panels,cl="dpr_scaled_diamonds",name="dpr.diamonds")
+  })
+# A full-width panel has factor one; each side-by-side subdivision contributes
+# its column count. Explicit spanning panels use only their occupied width share.
+dpr_patch_columns <- function(p) {
+  layout <- p$patches$layout
+  n <- length(p$patches$plots)+as.integer(!inherits(p,"plot_filler"))
+  if(!is.null(layout$design)) {
+    design <- as.data.frame(unclass(layout$design))
+    return(max(design$r)/(design$r-design$l+1))
+  }
+  nc <- layout$ncol;nr <- layout$nrow
+  if(is.null(nc) && length(layout$widths)>1)nc <- length(layout$widths)
+  if(is.null(nr) && length(layout$heights)>1)nr <- length(layout$heights)
+  rep(ggplot2::wrap_dims(n,nrow=nr,ncol=nc)[2],n)
+}
+# Clone only interval and diamond layers; preserve other marks and data.
+# Patchwork columns and facet columns multiply; vertical stacking adds no factor.
+dpr_style_errorbars <- function(p,horizontal_panels=1) {
+  if(!inherits(p,"ggplot"))return(p)
+  own_panels <- horizontal_panels
+  if(inherits(p,"patchwork")) {
+    factors <- dpr_patch_columns(p)
+    p$patches$plots <- lapply(seq_along(p$patches$plots),function(i)
+      dpr_style_errorbars(p$patches$plots[[i]],horizontal_panels*factors[i]))
+    if(!inherits(p,"plot_filler"))own_panels <- horizontal_panels*tail(factors,1)
+  }
+  if(!inherits(p$facet,"FacetNull") && length(p$layers)) {
+    layout <- ggplot2::ggplot_build(p)$layout$layout
+    own_panels <- own_panels*max(layout$COL)
+  }
+  p$layers <- lapply(p$layers,function(layer) {
+    bar <- inherits(layer$geom,"GeomErrorbar")
+    diamond <- inherits(layer$geom,"GeomPoint") && identical(as.numeric(layer$aes_params$shape),23)
+    if(!bar && !diamond)return(layer)
+    styled <- ggplot2::ggproto(NULL,layer)
+    styled$geom_params <- utils::modifyList(layer$geom_params,list(horizontal_panels=own_panels))
+    if(bar) {
+      styled$geom <- dpr_errorbar_geom
+      styled$aes_params <- utils::modifyList(layer$aes_params,list(linewidth=dpr_errorbar_linewidth))
+    } else {
+      styled$geom <- dpr_diamond_geom
+      styled$aes_params <- utils::modifyList(layer$aes_params,list(size=3.4,stroke=.9))
+    }
+    styled
+  })
+  p
+}
 dpr_theme <- function()theme_minimal(base_size=12,base_family="Helvetica")+theme(
   text=element_text(colour="#25323D"),panel.grid.minor=element_blank(),panel.grid.major.x=element_blank(),
   plot.title=element_text(size=14,face="bold"),plot.subtitle=element_text(size=10),
@@ -110,13 +204,15 @@ dpr_plot_build <- function(bundle,registry,out) {
       raw <- filter(raw,phase %in% levels) %>% mutate(x=match(phase,levels)+ifelse(group=="CAL65",-.15,.15))
       ratio <- o=="correct_rt"
       rg <- range(c(raw$value,cells$lower,cells$upper,0),finite=TRUE);span <- max(diff(rg),.05)
-      top <- rg[2]+.12*span; group_tests <- filter(t,group=="CAL90 - CAL65") %>% mutate(x=match(phase,levels),y=top)
+      # Match Virus/ATC: a common reference-test row above all data, then group comparisons.
+      reference_y <- rg[2]+.12*span
+      top <- rg[2]+.29*span; group_tests <- filter(t,group=="CAL90 - CAL65") %>% mutate(x=match(phase,levels),y=top)
       p <- ggplot()+geom_hline(yintercept=0,colour="#9BA5AD",linetype="dotted")+
         geom_point(data=raw,aes(x,value,colour=group),position=position_jitter(width=.045,height=0,seed=26),alpha=.20,size=1.1)+
         geom_errorbar(data=cells,aes(x,ymin=lower,ymax=upper,colour=group),width=.07,linewidth=.85)+
-        geom_point(data=cells,aes(x,estimate,colour=group),shape=23,fill="white",stroke=1.1,size=3.4)+
-        geom_label(data=cells,aes(x,y=upper+.035*span,label=dpr_p_label(p_holm),colour=group),size=3.3,
-          fill="white",linewidth=0,label.padding=grid::unit(.08,"lines"),show.legend=FALSE)+
+        geom_point(data=cells,aes(x,estimate,colour=group),shape=23,fill="white",stroke=.9,size=3.4)+
+        geom_text(data=cells,aes(x,y=reference_y,label=dpr_p_label(p_holm)),
+          inherit.aes=FALSE,size=3.7,vjust=-.1)+
         geom_segment(data=group_tests,aes(x=x-.15,xend=x+.15,y=y,yend=y),colour="#334858",linewidth=.45)+
         geom_text(data=group_tests,aes(x,y=y+.04*span,label=paste("Group:",dpr_p_label(p_holm))),size=3.2,colour="#334858")+
         scale_colour_manual(values=colours,name=NULL)+
@@ -132,7 +228,7 @@ dpr_plot_build <- function(bundle,registry,out) {
         panels[[o]] <- gain_panel(changes(o),choose("H1",o),o,ylab=if(o=="accuracy")"Aided minus manual pre (pp)" else
           if(o=="task_dprime")"Aided minus manual pre (d-prime)" else "Aided / manual pre RT ratio (log-spaced axis)")
       finish(order,wrap_plots(panels,nrow=1,guides="collect"),
-        paste(caption,"Cell labels test no benefit; group brackets compare benefits. Manual-pre is the reference.",
+        paste(caption,"Aligned labels above the data test no benefit; higher group brackets compare benefits. Manual-pre is the reference.",
           if(order==2)"Ratios below 1 mean faster correct responses; group contrasts are ratios of ratios." else "Accuracy includes timeouts; SDT uses answered trials."))
     }
     panels <- list()
@@ -151,7 +247,7 @@ dpr_plot_build <- function(bundle,registry,out) {
         geom_point(position=position_jitter(width=.025,height=0,seed=26),alpha=.16,size=.9)+
         geom_line(data=m,aes(x,estimate,group=group),linewidth=.65)+
         geom_errorbar(data=m,aes(x,y=NULL,ymin=lower,ymax=upper),width=.065,linewidth=.75)+
-        geom_point(data=m,aes(x,estimate),shape=if(descriptive)16 else 23,fill="white",size=3,stroke=1)+
+        geom_point(data=m,aes(x,estimate),shape=if(descriptive)16 else 23,fill="white",size=3,stroke=if(descriptive)1 else .8)+
         scale_colour_manual(values=colours,name=NULL)+scale_x_continuous(breaks=seq_along(levels),labels=dpr_phase_labels[levels],limits=c(.7,length(levels)+.3))+
         labs(title=if(o %in% names(dpr_labels))dpr_labels[[o]] else o,x=NULL,y=if(o=="accuracy")"Accuracy (%)" else if(o=="correct_rt")"Geometric mean RT (s)" else "SDT z units")+dpr_theme()
       list(plot=p,data=m,raw=raw)
@@ -161,7 +257,7 @@ dpr_plot_build <- function(bundle,registry,out) {
       rg <- if(is.null(limits))range(c(0,t$lower,t$upper),finite=TRUE) else limits;span <- max(diff(rg),.05)
       ggplot(t,aes(estimate,label,colour=group))+geom_vline(xintercept=0,linetype="dashed",colour="#9BA5AD")+
         geom_errorbar(aes(xmin=lower,xmax=upper),orientation="y",width=.12,linewidth=.75)+
-        geom_point(shape=23,fill="white",size=3,stroke=1)+
+        geom_point(shape=23,fill="white",size=3,stroke=.8)+
         geom_text(aes(x=rg[2]+.18*span,label=dpr_p_label(p_holm)),size=3.4,show.legend=FALSE)+
         scale_colour_manual(values=colours,guide="none")+coord_cartesian(xlim=c(rg[1]-.08*span,rg[2]+.35*span))+
         labs(title=title,x="Difference (SDT z units)",y=NULL)+dpr_theme()+
@@ -216,7 +312,7 @@ dpr_plot_build <- function(bundle,registry,out) {
         geom_line(aes(group=participant_id),alpha=.07,linewidth=.22)+geom_point(alpha=.13,size=.8)+
         geom_ribbon(data=m,aes(x=progress,y=NULL,ymin=lower,ymax=upper,fill=group,group=group),alpha=.12,colour=NA)+
         geom_line(data=m,aes(progress,estimate,group=group),linewidth=.8)+
-        geom_point(data=filter(m,progress %in% c(0,.5,1)),aes(progress,estimate),shape=23,fill="white",size=2.3)+
+        geom_point(data=filter(m,progress %in% c(0,.5,1)),aes(progress,estimate),shape=23,fill="white",size=2.3,stroke=.4)+
         geom_text(data=aa,aes(x=.02,y=y,label=label,colour=group),inherit.aes=FALSE,hjust=0,size=2.8,show.legend=FALSE)+
         facet_grid(advice~phase,scales="free_y",labeller=labeller(phase=c(P1="Phase 1: 95%",P2="Phase 2: 70%",P3="Phase 3: 95%")))+
         scale_colour_manual(values=colours,breaks=GROUPS,name=NULL)+scale_fill_manual(values=colours,guide="none")+
@@ -235,19 +331,20 @@ dpr_plot_build <- function(bundle,registry,out) {
     for(o in c("trust","perceived","signed_error")) {
       raw <- mutate(d$ratings,value=.data[[o]],x=match(group,GROUPS));m <- means[[paste0("ratings_",o)]] %>% mutate(x=match(group,GROUPS))
       t <- choose("H6",o);rg <- range(c(raw$value,m$lower,m$upper,if(o=="signed_error")0),finite=TRUE);span <- max(diff(rg),.1)
+      group_y <- rg[2]+if(o=="signed_error") .29*span else .12*span
       p <- ggplot(raw,aes(x,value,colour=group))+geom_point(position=position_jitter(width=.09,height=0,seed=26),alpha=.25,size=1.4)+
         geom_errorbar(data=m,aes(x,y=NULL,ymin=lower,ymax=upper),width=.10,linewidth=.85)+
-        geom_point(data=m,aes(x,estimate),shape=23,fill="white",size=3.5,stroke=1)+
-        annotate("segment",x=1,xend=2,y=rg[2]+.12*span,yend=rg[2]+.12*span)+
-        annotate("text",x=1.5,y=rg[2]+.19*span,label=paste("Group:",dpr_p_label(t$p_holm[t$contrast_id=="group_difference"])),size=3.6)+
+        geom_point(data=m,aes(x,estimate),shape=23,fill="white",size=3.5,stroke=.8)+
+        annotate("segment",x=1,xend=2,y=group_y,yend=group_y)+
+        annotate("text",x=1.5,y=group_y+.07*span,label=paste("Group:",dpr_p_label(t$p_holm[t$contrast_id=="group_difference"])),size=3.6)+
         scale_colour_manual(values=colours,guide="none")+scale_x_continuous(breaks=1:2,labels=GROUPS,limits=c(.6,2.4))+
         labs(title=dpr_labels[[o]],x=NULL,y=if(o=="trust")"Trust (1-5)" else if(o=="perceived")"Perceived reliability (%)" else "Error (pp)")+
-        dpr_theme()+coord_cartesian(ylim=c(rg[1]-.07*span,rg[2]+.29*span))
+        dpr_theme()+coord_cartesian(ylim=c(rg[1]-.07*span,group_y+.17*span))
       if(o=="signed_error") {
         z <- filter(t,startsWith(contrast_id,"zero_")) %>% mutate(x=match(group,GROUPS))
         p <- p+geom_hline(yintercept=0,linetype="dashed",colour="#9BA5AD")+
-          geom_label(data=z,aes(x,y=upper+.045*span,label=paste("vs zero:",dpr_p_label(p_holm))),size=3.1,
-            fill="white",linewidth=0,label.padding=grid::unit(.12,"lines"),show.legend=FALSE)
+          geom_text(data=z,aes(x,label=dpr_p_label(p_holm)),y=rg[2]+.12*span,
+            inherit.aes=FALSE,size=3.7,vjust=-.1)
       }
       panels[[o]] <- p;register(o,m,raw,t)
     }

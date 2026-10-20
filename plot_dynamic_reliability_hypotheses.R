@@ -54,12 +54,13 @@ plot_dynamic_reliability_hypotheses <- function(base,plot_base,root,input=NULL,q
   stage <- tempfile(".presentation_build_",tmpdir=plot_base);dir.create(file.path(stage,"data"),recursive=TRUE)
   message("Staged H1-H7 report: ",stage)
   source_paths <- c(provenance$path,file.path(primary,c("input_checksums.csv","artifact_manifest.csv","bundle.rds","contrast_audit.rds")),
-    file.path(root,c("plot_dynamic_reliability_hypotheses.R","plot_dynamic_reliability_slides.R","R/dynamic_reliability_primary_plots.R","tests/validate_dynamic_reliability_primary.R")))
+    file.path(root,c("plot_dynamic_reliability_hypotheses.R","plot_dynamic_reliability_slides.R","R/dynamic_reliability_primary_plots.R","tests/validate_dynamic_reliability_primary.R","tests/test_dynamic_reliability_errorbars.R")))
   start_hashes <- task_hashes(unique(source_paths))
   built <- dpr_plot_build(bundle,registry,stage)
+  built$figures <- lapply(built$figures,dpr_style_errorbars)
   for(stem in names(built$figures))for(ext in c("pdf","png"))
     ggsave(file.path(stage,paste0(stem,".",ext)),built$figures[[stem]],width=12,height=6.75,dpi=300,bg="white",device=if(ext=="pdf")cairo_pdf else "png")
-  # Redraw historical pages from saved results, updating display text only.
+  # Redraw historical pages from saved results with the shared display style.
   old_stems <- c("19_historical_incorrect_agreement_drop","20_historical_accuracy_and_agreement_recovery","21_historical_trust_and_incorrect_agreement")
   histories <- filter(catalog,role=="Historical")
   historical_manifest <- list()
@@ -83,6 +84,7 @@ plot_dynamic_reliability_hypotheses <- function(base,plot_base,root,input=NULL,q
         "22. Final evaluations and incorrect-advice agreement")[i],
       subtitle=paste0(if(sample=="primary")"" else "All-participant sensitivity; ",
         "CAL65 n = ",sum(members$calibration_target_group=="CAL65"),", CAL90 n = ",sum(members$calibration_target_group=="CAL90")))
+    p <- dpr_style_errorbars(p)
     for(ext in c("pdf","png")) {
       dst <- file.path(stage,paste0(stem,".",ext))
       ggsave(dst,p,width=12,height=6.75,dpi=300,bg="white",device=if(ext=="pdf")cairo_pdf else "png")
@@ -176,9 +178,9 @@ dpr_report_html <- function(out,catalog,bundle,annotations) {
       html <- c(html,paste0('<h2 id="',r$hypothesis,'">',r$hypothesis,'</h2><p>',prose[[r$hypothesis]],'</p>'));last <- r$hypothesis
     }
     if(i==which(primary$role=="Supporting")[1])html <- c(html,'<h2 id="supporting">Supporting analyses and sensitivities</h2>')
-    if(i==which(primary$role=="Historical")[1])html <- c(html,'<h2 id="historical">Historical hypothesis formulations</h2><p>Original plotted data and tests are retained, with updated display text. Their hypothesis labels belong to the earlier framework.</p>')
+    if(i==which(primary$role=="Historical")[1])html <- c(html,'<h2 id="historical">Historical hypothesis formulations</h2><p>Original plotted data and tests are retained, with updated display text and the shared error-bar style. Their hypothesis labels belong to the earlier framework.</p>')
     r$notes <- gsub("; nonsignificance is not equivalence|; the post block is not an untreated control","",r$notes)
-    r$notes <- sub("Original figure and test families retained unchanged", "Original plotted data and test families retained; display text updated",r$notes,fixed=TRUE)
+    r$notes <- sub("Original figure and test families retained unchanged", "Original plotted data and test families retained; display text and error-bar style updated",r$notes,fixed=TRUE)
     html <- c(html,paste0('<article><h3>',esc(r$title),'</h3><p class="meta">',esc(r$legacy_labels),' | ',esc(r$notes),'</p>',
       '<img loading="lazy" src="',r$filename,'.png" alt="',esc(r$title),'"><p>',links(r$filename),'</p>'))
     a <- filter(annotations,filename==r$filename)

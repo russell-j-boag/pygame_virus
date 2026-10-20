@@ -527,6 +527,11 @@ white backgrounds, typography, faint participant data, open diamonds for fitted
 estimates and ordinary pointwise intervals. CAL65 is blue and CAL90 orange.
 Annotations consistently use `***`, `**`, `*`, `ns` or `unavailable`, with exact tests
 available beside the figure. Descriptive supporting means use filled circles.
+Vertical error bars throughout the gallery, including historical panels, use
+H1b's cap proportions: 3% of each panel's plotting width. Horizontal change/difference intervals
+use line segments without end caps. Both use a lighter `linewidth = 0.70`.
+Diamond sizes and outlines scale with panel width, at 120% of H1b's original marker proportions.
+Cap length scales with panel width and is independent of the axis range; interval endpoints retain their original statistical meaning.
 
 Seven supporting pages show full-sequence context, manual pre/post comparisons
 (three tests per outcome), completion/answered accuracy, correction sensitivity,
@@ -540,6 +545,8 @@ Satterthwaite df, participant tests, transformations and Holm families; and requ
 one of the 206 primary annotations per cohort. It also verifies saved figure data,
 cohort identities, source copies, historical bytes, report links, PDF counts/dimensions,
 text bounds and input/artifact hashes. Rendered visual inspection is a separate step.
+`Rscript tests/test_dynamic_reliability_errorbars.R` checks panel-relative cap sizes,
+line thickness and unchanged interval coordinates across layouts and orientations.
 `tests/validate_dynamic_reliability_hypotheses.R` is a compatibility entrypoint for this
 validator; the older component validators remain available for historical component work.
 
@@ -738,3 +745,7 @@ comparator ranking, local report links, checksums, and PDF/PNG structure. Render
 visual review is still required after plotting changes. Its optional
 `--expect-current-cohort` switch asserts the reviewed 89-person snapshot; normal
 generation and validation discover sample size dynamically.
+
+Cap lengths and diamond sizes are multiplied by the number of horizontal panels
+(including nested facets), so side-by-side layouts retain comparable sizes.
+Vertical stacking adds no multiplier; spanning panels use their occupied column share.
