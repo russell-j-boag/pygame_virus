@@ -1,0 +1,34 @@
+{
+  "participant_ids": [
+    23,
+    49,
+    51,
+    65,
+    75,
+    79,
+    81
+  ],
+  "source_n": 89,
+  "primary_n": 82,
+  "input_matches_qc_manifest": true,
+  "embedded_source_images_verified": 7,
+  "source_sha256": {
+    "analysis_outputs/semester2_2026_behavioural/primary/cohort_membership.csv": "9688404ff633387f2cc6f09705e45222dd4437085a770cc3f4ee6b09ab5a4726",
+    "analysis_outputs/semester2_2026_qc/manifest.json": "576c125994a00f62f60a11c41b9bc8ca32c90385a3ccca7ca6a86c820ece1187",
+    "analysis_outputs/semester2_2026_qc/scope_metrics.csv": "5af4879991678cab9266d90f76e42fe1aec7daa6b40a01889b2cd52bf75ee35f",
+    "analysis_outputs/semester2_2026_qc/flagged_checks.csv": "f2289d06ca86e48d66a72fe14cb2abf4f7670bf7a3671126fbcc9a4c863a857a",
+    "analysis_outputs/semester2_2026_qc/exclusion_summary.json": "16d99cd42bf75d9f5ac0f8363c8e31b1f167a6971d236dc12810832071819f6e",
+    "participant_qc/config.json": "885ed1d76c3184c05337f1b05e21aaa7c138713c2c299e0fe3219cc7b9d89f10",
+    "analysis_outputs/semester2_2026_qc/individual/p023_diagnostics.png": "5d0d8b9a991a6849f319759c7a4ebd1909333ba7f3676c4102b21d61fc2df5e7",
+    "analysis_outputs/semester2_2026_qc/individual/p049_diagnostics.png": "5e87c44321cdc6d3cc4e186b0186a1c78893fdc4ffbdd48adfe22fb6adeb8d44",
+    "analysis_outputs/semester2_2026_qc/individual/p051_diagnostics.png": "e8753c03525685f13b05f0832b81ec82ab80cd6e5974716402287c80ee1ca6e0",
+    "analysis_outputs/semester2_2026_qc/individual/p065_diagnostics.png": "9014658ed7bc6b8d547bb6a52ef34a5a11dc0e0c648eeb6c681990e0729ad9b5",
+    "analysis_outputs/semester2_2026_qc/individual/p075_diagnostics.png": "adbbdd11b845ac1bc8a481a91f5c573218d46b1b2861765d6decbb1a97857ce7",
+    "analysis_outputs/semester2_2026_qc/individual/p079_diagnostics.png": "66f7be66cee1f4b56c8aa05fe82c7414699a019d0e44203a63dc3cdf34aef16a",
+    "analysis_outputs/semester2_2026_qc/individual/p081_diagnostics.png": "bc3e1403ef357c1a5f301baf5f56b9b16bb1e836c7d042d8ec83c392ee9d24ef"
+  },
+  "rendered_pages": 9,
+  "visual_review": "All nine pages inspected; table, captions, figures and page furniture fit without clipping or overlap.",
+  "source_files_unchanged": true,
+  "docx_sha256": "7972ac179c15c2c81d91c3ed7e7393be414680715aec6bb21ceee24f6ed84929"
+}
