@@ -456,3 +456,19 @@ H3/H4 conditional-accuracy outcomes appear as supporting S3, original H1 perceiv
 reliability appears in H7, and prior exploratory H5/H6/H7/H8 presentation outcomes
 map to H5b/H3-H4/H6/H7 respectively. The former alternate advice SDT figures are
 now core outcomes alongside their task-SDT analogues.
+
+Current hypothesis-report error bars use vertical caps spanning 3%
+of each panel's plotting width, `linewidth = 0.70`, and no caps on horizontal
+change/difference intervals. Cap lengths scale with panel size, independently of
+axis range. Diamond sizes and outlines also scale with panel width, at 120% of
+dynamic-reliability H1b's original marker proportions. `Rscript tests/test_report_errorbars.R` checks the drawing geometry.
+
+Cap lengths and diamond sizes are multiplied by the number of horizontal panels
+(including nested facets), so side-by-side layouts retain comparable sizes.
+Vertical stacking adds no multiplier; spanning panels use their occupied column share.
+
+In the current aid-onset gallery, diamonds and intervals use the same condition
+colours as participant points: Manual grey, Aid-first blue, Stimulus-first orange.
+Selective-uptake panels retain red for incorrect advice and green for correct advice.
+Faint grey lines connect repeated observations within each participant; supporting
+initial/final-decision panels keep the two decision trajectories separate.

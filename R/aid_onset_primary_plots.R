@@ -1,3 +1,98 @@
+# Vertical caps occupy 3% of panel width, corrected for horizontal panel count.
+# Panel-relative units preserve these proportions across layouts and axis ranges.
+report_errorbar_cap_fraction <- .03
+report_errorbar_linewidth <- .70
+report_errorbar_geom <- ggplot2::ggproto("GeomReportErrorbar",ggplot2::GeomErrorbar,
+  draw_panel=function(data,panel_params,coord,lineend="butt",width=NULL,flipped_aes=FALSE,horizontal_panels=1) {
+    if(!nrow(data))return(grid::zeroGrob())
+    data <- coord$transform(data,panel_params)
+    horizontal <- xor(flipped_aes,inherits(coord,"CoordFlip"))
+    half <- grid::unit(report_errorbar_cap_fraction*horizontal_panels/2,"npc")
+    gp <- grid::gpar(col=scales::alpha(data$colour,data$alpha),
+      lwd=data$linewidth*ggplot2::.pt,lty=data$linetype,lineend=lineend)
+    if(horizontal) {
+      low <- grid::unit(data$xmin,"native");high <- grid::unit(data$xmax,"native")
+      centre <- grid::unit(data$y,"native")
+      stem <- grid::segmentsGrob(low,centre,high,centre,gp=gp,name="dpr.errorbar.stem")
+      # Horizontal change/difference intervals use an uncapped line segment.
+      return(grid::grobTree(stem,name="dpr.errorbar"))
+    } else {
+      low <- grid::unit(data$ymin,"native");high <- grid::unit(data$ymax,"native")
+      centre <- grid::unit(data$x,"native")
+      stem <- grid::segmentsGrob(centre,low,centre,high,gp=gp,name="dpr.errorbar.stem")
+      a <- grid::segmentsGrob(centre-half,low,centre+half,low,gp=gp,name="dpr.errorbar.cap.lower")
+      b <- grid::segmentsGrob(centre-half,high,centre+half,high,gp=gp,name="dpr.errorbar.cap.upper")
+    }
+    grid::grobTree(stem,a,b,name="dpr.errorbar")
+  })
+# Scale diamond size and outline together, 20% larger than the original H1b marker
+# (size 3.4, stroke .9) in its 783.78125-point-wide plotting panel.
+# Resolve physical dimensions at draw time, inside the actual panel viewport.
+report_diamond_scale <- 1.20
+report_diamond_reference_mm <- 783.78125 * 25.4 / 72
+report_make_diamonds <- function(x) {
+  horizontal_panels <- if(is.null(x$horizontal_panels))1 else x$horizontal_panels
+  ratio <- horizontal_panels * report_diamond_scale * grid::convertWidth(grid::unit(1,"npc"),"mm",valueOnly=TRUE)/report_diamond_reference_mm
+  d <- x$data
+  marks <- grid::pointsGrob(d$x,d$y,pch=23,
+    gp=grid::gpar(col=scales::alpha(d$colour,d$alpha),fill=scales::alpha(d$fill,d$alpha),
+      fontsize=(3.4*ggplot2::.pt+.9*ggplot2::.stroke/2)*ratio,
+      lwd=.9*ggplot2::.stroke/2*ratio),name="dpr.diamond.points")
+  grid::setChildren(x,grid::gList(marks))
+}
+registerS3method("makeContent","report_scaled_diamonds",report_make_diamonds,envir=asNamespace("grid"))
+report_diamond_geom <- ggplot2::ggproto("GeomReportDiamond",ggplot2::GeomPoint,
+  draw_panel=function(data,panel_params,coord,na.rm=FALSE,horizontal_panels=1) {
+    if(!nrow(data))return(grid::zeroGrob())
+    grid::gTree(data=coord$transform(data,panel_params),horizontal_panels=horizontal_panels,cl="report_scaled_diamonds",name="dpr.diamonds")
+  })
+# A full-width panel has factor one; each side-by-side subdivision contributes
+# its column count. Explicit spanning panels use only their occupied width share.
+report_patch_columns <- function(p) {
+  layout <- p$patches$layout
+  n <- length(p$patches$plots)+as.integer(!inherits(p,"plot_filler"))
+  if(!is.null(layout$design)) {
+    design <- as.data.frame(unclass(layout$design))
+    return(max(design$r)/(design$r-design$l+1))
+  }
+  nc <- layout$ncol;nr <- layout$nrow
+  if(is.null(nc) && length(layout$widths)>1)nc <- length(layout$widths)
+  if(is.null(nr) && length(layout$heights)>1)nr <- length(layout$heights)
+  rep(ggplot2::wrap_dims(n,nrow=nr,ncol=nc)[2],n)
+}
+# Clone only interval and diamond layers; preserve other marks and data.
+# Patchwork columns and facet columns multiply; vertical stacking adds no factor.
+report_style_errorbars <- function(p,horizontal_panels=1) {
+  if(!inherits(p,"ggplot"))return(p)
+  own_panels <- horizontal_panels
+  if(inherits(p,"patchwork")) {
+    factors <- report_patch_columns(p)
+    p$patches$plots <- lapply(seq_along(p$patches$plots),function(i)
+      report_style_errorbars(p$patches$plots[[i]],horizontal_panels*factors[i]))
+    if(!inherits(p,"plot_filler"))own_panels <- horizontal_panels*tail(factors,1)
+  }
+  if(!inherits(p$facet,"FacetNull") && length(p$layers)) {
+    layout <- ggplot2::ggplot_build(p)$layout$layout
+    own_panels <- own_panels*max(layout$COL)
+  }
+  p$layers <- lapply(p$layers,function(layer) {
+    bar <- inherits(layer$geom,"GeomErrorbar")
+    diamond <- inherits(layer$geom,"GeomPoint") && identical(as.numeric(layer$aes_params$shape),23)
+    if(!bar && !diamond)return(layer)
+    styled <- ggplot2::ggproto(NULL,layer)
+    styled$geom_params <- utils::modifyList(layer$geom_params,list(horizontal_panels=own_panels))
+    if(bar) {
+      styled$geom <- report_errorbar_geom
+      styled$aes_params <- utils::modifyList(layer$aes_params,list(linewidth=report_errorbar_linewidth))
+    } else {
+      styled$geom <- report_diamond_geom
+      styled$aes_params <- utils::modifyList(layer$aes_params,list(size=3.4,stroke=.9))
+    }
+    styled
+  })
+  p
+}
+
 suppressPackageStartupMessages(library(patchwork))
 ao_palette <- c(Manual="#727B88",`Aid-first`="#1976A3",`Stimulus-first`="#C56924",
   `Incorrect advice`="#BB503B",`Correct advice`="#087F72")
@@ -75,10 +170,11 @@ ao_panel <- function(row,raw,means,tests) {
   data_range <- range(c(r$value,m$lower,m$upper,limits),finite=TRUE)
   breaks <- pretty(data_range,n=5);breaks <- breaks[breaks>=data_range[1] & breaks<=data_range[2]]
   p <- ggplot(r,aes(x,value,color=condition))+
+    geom_line(aes(group=participant_id),color="#75818A",alpha=.10,linewidth=.25)+
     geom_point(position=position_jitter(width=.12,height=0,seed=20261017),alpha=.22,size=1.65)+
     geom_errorbar(data=m,inherit.aes=FALSE,
-      mapping=aes(x=x,ymin=lower,ymax=upper),width=.10,linewidth=.85,color="#172B3A",na.rm=TRUE)+
-    geom_point(data=m,aes(x,estimate),inherit.aes=FALSE,shape=23,fill="white",color="#172B3A",size=3.8,stroke=1)+
+      mapping=aes(x=x,ymin=lower,ymax=upper,color=condition),width=.10,linewidth=.85,na.rm=TRUE)+
+    geom_point(data=m,aes(x,estimate,color=condition),inherit.aes=FALSE,shape=23,fill="white",size=3.8,stroke=1)+
     scale_color_manual(values=ao_palette,guide="none")+
     scale_x_continuous(breaks=seq_along(lev),labels=labels,limits=c(.6,length(lev)+.4))+
     scale_y_continuous(breaks=breaks)+ao_theme()+labs(title=row$panel_title)
@@ -104,10 +200,15 @@ ao_context <- function(d,outcome,title) {
   r <- filter(d,.data$outcome==!!outcome) %>% mutate(condition=factor(condition,levels=ao_levels),decision=factor(decision,levels=c("D1","D2")))
   m <- r %>% group_by(condition,decision) %>% summarise(estimate=mean(value),se=sd(value)/sqrt(n()),df=n()-1,.groups="drop") %>%
     mutate(lower=estimate-qt(.975,df)*se,upper=estimate+qt(.975,df)*se)
+  # Connect the same decision across conditions; keep D1 and D2 paths separate.
+  paths <- mutate(r,x=as.numeric(condition)+ifelse(decision=="D1",-.1,.1))
   p <- ggplot(r,aes(condition,value,color=condition,shape=decision,group=interaction(condition,decision)))+
+    geom_line(data=paths,aes(x=x,y=value,group=interaction(participant_id,decision)),
+      inherit.aes=FALSE,color="#75818A",alpha=.10,linewidth=.25)+
     geom_point(position=position_jitterdodge(jitter.width=.15,dodge.width=.4,seed=11),alpha=.16,size=1.5)+
     geom_errorbar(data=m,aes(y=estimate,ymin=lower,ymax=upper),position=position_dodge(.4),width=.10,linewidth=.8)+
     geom_point(data=m,aes(y=estimate),position=position_dodge(.4),size=3.2)+
+    scale_x_discrete()+
     scale_color_manual(values=ao_palette,guide="none")+scale_shape_manual(values=c(D1=1,D2=16),name=NULL,
       labels=c(D1="Initial decision",D2="Final decision"))+ao_theme()+labs(title=title)
   if(outcome=="task_bias") p <- p+geom_hline(yintercept=0,linetype="dashed",color="#9AA4AE")
@@ -134,7 +235,7 @@ ao_build_plots <- function(root,analysis,out) {
     message("Rendering ",f$figure)
     rp <- mp <- tp <- tibble()
     subtitle <- "60 participants"
-    caption <- "Faint points: participants. Diamonds: model estimates with pointwise 95% CIs. AF = Aid-first; SF = Stimulus-first."
+    caption <- "Faint points and lines: participants. Diamonds: model estimates with pointwise 95% CIs. AF = Aid-first; SF = Stimulus-first."
     if(f$section=="core" || f$order==11) {
       pieces <- lapply(seq_len(nrow(rs)),function(j) ao_panel(rs[j,],filter(raw,correction=="loglinear"),
         filter(means,correction=="loglinear"),filter(tests,correction=="loglinear")))
@@ -150,7 +251,7 @@ ao_build_plots <- function(root,analysis,out) {
       p <- wrap_plots(lapply(pieces,`[[`,"plot"),nrow=1)
       rp <- bind_rows(lapply(pieces,`[[`,"raw"));mp <- bind_rows(lapply(pieces,`[[`,"means"))
       subtitle <- "Supporting descriptive context | 60 participants | Matched valid initial/final response pairs"
-      caption <- "Points: participants. Large symbols: equally weighted participant means with pointwise 95% t CIs; no additional hypothesis tests.\nAid-first initial decisions already follow advice exposure. These within-trial changes do not share an independent baseline."
+      caption <- "Faint points and lines: participants; lines connect conditions within each decision. Large symbols: equally weighted participant means with pointwise 95% t CIs; no additional hypothesis tests.\nAid-first initial decisions already follow advice exposure. These within-trial changes do not share an independent baseline."
     } else if(f$order==12) {
       tp <- tests %>% filter(comparison=="SF_minus_AF",outcome %in% c("advice_bias","task_bias","advice_dprime","task_dprime","task_dprime_advantage")) %>%
         mutate(label=unname(ao_outcome[outcome]),correction=factor(correction,levels=c("loglinear","extreme_only")))
@@ -185,6 +286,7 @@ ao_build_plots <- function(root,analysis,out) {
     p <- p+plot_annotation(title=f$title,subtitle=subtitle,caption=caption,
       theme=theme(plot.title=element_text(size=20,face="bold",color="#172B3A"),plot.subtitle=element_text(size=11,color="#526572",margin=margin(b=12)),
         plot.caption=element_text(size=8.8,hjust=0,color="#526572",lineheight=1.25),plot.margin=margin(18,22,14,22)))
+    p <- report_style_errorbars(p)
     ggsave(file.path(stage,paste0(f$figure,".pdf")),p,width=12,height=6.75,device=cairo_pdf,bg="white")
     ggsave(file.path(stage,paste0(f$figure,".png")),p,width=12,height=6.75,dpi=300,bg="white")
     write_csv(rp,file.path(stage,"data",paste0(f$figure,"_participants.csv")))
