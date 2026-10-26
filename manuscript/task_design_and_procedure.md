@@ -1,0 +1,15 @@
+# Virus discrimination task design and procedure
+
+Sixty participants completed three within-participant conditions: manual performance without advice, advice before the stimulus (aid-first), and advice after the initial decision (stimulus-first). Each condition comprised 260 trials, with an initial and final classification per trial. Condition order was counterbalanced across six sequences, with ten participants per sequence; response-key assignments were also counterbalanced.
+
+Participants classified samples as V-BLACK or V-WHITE according to which colour predominated among 3,600 moving dots within a circular region on a grey background. Colour proportions remained constant within trials. Samples closer to equal proportions were more difficult; black-majority and white-majority samples were selected with equal probability.
+
+Participants first completed 60 unaided practice trials. An adaptive staircase targeted 75% final-decision accuracy, increasing difficulty after correct responses and decreasing it after errors. The mean and standard deviation of difficulty over the final 40 practice trials defined the stimulus distribution used throughout the experimental blocks.
+
+Before aid-first blocks, participants were instructed: “In the next block, the aid's recommendation will appear before the virus sample.” Before stimulus-first blocks, they were instructed: “In the next block, the virus sample will appear before the aid's recommendation.” Manual instructions stated: “In the next block, no advice will be shown in the centre of the display. There is simply a string '#####', which you should ignore.” Advice recommended BLACK or WHITE and was independently correct with probability .85. Participants were told that reliability was very good but imperfect and that correct classification remained their responsibility; the percentage was not disclosed.
+
+Trials comprised an initial 1,000-ms preview, the stimulus until the initial response, a second 1,000-ms preview, and a final response screen. Each of these four phases was preceded by a 500-ms fixation. Advice appeared during the first preview in aid-first blocks and the second preview in stimulus-first blocks; all other previews displayed #####. The final response screen showed only progress information and response prompts. Participants used D and J to classify each sample and could confirm or change their initial response. Both decisions were self-paced, with instructions emphasising accuracy.
+
+CORRECT or INCORRECT feedback followed the final response. Participants pressed a key to continue, permitting breaks between trials. Choice, accuracy, and response time were recorded separately for both decisions, together with response changes.
+
+After the manual block, participants estimated their own accuracy on a 0–100% slider. After each aided block, they estimated aid accuracy and completed six trust items rated from 1 (*strongly disagree*) to 5 (*strongly agree*). At completion, participants received their percentage of correct final decisions across the experimental blocks.
