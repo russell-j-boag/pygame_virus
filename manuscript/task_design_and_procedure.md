@@ -4,7 +4,7 @@ The primary between-participant manipulation was unaided classification reliabil
 
 Group and D/J response-key mapping were counterbalanced in a repeating four-participant cycle determined by participant number. Block and phase order were fixed.
 
-Participants classified samples as V-BLACK or V-WHITE according to which colour predominated among 3,600 moving dots within a circular region on a grey background. Colour proportions remained constant within trials; samples closer to equal proportions were harder. Black-majority and white-majority samples were selected with equal probability.
+Participants classified samples as V-BLACK or V-WHITE according to which colour predominated among 3,600 moving dots within a circular region on a grey background. Colour proportions remained constant within trials; samples closer to equal proportions were harder. Black-majority and white-majority samples were presented with equal probability.
 
 After instructions, participants completed 300 unaided calibration trials. An adaptive staircase increased difficulty after correct responses and decreased it after errors or missed deadlines. The mean and standard deviation of the departure from equal colour proportions over the final 150 trials defined the stimulus distribution for all subsequent blocks. Distribution parameters remained fixed, while individual stimuli varied. The session comprised 1,900 trials.
 

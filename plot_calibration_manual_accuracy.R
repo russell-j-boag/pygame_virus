@@ -59,6 +59,7 @@ TARGET_ACCURACIES <- c("CAL65" = 0.65, "CAL90" = 0.90)
 ANNOTATION_TARGET_BAND <- 0.10
 PARTICIPANT_LABEL_SIZE <- 2 * FONT_SCALE
 PARTICIPANT_LABEL_NUDGE_X <- 0.05
+PARTICIPANT_LABEL_MIN_GAP <- 0.014
 GROUP_MEAN_LABEL_SIZE <- 3 * FONT_SCALE
 GROUP_MEAN_LABEL_NUDGE_Y <- 0.008
 PLOT_WIDTH_IN <- 10
@@ -340,6 +341,8 @@ participant_labels <- participant_condition_means %>%
     target_deviation = abs(accuracy - calibration_target_accuracy)
   ) %>%
   filter(target_deviation > ANNOTATION_TARGET_BAND + 1e-10) %>%
+  # Merge numerically identical accuracy values for annotation only.
+  mutate(accuracy = round(accuracy, 10)) %>%
   group_by(condition_code, condition_label, accuracy) %>%
   summarise(
     participant_label = paste(
@@ -347,7 +350,15 @@ participant_labels <- participant_condition_means %>%
       collapse = ", "
     ),
     .groups = "drop"
-  )
+  ) %>%
+  group_by(condition_code, condition_label) %>%
+  arrange(accuracy, .by_group = TRUE) %>%
+  mutate(label_accuracy = {
+    offset <- (seq_along(accuracy) - 1) * PARTICIPANT_LABEL_MIN_GAP
+    positions <- cummax(accuracy - offset) + offset
+    positions - mean(positions - accuracy)
+  }) %>%
+  ungroup()
 
 accuracy_plot <- ggplot(
   participant_condition_means,
@@ -383,11 +394,23 @@ accuracy_plot <- ggplot(
     size = 2.8,
     show.legend = FALSE
   ) +
+  geom_segment(
+    data = participant_labels,
+    aes(
+      x = as.numeric(condition_label),
+      xend = as.numeric(condition_label) + PARTICIPANT_LABEL_NUDGE_X * 0.8,
+      y = accuracy,
+      yend = label_accuracy
+    ),
+    inherit.aes = FALSE,
+    colour = "grey50",
+    linewidth = 0.25
+  ) +
   geom_text(
     data = participant_labels,
     aes(
       x = condition_label,
-      y = accuracy,
+      y = label_accuracy,
       label = participant_label
     ),
     inherit.aes = FALSE,
