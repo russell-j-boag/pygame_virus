@@ -2,7 +2,8 @@
 # Standalone: Rscript analyse_time_pressure_exploratory.R [base_analysis_dir]
 
 make_sequence <- function(dat) {
-  # Lag BEFORE removing timeouts; never bridge missing trials or block boundaries.
+  # Lag before removing timeouts. Prior RT exclusions leave gaps in original
+  # trial numbers; the consecutive-trial check never bridges those gaps or blocks.
   dat %>% filter(mode == "Automation") %>% arrange(participant_id, run_timestamp, block_idx, trial) %>%
     group_by(participant_id, run_timestamp, block_idx) %>% mutate(
       previous_trial = lag(trial), previous_timeout = lag(timeout),

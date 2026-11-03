@@ -31,6 +31,11 @@ CATEGORIES=["calibration_target","manual_target","near_chance_or_worse","anticip
 EXCLUSION_CATEGORIES=["calibration_target","near_chance_or_worse","anticipatory"]
 
 
+def display_id(value):
+    number, suffix = re.fullmatch(r"(\d+)([a-z]*)", str(value)).groups()
+    return str(int(number)).zfill(3) + suffix
+
+
 def read(path):
     with Path(path).open(newline="") as handle:return list(csv.DictReader(handle))
 
@@ -59,7 +64,7 @@ class Links(HTMLParser):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir",type=Path,default=ROOT/"analysis_outputs/semester2_2026_qc")
-    parser.add_argument("--expect-current-cohort",action="store_true",help="Assert the first 87-participant snapshot, not a rule for future cohorts")
+    parser.add_argument("--expect-current-cohort",action="store_true",help="Assert the 2026-11-03 95-participant snapshot, not a rule for future cohorts")
     args=parser.parse_args();out=args.output_dir.resolve()
     manifest=json.loads((out/"manifest.json").read_text());cfg=json.loads((out/"config_snapshot.json").read_text())
     assert manifest["generator"]=="participant_qc" and manifest["qc_data_filtered"] is False
@@ -75,20 +80,20 @@ def main():
     assert {str(p.relative_to(out)) for p in out.rglob("*") if p.is_file() and p.name not in ("manifest.json","COMPLETE.txt")}=={r["path"] for r in manifest["outputs"]}
     raw=read(source);by_id=defaultdict(dict)
     for r in raw:
-        pid,t=int(r["participant_id"]),int(r["global_trial"])
+        pid,t=str(r["participant_id"]),int(r["global_trial"])
         assert t not in by_id[pid]
         by_id[pid][t]=r
     summaries=read(out/"participant_summary.csv");metrics=read(out/"scope_metrics.csv");checks=read(out/"screening_results.csv")
-    assert {int(s["participant_id"]) for s in summaries}==set(by_id)
+    assert {str(s["participant_id"]) for s in summaries}==set(by_id)
     assert len(summaries)==len(by_id)==manifest["participant_n"]
     assert len(raw)==manifest["trial_n"]
     assert manifest["study"]=="time_pressure"
-    corrections={(int(r["source_participant_id"]),r["run_timestamp"]):int(r["participant_id"])
+    corrections={(int(r["source_participant_id"]),r["run_timestamp"]):str(r["participant_id"])
                  for r in read(manifest["identity_corrections"])}
     bounds={}; row_issues={}
     for pid, trials in by_id.items():
         first=next(iter(trials.values()));source_id=int(first["source_participant_id"])
-        assert pid==corrections.get((source_id,first["run_timestamp"]),source_id)
+        assert pid==corrections.get((source_id,first["run_timestamp"]),str(source_id))
         allocation=task.counterbalance_allocation_for_participant(source_id)
         mapping=task.key_mapping_for_participant(source_id)
         lo=1;bs={}; metadata={}
@@ -132,7 +137,7 @@ def main():
 
     def reconcile(m,selected):
         nonlocal values_checked
-        pid=int(m["participant_id"]);rr=[by_id[pid][t] for t in sorted(selected) if t in by_id[pid]]
+        pid=str(m["participant_id"]);rr=[by_id[pid][t] for t in sorted(selected) if t in by_id[pid]]
         first=next(iter(by_id[pid].values()))
         for key in ("source_participant_id","run_timestamp","automation_reliability_pattern","key_black","key_white"):
             assert m[key]==first[key]
@@ -176,9 +181,9 @@ def main():
 
     assert len(metrics)==8*len(by_id)
     for m in metrics:
-        selected=bounds[int(m["participant_id"])][m["scope"]]
+        selected=bounds[str(m["participant_id"])][m["scope"]]
         assert int(m["trial_start"])==min(selected) and int(m["trial_end"])==max(selected)
-        key=(int(m["participant_id"]),m["scope"])
+        key=(str(m["participant_id"]),m["scope"])
         assert key not in expected
         expected[key]=reconcile(m,selected)
     bins=read(out/"trial_bin_summary.csv");bin_lookup={}
@@ -186,7 +191,7 @@ def main():
     for b in bins:
         lo,hi=int(b["trial_start"]),int(b["trial_end"])
         assert (lo-1)%cfg["bin_size"]==0 and hi-lo+1==cfg["bin_size"]
-        pid=int(b["participant_id"]);start=min(bounds[pid][b["scope"]])
+        pid=str(b["participant_id"]);start=min(bounds[pid][b["scope"]])
         assert int(b["condition_trial_start"])==lo-start+1
         near(b["condition_trial_midpoint"],(lo+hi)/2-start+1)
         near(b["trial_midpoint"],(lo+hi)/2)
@@ -198,9 +203,9 @@ def main():
     wanted={(pid,scope,category) for pid in by_id for scope in bounds[pid]
             for category in (["calibration_target"] if scope=="calibration_tail" else
                              ["near_chance_or_worse","anticipatory"]+(["manual_target"] if scope=="M_LP" else []))}
-    assert {(int(c["participant_id"]),c["scope"],c["category"]) for c in checks}==wanted
+    assert {(str(c["participant_id"]),c["scope"],c["category"]) for c in checks}==wanted
     for c in checks:
-        pid,scope,category=int(c["participant_id"]),c["scope"],c["category"]
+        pid,scope,category=str(c["participant_id"]),c["scope"],c["category"]
         assert category in CATEGORIES
         assert (category=="calibration_target")== (scope=="calibration_tail")
         if category=="manual_target":assert scope=="M_LP"
@@ -224,7 +229,7 @@ def main():
         assert s["review_required"]==str(any(c["status"]!="clear" for c in person_checks))
         assert "manual_aid_ordering" not in s
         for category in CATEGORIES:
-            st=statuses[int(s["participant_id"]),category]
+            st=statuses[str(s["participant_id"]),category]
             want="flag" if "flag" in st else "not_assessable" if "not_assessable" in st else "clear"
             assert s[category]==want
         n_rules=sum(s[c]=="flag" for c in CATEGORIES)
@@ -241,7 +246,7 @@ def main():
     assert {(r["participant_id"],r["scope"]) for r in issues}=={(m["participant_id"],m["scope"]) for m in metrics if m["assessable"]!="True"}
     union=sorted(set(pid for c in EXCLUSION_CATEGORIES for pid in flags[c]))
     candidates=read(out/"exclusion_candidates.csv")
-    assert candidates==[s for s in summaries if int(s["participant_id"]) in union]
+    assert candidates==[s for s in summaries if str(s["participant_id"]) in union]
     exclusions=json.loads((out/"exclusion_summary.json").read_text())
     assert exclusions["participant_ids"]==union
     assert exclusions["participant_n"]==len(by_id)
@@ -254,13 +259,13 @@ def main():
     assert application==manifest["primary_analysis"]
     if application:
         selection=read(out/"analysis_cohort_selection.csv")
-        assert {int(r["participant_id"]) for r in selection}==set(by_id)
-        excluded_ids=sorted(int(r["participant_id"]) for r in selection if r["included"].lower()=="false")
-        included_ids={int(r["participant_id"]) for r in selection if r["included"].lower()=="true"}
+        assert {str(r["participant_id"]) for r in selection}==set(by_id)
+        excluded_ids=sorted(str(r["participant_id"]) for r in selection if r["included"].lower()=="false")
+        included_ids={str(r["participant_id"]) for r in selection if r["included"].lower()=="true"}
         assert application["excluded_participant_ids"]==excluded_ids
         assert application["included_participant_n"]==len(included_ids)
         assert application["source_participant_n"]==len(by_id)
-        assert {int(r["participant_id"]) for r in read(Path(application["analysis_directory"])/"cohort.csv")}==included_ids
+        assert {str(r["participant_id"]) for r in read(Path(application["analysis_directory"])/"cohort.csv")}==included_ids
         assert exclusions["exclusions_applied"]==bool(excluded_ids)
     cases=exclusions["identity_reuse_cases"]
     assert cases==manifest["identity_reuse_cases"]
@@ -270,14 +275,14 @@ def main():
     assert {c["source_participant_id"] for c in cases}==set(expected_reused)
     for c in cases:
         ss=expected_reused[c["source_participant_id"]]
-        assert c["analysis_participant_ids"]==sorted(int(s["participant_id"]) for s in ss)
-        assert {(r["participant_id"],r["run_timestamp"]) for r in c["runs"]}=={(int(s["participant_id"]),s["run_timestamp"]) for s in ss}
+        assert c["analysis_participant_ids"]==sorted(str(s["participant_id"]) for s in ss)
+        assert {(r["participant_id"],r["run_timestamp"]) for r in c["runs"]}=={(str(s["participant_id"]),s["run_timestamp"]) for s in ss}
         assert all(r["allocation_source_participant_id"]==c["source_participant_id"] for r in c["runs"])
     identity_rows=read(out/"identity_corrections_summary.csv")
     assert len(identity_rows)==sum(len(c["runs"]) for c in cases)
     summary_text=(out/"exclusion_summary.txt").read_text()
     for c in cases:
-        for r in c["runs"]:assert r["run_timestamp"] in summary_text and f"analysis ID {r['participant_id']:03d}" in summary_text
+        for r in c["runs"]:assert r["run_timestamp"] in summary_text and f"analysis ID {display_id(r['participant_id'])}" in summary_text
     assert exclusions["exclusion_categories"]==manifest["exclusion_categories"]==EXCLUSION_CATEGORIES
     assert exclusions["diagnostic_categories"]==manifest["diagnostic_categories"]==["manual_target"]
     assert exclusions["rule_counts"]==manifest["exclusion_rule_counts"]=={c:len(set(flags[c])) for c in EXCLUSION_CATEGORIES}
@@ -287,10 +292,10 @@ def main():
     diagnostic_only=sorted(set(flags["manual_target"])-set(union))
     assert exclusions["diagnostic_only_participant_ids"]==diagnostic_only
     assert exclusions["diagnostic_only_n"]==len(diagnostic_only)
-    assert exclusions["incomplete_assessment_ids"]==[int(s["participant_id"]) for s in summaries if int(s["n_not_assessable"])]
+    assert exclusions["incomplete_assessment_ids"]==[str(s["participant_id"]) for s in summaries if int(s["n_not_assessable"])]
     assert len(exclusions["overlap"])==len(EXCLUSION_CATEGORIES)
     for k,r in enumerate(exclusions["overlap"],1):
-        ids=[int(s["participant_id"]) for s in summaries if sum(s[c]=="flag" for c in EXCLUSION_CATEGORIES)==k]
+        ids=[str(s["participant_id"]) for s in summaries if sum(s[c]=="flag" for c in EXCLUSION_CATEGORIES)==k]
         assert r==dict(n_rules=k,participant_n=len(ids),participant_ids=ids)
     table=read(out/"exclusion_summary_table.csv")
     assert [r["criterion"] for r in table]==EXCLUSION_CATEGORIES+["manual_target","any_exclusion_rule","remaining_if_applied"]
@@ -300,12 +305,12 @@ def main():
         n=len(by_id)-len(union) if category=="remaining_if_applied" else len(ids)
         role="Exclusion criterion" if category in EXCLUSION_CATEGORIES else "Diagnostic only" if category=="manual_target" else "Total"
         assert row["role"]==role and int(row["participant_n"])==n
-        assert row["participant_ids"]=="; ".join(f"{p:03d}" for p in ids)
+        assert row["participant_ids"]=="; ".join(f"{display_id(p)}" for p in ids)
         near(row["percent_of_cohort"],100*n/len(by_id))
     pools=json.loads((out/"reference_pools.json").read_text())
     for s in summaries:
-        pid=int(s["participant_id"])
-        want=[int(q["participant_id"]) for q in summaries if q["participant_id"]!=s["participant_id"] and q["automation_reliability_pattern"]==s["automation_reliability_pattern"] and q["anticipatory"]=="clear" and int(q["n_not_assessable"])==0]
+        pid=str(s["participant_id"])
+        want=[str(q["participant_id"]) for q in summaries if q["participant_id"]!=s["participant_id"] and q["automation_reliability_pattern"]==s["automation_reliability_pattern"] and q["anticipatory"]=="clear" and int(q["n_not_assessable"])==0]
         assert pools[str(pid)]==want
     # NumPy's default linear quantile, independently implemented for peer bands.
     def quantile(values,p):
@@ -313,9 +318,9 @@ def main():
         return values[lo]+(position-lo)*(values[hi]-values[lo])
     bands=read(out/"reference_bands.csv")
     assert len(bands)==len(bins)
-    assert {(int(b["participant_id"]),b["scope"],float(b["condition_trial_midpoint"])) for b in bands}==set(bin_lookup)
+    assert {(str(b["participant_id"]),b["scope"],float(b["condition_trial_midpoint"])) for b in bands}==set(bin_lookup)
     for row in bands:
-        pid=int(row["participant_id"]);mid=float(row["condition_trial_midpoint"]);scope=row["scope"]
+        pid=str(row["participant_id"]);mid=float(row["condition_trial_midpoint"]);scope=row["scope"]
         assert int(row["peer_n"])==len(pools[str(pid)])
         for key in ("accuracy","fast_fraction"):
             values=[100*bin_lookup[p,scope,mid][key] for p in pools[str(pid)] if bin_lookup[p,scope,mid] is not None]
@@ -323,8 +328,8 @@ def main():
     matches=json.loads((out/"comparator_selection.json").read_text())
     assert sorted(p for m in matches for p in m["targets"])==sorted(set(flags["anticipatory"]))
     for m in matches:
-        assert m["targets"]==[int(s["participant_id"]) for s in summaries if s["anticipatory"]=="flag" and s["automation_reliability_pattern"]==m["group"] and s["key_black"]==m["key_black"] and s["key_white"]==m["key_white"]]
-        candidates=[int(s["participant_id"]) for s in summaries if s["automation_reliability_pattern"]==m["group"] and s["key_black"]==m["key_black"] and s["key_white"]==m["key_white"] and s["anticipatory"]!="flag" and int(s["n_not_assessable"])==0 and expected[int(s["participant_id"]),"experimental_overall"]["median_positive_rt_ms"] is not None]
+        assert m["targets"]==[str(s["participant_id"]) for s in summaries if s["anticipatory"]=="flag" and s["automation_reliability_pattern"]==m["group"] and s["key_black"]==m["key_black"] and s["key_white"]==m["key_white"]]
+        candidates=[str(s["participant_id"]) for s in summaries if s["automation_reliability_pattern"]==m["group"] and s["key_black"]==m["key_black"] and s["key_white"]==m["key_white"] and s["anticipatory"]!="flag" and int(s["n_not_assessable"])==0 and expected[str(s["participant_id"]),"experimental_overall"]["median_positive_rt_ms"] is not None]
         distances={p:0 for p in candidates}
         for metric in ("accuracy","median_positive_rt_ms"):
             if not candidates:continue
@@ -341,7 +346,7 @@ def main():
         if link.startswith("#"):assert link[1:] in links.ids
         else:assert (out/unquote(link)).is_file(),link
     plots=json.loads((out/"plot_sources.json").read_text())
-    assert [p["participant_id"] for p in plots["individuals"]]==sorted(by_id)
+    assert [p["participant_id"] for p in plots["individuals"]]==sorted(by_id,key=display_id)
     assert sorted(p for page in plots["comparison_pages"] for p in page["targets"])==sorted(set(flags["anticipatory"]))
     expected_pairs=len(by_id)+4+len(plots["comparison_pages"])
     pdfs=sorted(out.rglob("*.pdf"));pngs=sorted(out.rglob("*.png"))
@@ -359,9 +364,9 @@ def main():
             im.verify()
     flags={c:sorted(set(flags[c])) for c in CATEGORIES}
     if args.expect_current_cohort:
-        assert len(by_id)==87 and len(raw)==165300 and not read(out/"integrity_issues.csv")
-        assert set(by_id)==set(range(1,88))
-        assert next(s for s in summaries if s["participant_id"]=="84")["source_participant_id"]=="83"
+        assert len(by_id)==95 and len(raw)==180500 and not read(out/"integrity_issues.csv")
+        assert set(by_id)==({str(p) for p in range(1,92)} - {"4","10","48","83"}) | {f"{p}{suffix}" for p in (4,10,48,83) for suffix in "ab"}
+        assert next(s for s in summaries if s["participant_id"]=="84")["source_participant_id"]=="84"
     print(json.dumps(dict(status="passed",participants=len(by_id),numeric_values_checked=values_checked,
         checks_verified=len(checks),pdfs_verified=len(pdfs),pngs_verified=len(pngs),flagged_participants=flags,
         unique_flagged_n=len(union),unique_participant_ids=union,diagnostic_only_participant_ids=diagnostic_only,

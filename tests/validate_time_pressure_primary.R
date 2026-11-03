@@ -30,15 +30,37 @@ check(setequal(selection$participant_id[!selection$included],policy$participant_
 key <- c("participant_id","source_participant_id","run_timestamp")
 check(nrow(anti_join(policy,excluded,by=key))==0,"Exclusion decision applied to the wrong run")
 check(all(excluded$reason==policy$reason[match(excluded$participant_id,policy$participant_id)]),"Exclusion reasons changed")
-raw <- raw_all %>% filter(condition_deadline_code!="CAL_LP",!participant_id %in% policy$participant_id)
-n_participants <- n_distinct(raw$participant_id)
-check(nrow(raw)==1600*n_participants,"Unexpected trial count")
+untrimmed <- raw_all %>% filter(condition_deadline_code!="CAL_LP",!participant_id %in% policy$participant_id)
+n_participants <- n_distinct(untrimmed$participant_id)
+check(nrow(untrimmed)==1600*n_participants,"Unexpected collected trial count")
+check(all((untrimmed %>% count(participant_id,condition_deadline_code))$n==400),"Incomplete collected study blocks")
+# Independent strict threshold: retain timeouts and exactly 200 ms.
+expected_fast <- with(untrimmed,response!="TIMEOUT" & is.finite(rt_s) & rt_s<.200)
+raw <- untrimmed[!expected_fast,]
+trial_selection <- read(file.path(pdir,"trial_selection.csv"))
+trial_exclusions <- read(file.path(pdir,"trial_exclusions.csv"))
+trial_keys <- c("participant_id","run_timestamp","block_idx","trial")
+trial_key <- function(x)do.call(paste,c(as.list(x[trial_keys]),sep="/"))
+i <- match(trial_key(untrimmed),trial_key(trial_selection))
+check(nrow(trial_selection)==nrow(untrimmed) && !anyNA(i) && !anyDuplicated(trial_key(trial_selection)),"Trial selection coverage")
+check(identical(trial_selection$excluded_fast_rt[i],expected_fast) &&
+  identical(trial_selection$included_behavioural[i],!expected_fast),"Trial RT exclusion flags")
+check(setequal(trial_key(trial_exclusions),trial_key(untrimmed[expected_fast,])) &&
+  nrow(trial_exclusions)==sum(expected_fast),"Excluded trial identities")
+expected_summary <- untrimmed %>% mutate(fast=expected_fast) %>% group_by(participant_id,condition_deadline_code) %>%
+  summarise(n_collected=n(),n_excluded_fast_rt=sum(fast),n_retained=sum(!fast),n_timeouts=sum(response=="TIMEOUT"),.groups="drop")
+summaries <- read(file.path(pdir,"trial_filter_summary.csv"))
+sj <- inner_join(expected_summary,summaries,by=c("participant_id","condition_deadline_code"),suffix=c("","_saved"))
+check(nrow(sj)==4*n_participants,"RT filter summary coverage")
+for(k in c("n_collected","n_excluded_fast_rt","n_retained","n_timeouts"))check(close(sj[[k]],sj[[paste0(k,"_saved")]]),paste("RT filter summary",k))
+check(sum(raw$response=="TIMEOUT")==sum(untrimmed$response=="TIMEOUT"),"RT filter removed timeouts")
 check(setequal(raw$participant_id,b$data$cohort$participant_id),"Cohort identity mismatch")
 for(name in names(b$data))if("participant_id" %in% names(b$data[[name]]) && !name %in% c("cohort_selection","exclusions"))
   check(!any(b$data[[name]]$participant_id %in% policy$participant_id),paste("Excluded participant leaked into",name))
 check(all(b$diagnostics$n_participants==n_participants),"Models were not all refitted on the included cohort")
-check(all((raw %>% count(participant_id,condition_deadline_code))$n==400),"Incomplete study blocks")
-check(setequal(b$data$cohort$participant_id[b$data$cohort$source_participant_id==83],c(83,84)),"Identity correction changed")
+check(setequal(b$data$cohort$participant_id[b$data$cohort$source_participant_id==83],"83b"),"Identity correction changed")
+check(b$diagnostics$n_observations[b$diagnostics$model=="accuracy_none"]==nrow(raw),"Accuracy model includes removed trials")
+check(b$diagnostics$n_observations[b$diagnostics$model=="correct_rt_none"]==sum(with(raw,response==stimulus & is.finite(rt_s) & rt_s>=.2)),"RT model includes removed trials")
 counts <- function(x,response,actor) x %>% group_by(participant_id,condition_deadline_code) %>% summarise(
   actor=actor,n_scored=n(),n_signal=sum(stimulus=="BLACK"),n_noise=sum(stimulus=="WHITE"),
   hits=sum(stimulus=="BLACK" & .data[[response]]=="BLACK"),false_alarms=sum(stimulus=="WHITE" & .data[[response]]=="BLACK"),.groups="drop")
@@ -65,7 +87,7 @@ for(co in c("loglinear","extreme_only")) {
 }
 pp <- raw %>% group_by(participant_id,pressure=time_pressure_condition,mode=ifelse(grepl("^A_",condition_deadline_code),"Automation","Manual")) %>%
   summarise(accuracy=mean(response==stimulus),answered_accuracy=mean(response[response!="TIMEOUT"]==stimulus[response!="TIMEOUT"]),
-    completion=mean(response!="TIMEOUT"),correct_rt=mean(log(rt_s[response==stimulus & is.finite(rt_s) & rt_s>0])),.groups="drop")
+    completion=mean(response!="TIMEOUT"),correct_rt=mean(log(rt_s[response==stimulus & is.finite(rt_s) & rt_s>=.2])),.groups="drop")
 pj <- inner_join(pp,b$data$performance,by=c("participant_id","pressure","mode"),suffix=c("","_saved"))
 check(nrow(pj)==4*n_participants && close(pj$accuracy,pj$accuracy_saved) && close(pj$correct_rt,pj$correct_rt_saved),"Performance source summaries")
 check(close(pj$answered_accuracy,pj$answered_accuracy_saved) && close(pj$completion,pj$completion_saved),"Completion and answered accuracy")
@@ -85,7 +107,9 @@ check(nrow(sj)==2*n_participants && close(sj$response_percent,sj$perceived) && c
 seq <- aided %>% arrange(participant_id,run_timestamp,block_idx,trial) %>% group_by(participant_id,run_timestamp,block_idx) %>%
   mutate(previous_trial=lag(trial),previous_response=lag(response)) %>% ungroup() %>% filter(response!="TIMEOUT",previous_response!="TIMEOUT",trial==previous_trial+1)
 saved <- read(file.path(pdir,"sequence_eligibility.csv"));keys <- c("participant_id","run_timestamp","block_idx","trial")
-check(nrow(seq)==nrow(saved) && nrow(anti_join(seq,saved,by=keys))==0,"History eligibility bridges timeout or block boundary")
+check(nrow(seq)==nrow(saved) && nrow(anti_join(seq,saved,by=keys))==0,"History eligibility bridges an excluded trial, timeout or block boundary")
+check(b$diagnostics$n_observations[b$diagnostics$model=="H8_history"]==nrow(seq),"History model includes ineligible trials")
+check(b$diagnostics$n_observations[b$diagnostics$model=="historical_agreement"]==sum(aided$response!="TIMEOUT"),"Historical agreement includes removed trials")
 check(all(abs((b$data$associations %>% group_by(participant_id,correction) %>% summarise(x=sum(trust_within),.groups="drop"))$x)<1e-12),"Within-person trust centering")
 # Numeric reconstruction uses saved model covariance and explicit linear weights,
 # not emmeans::contrast() or the production contrast constructor.
@@ -217,7 +241,7 @@ for(o in c("advice_bias","advice_dprime")) {
   model_path <- file.path(pdir,"models",paste0(model_name,".rds"))
   association_paths <- c(association_paths,normalizePath(model_path))
   model <- readRDS(model_path)
-  check(setequal(as.integer(as.character(model.frame(model)$subject)),raw$participant_id),"H7 fit uses another cohort")
+  check(setequal(as.character(model.frame(model)$subject),raw$participant_id),"H7 fit uses another cohort")
   em <- emmeans(model,~pressure*pattern*trust_within*trust_between,
     at=list(trust_within=c(0,1),trust_between=c(0,1),block_position=0),lmer.df="satterthwaite")
   gd <- as.data.frame(em);beta <- lme4::fixef(model)
@@ -296,6 +320,7 @@ if(file.exists(artifact_manifest)) {
   am <- filter(am,path!="validation.log")
   check(identical(unname(tools::md5sum(file.path(plots,am$path))),am$md5),"Artifact hashes changed")
 }
+cat("PASS:",sum(expected_fast),"RT <200 ms trials excluded;",nrow(raw),"retained experimental trials; timeouts preserved.\n")
 cat("PASS:",n_participants,"participants; independent source scores, benchmark and history eligibility.\n")
 cat("PASS:",total,"mixed-model/cluster contrasts independently reconstructed; all Holm families.\n")
 cat("PASS: H7 group slopes and direct differences for both corrections and clustered sensitivity; separate common-slope families.\n")

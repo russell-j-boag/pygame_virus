@@ -97,7 +97,7 @@ class QCTests(unittest.TestCase):
         result=self.result(raw);s=result['summaries'][0]
         self.assertEqual(s['manual_target'],'flag');self.assertFalse(s['exclude_by_rules'])
         self.assertTrue(s['review_required']);self.assertEqual(s['n_exclusion_rules'],0)
-        self.assertEqual(exclusion_summary(result)['diagnostic_only_participant_ids'],[1])
+        self.assertEqual(exclusion_summary(result)['diagnostic_only_participant_ids'],['1'])
         checks=[c for c in result['checks'] if c['category']=='manual_target']
         self.assertEqual([c['scope'] for c in checks],['M_LP'])
         self.assertFalse(checks[0]['use_for_exclusion'])
@@ -139,7 +139,7 @@ class QCTests(unittest.TestCase):
         metrics={m['scope']:m for m in result['metrics']}
         self.assertFalse(metrics['A_HP']['assessable']);self.assertFalse(metrics['aided_overall']['assessable'])
         self.assertTrue(metrics['M_LP']['assessable'])
-        self.assertEqual(exclusion_summary(result)['incomplete_assessment_ids'],[1])
+        self.assertEqual(exclusion_summary(result)['incomplete_assessment_ids'],['1'])
         for key,value in [('trial_deadline_s',3),('keymap_flip','True'),('block_idx',6),('aid_accuracy_setting',.65)]:
             raw=fixture();block_rows(raw,'A_HP')[0][key]=value
             self.assertFalse(self.metric(raw,'A_HP')['assessable'],key)
@@ -153,14 +153,14 @@ class QCTests(unittest.TestCase):
         self.assertEqual(m['n_trials'],800);self.assertEqual(m['accuracy'],1)
 
     def test_identity_correction_and_collision(self):
-        raw=fixture(83,timestamp='20261015_125827')+fixture(84,83,'20261015_130522')
+        raw=fixture('83a',83,'20261015_125827')+fixture('83b',83,'20261015_130522')
         people=parsed(raw);result=analyse(people,self.cfg)
-        self.assertEqual(list(people),[83,84]);self.assertFalse(result['issues'])
+        self.assertEqual(list(people),['83a','83b']);self.assertFalse(result['issues'])
         self.assertEqual(result['summaries'][0]['main_block_order'],result['summaries'][1]['main_block_order'])
         self.assertEqual(result['summaries'][1]['source_participant_id'],83)
         identity=exclusion_summary(result)['identity_reuse_cases']
         self.assertEqual(len(identity),1)
-        self.assertEqual(identity[0]['analysis_participant_ids'],[83,84])
+        self.assertEqual(identity[0]['analysis_participant_ids'],['83a','83b'])
         self.assertEqual([r['run_timestamp'] for r in identity[0]['runs']],['20261015_125827','20261015_130522'])
         self.assertTrue(all(r['allocation_source_participant_id']==83 for r in identity[0]['runs']))
         result['primary_analysis']=dict(exclusions_applied=True,excluded_participant_ids=[4,10,48],included_participant_n=84)
@@ -180,7 +180,7 @@ class QCTests(unittest.TestCase):
             if r['participant_id']==1 and r['condition_deadline_code'] in ('M_HP','A_HP'):
                 correct(r,r['trial']%2==0);r['rt_s']=.1
         result=self.result(raw);summary=exclusion_summary(result)
-        self.assertEqual(summary['participant_ids'],[1]);self.assertEqual(summary['unique_flagged_n'],1)
+        self.assertEqual(summary['participant_ids'],['1']);self.assertEqual(summary['unique_flagged_n'],1)
         self.assertEqual(summary['remaining_if_applied_n'],1)
         self.assertEqual(result['summaries'][0]['n_exclusion_rules'],2)
         self.assertFalse(summary['exclusions_applied'])
@@ -188,7 +188,7 @@ class QCTests(unittest.TestCase):
     def test_comparator_order_independence_tie_and_empty(self):
         raw=fixture(1)+fixture(5)+fixture(9);result=self.result(raw)
         result['summaries'][0]['anticipatory']='flag'
-        matches=choose_comparators(result);self.assertEqual(matches[0]['comparator'],5)
+        matches=choose_comparators(result);self.assertEqual(matches[0]['comparator'],'5')
         self.assertEqual(matches[0]['ranked_candidates'][0]['score'],0)
         for s in result['summaries']:s['anticipatory']='flag'
         self.assertIsNone(choose_comparators(result)[0]['comparator'])
@@ -202,8 +202,8 @@ class QCTests(unittest.TestCase):
             if r['participant_id']==5:correct(r,r['condition_deadline_code']=='M_LP')
         result=self.result(raw)
         _,refs,pools,bands=peer_references(result)
-        self.assertEqual(pools['1'],[5])
-        self.assertTrue(all(b['accuracy_median']==(100 if b['scope']=='M_LP' else 0) for b in bands if b['participant_id']==1))
+        self.assertEqual(pools['1'],['5'])
+        self.assertTrue(all(b['accuracy_median']==(100 if b['scope']=='M_LP' else 0) for b in bands if b['participant_id']=='1'))
 
     def test_schema_empty_config_and_destinations(self):
         with tempfile.TemporaryDirectory() as tmp:

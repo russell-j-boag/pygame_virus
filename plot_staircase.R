@@ -101,7 +101,7 @@ required_cols <- c(
 )
 
 numeric_cols <- c(
-  "participant_id", "block_idx", "trial_deadline_s", "trial", "global_trial",
+  "block_idx", "trial_deadline_s", "trial", "global_trial",
   "delta_fixed_mean", "delta_fixed_sd", "delta_stair_realised",
   "delta_stair_mean", "delta_step_down_used", "delta_step_up_used",
   "vblack_prop", "n_vblack", "n_vwhite", "auto_on", "aid_accuracy_setting",
@@ -144,6 +144,8 @@ parse_bool <- function(x) {
     TRUE ~ NA
   )
 }
+
+format_participant_id <- function(x) paste0(sprintf("%03d", as.integer(sub("[a-z]+$", "", x))), sub("^[0-9]+", "", x))
 
 read_task_csv <- function(path) {
   dat <- read_csv(
@@ -225,7 +227,7 @@ read_slider_csv <- function(path) {
 
   slider_dat %>%
     mutate(
-      participant_id = suppressWarnings(as.numeric(participant_id)),
+      participant_id = as.character(participant_id),
       response_percent = suppressWarnings(as.numeric(response_percent))
     )
 }
@@ -3056,10 +3058,10 @@ if (PLOT_MODE %in% c("cohort", "group", "accuracy")) {
   written <- character(0)
 
   if (PLOT_MODE %in% c("cohort", "accuracy")) for (pid in participant_ids) {
-    pid_prefix <- sprintf("p%03d", as.integer(pid))
+    pid_prefix <- paste0("p", format_participant_id(pid))
     OUTPUT_DIR <- file.path(base_output_dir, "individual", pid_prefix)
     OUTPUT_PREFIX <- pid_prefix
-    PLOT_LABEL <- paste("Participant", sprintf("%03d", as.integer(pid)))
+    PLOT_LABEL <- paste("Participant", format_participant_id(pid))
     dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
 
     dat_pid <- dat %>% filter(participant_id == pid)

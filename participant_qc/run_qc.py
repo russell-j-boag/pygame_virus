@@ -56,7 +56,7 @@ def primary_application(directory, source, result):
         if hashes.get(str(path.resolve())) != hashlib.md5(path.read_bytes()).hexdigest():
             raise ValueError("Primary analysis has stale data/exclusion decisions")
     decisions = rows(selection);cohort = rows(directory/"cohort.csv")
-    key = lambda r:(int(r["participant_id"]),int(r["source_participant_id"]),str(r["run_timestamp"]))
+    key = lambda r:(str(r["participant_id"]),int(r["source_participant_id"]),str(r["run_timestamp"]))
     if len(decisions)!=len(result["summaries"]) or {key(r) for r in decisions}!={key(s) for s in result["summaries"]}:
         raise ValueError("QC and primary source cohorts differ")
     excluded = [r for r in decisions if r["included"].lower()=="false"]
@@ -66,7 +66,7 @@ def primary_application(directory, source, result):
     if {key(r) for r in excluded}!={key(r) for r in rows(policy)}:
         raise ValueError("Applied exclusions differ from reviewed decisions")
     return dict(exclusions_applied=bool(excluded),source_participant_n=len(decisions),
-                included_participant_n=len(included),excluded_participant_ids=sorted(int(r["participant_id"]) for r in excluded),
+                included_participant_n=len(included),excluded_participant_ids=sorted(str(r["participant_id"]) for r in excluded),
                 analysis_directory=str(directory),selection_path=str(selection),
                 note="Exclusions apply to the primary hypothesis analyses and figures. The QC audit retains all source participants."), artifacts+[policy]
 
@@ -77,6 +77,7 @@ def main(argv=None):
     parser.add_argument("--config",type=Path,default=Path(__file__).with_name("config.json"))
     parser.add_argument("--output-dir",type=Path,default=ROOT/"analysis_outputs/semester2_2026_qc")
     parser.add_argument("--primary-analysis-dir",type=Path,default=ROOT/"analysis_outputs/semester2_2026_behavioural/primary")
+    parser.add_argument("--audit-only", action="store_true", help="Refresh full-cohort QC without claiming existing hypothesis fits use this cohort")
     args=parser.parse_args(argv)
     source=args.input.resolve(); destination=args.output_dir.resolve(); config_path=args.config.resolve()
     check_destination(source,destination)
@@ -85,7 +86,7 @@ def main(argv=None):
     sources=sorted(Path(__file__).parent.glob("*.py"))+[config_path,IDENTITY_FILE,ROOT/"python/virus_task.py"]
     cfg=load_config(config_path); before=sha256(source); config_before=sha256(config_path)
     people=load_trials(source); result=analyse(people,cfg); comparisons=choose_comparators(result)
-    application, application_sources = primary_application(args.primary_analysis_dir,source,result)
+    application, application_sources = ({}, []) if args.audit_only else primary_application(args.primary_analysis_dir,source,result)
     result["primary_analysis"] = application
     sources += application_sources
     source_hashes=[dict(path=str(p),sha256=sha256(p)) for p in sources]

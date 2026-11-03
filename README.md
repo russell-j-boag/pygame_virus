@@ -248,40 +248,58 @@ and defaults to `plots/semester2_2026_behavioural`. Generated outputs are ignore
 by Git. The 2026-10-17 refresh includes 87 analysis participants (44 HP95_LP65,
 43 HP65_LP95), not the full planned sample of 96.
 
-### Recorded participant ID correction (2026-10-17)
+### Collection refresh and duplicate IDs (2026-11-03)
 
-Two complete runs have recorded participant ID 83: `20261015_125827` and
-`20261015_130522`; no run was recorded as participant 84. At the researcher's
-instruction, these are treated as two different people, assuming an experimenter
-ID-entry error. This identity assumption has not been independently confirmed.
-The earlier run retains analysis ID 83 and the later run receives analysis ID 84.
-The timestamp-specific mapping is in `config/participant_identity_corrections.csv`.
+The all-collected dataset contains **95 participants/runs** across recorded IDs
+1–91: 180,500 trial rows (including calibration), 1,140 trust-item rows and 475
+slider rows. All collected participants are retained for calibration and
+anticipatory-response checks. The duplicate recorded IDs are labelled oldest to
+newest as `4a/4b`, `10a/10b`, `48a/48b`, and `83a/83b`. The timestamp-specific
+mapping is in `config/participant_identity_corrections.csv`.
 
-Raw exports remain unchanged. Combined CSVs and analysis manifests retain
-`source_participant_id` and `run_timestamp`; their `participant_id` is the analysis
-ID. Both runs actually received the allocation for recorded ID 83: order O21,
-HP65_LP95, standard key mapping. Analysis ID 84 does **not** imply the planned
-flipped mapping for task ID 84. The refresh therefore has 86 distinct allocation
-cells, with the ID-83 cell represented twice; observed key mappings are 45 standard
-and 42 flipped. Allocation validation uses the recorded ID and the live task
-functions. Correction conflicts, analysis-ID collisions, and unexplained duplicate
-runs fail explicitly rather than silently selecting or merging a run.
+The two recorded-83 runs are different participants: `20261015_125827` is `83a`
+and `20261015_130522` is `83b`. The earlier mapping of the newer 83 to analysis ID
+84 is superseded; the newly collected actual participant 84 retains ID 84.
+Raw exports, recorded IDs, timestamps and administered allocations are preserved.
+Allocation validation uses the recorded ID and the live task functions. The
+95 collected runs occupy 91 distinct allocation cells; each duplicated ID
+occupies its recorded cell twice.
 
-Refresh combined data and descriptive figures from the repository root:
+**Clean data for behavioural and modelling analyses:**
+`data/semester2_2026_data/clean/` contains the same four CSV products with reviewed
+participant exclusions applied: **91 participants**, 172,900 trial rows,
+1,092 trust-item rows and 455 slider rows. Exclude only `4a`, `10a`, `48a` (the
+original reviewed QC exclusions) and `83a` (the user's duplicate-selection
+decision). Retain `4b`, `10b`, `48b`, `83b`, and actual 84.
+`clean/cohort_selection.csv` accounts for every collected run and
+`clean/exclusions.csv` gives the reasons. Selection is by analysis ID, recorded
+ID and timestamp together. No individual-trial trimming is performed here.
+
+Refresh from the repository root:
 
 ```sh
 Rscript collate_data.R output/semester2_2026_data data/semester2_2026_data
+Rscript prepare_clean_data.R
+Rscript tests/validate_time_pressure_collation.R
+Rscript tests/validate_time_pressure_clean_data.R
 Rscript plot_staircase.R data/semester2_2026_data/data_virus_all.csv plots/semester2_2026_data semester2_2026 'Semester 2 2026' cohort data/semester2_2026_data/data_virus_sliders_all.csv
 Rscript plot_calibration_manual_accuracy.R data/semester2_2026_data/data_virus_all.csv plots/semester2_2026_data calibration_manual_hp_lp_accuracy 'Calibration vs Manual HP/LP accuracy (Time-pressure task)'
 Rscript plot_calibration_accuracy_by_group.R
 Rscript plot_calibration_accuracy_by_group.R data/semester2_2026_data/data_virus_all.csv plots/semester2_2026_data/group semester2_2026_group_calibration_accuracy_distribution_compact compact
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_time_pressure_descriptive_plots.py
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m participant_qc.run_qc --audit-only
 Rscript tests/test_participant_identity.R
 ```
 
-Then run the behavioural pipeline above. The main analysis also refits the
-exploratory models; the main plotting command regenerates exploratory figures
-and the unified hypothesis report, including both SDT framings. The expected totals are 165,300
-trials (including calibration), 1,044 trust-item rows, and 435 slider rows.
+The collection refresh updates collation, participant-clean exports and full-cohort
+descriptive/QC plots. The subsequent **2026-11-03 behavioural refresh** refits all
+primary and sensitivity models and hypothesis figures on the **91-person cohort**,
+with **answered RT <200 ms excluded from every trial-based outcome**. The
+participant-clean CSVs remain untrimmed; the behavioural analysis records its
+additional trial selection separately. `--audit-only` permits a full-cohort QC
+refresh without claiming current hypothesis fits; without that option the QC
+runner verifies primary-analysis provenance. The primary fitter applies the same
+reviewed participant/run-selection function as the clean exporter.
 
 The analysis reads raw trial exports and same-run questionnaires, rejects duplicate
 participant runs after documented identity correction, records input checksums, and checks block order, deadlines,
@@ -289,7 +307,7 @@ reliability, and key mapping using the task's allocation functions. This check
 uses the `r-pygame` interpreter named in AGENTS.md; `TIME_PRESSURE_PYTHON` can
 override its absolute path on another machine. Calibration and pilot folders
 are excluded from the models. Timeouts count as incorrect, while correct-RT
-analysis requires finite positive RTs. Behavioural agreement excludes timeouts
+analysis requires correct, finite RTs at or above 200 ms in the current primary pipeline. Behavioural agreement excludes timeouts
 and is stratified by advice correctness; it is not evidence of an advice-caused
 change in a participant's decision. Trust requires all six valid items per block.
 
@@ -413,15 +431,19 @@ Open `index.html`, `core_hypotheses.pdf` (ten main figures), or
 `all_hypotheses.pdf` (18 figures including supporting and historical views).
 The revised framework was agreed on **17 October 2026 after inspection of the
 previous results**. These are the primary analyses for the revised question list;
-they are not preregistered. The current analysis includes **84 of 87 source
-participants**, excluding **004, 010 and 048** under the reviewed QC decisions.
-Both runs recorded as 083 remain included: `20261015_125827` retains analysis ID
-083, and `20261015_130522` is analysis ID 084. Both keep the allocation actually
-administered under recorded ID 083; this identity correction is not an exclusion.
+they are not preregistered. The current analysis uses **91 of 95 collected
+participants**, excluding `4a`, `10a`, `48a` and `83a`. The 2026-11-03 refresh
+additionally removes answered RT **<200 ms** before any trial-based summary,
+model or plot: **355 / 145,600 trials (0.244%)** are excluded, leaving **145,245
+experimental trials**. All 91 participants and all four conditions remain.
+Exactly 200 ms is retained; negative/zero answered RTs are excluded. Timeouts
+remain eligible and count as incorrect. Original data and full-cohort QC retain
+all trials. The previous 84-person fitted results and figures are archived.
 
 Fit the primary analyses, then build the report:
 
 ```sh
+Rscript tests/test_behavioural_trial_selection.R
 Rscript analyse_time_pressure_primary.R
 Rscript plot_time_pressure_hypotheses.R
 Rscript tests/validate_time_pressure_primary.R
@@ -435,7 +457,10 @@ files and fits the revised models. Reviewed participant/run decisions are stored
 in `config/participant_exclusions.csv`, applied after identity correction and
 before calculating any scores or fitting models. `primary/cohort_selection.csv`
 accounts for all source participants and `primary/exclusions.csv` records the
-applied reasons. An unknown run or invalid decision stops the analysis.
+applied reasons. `primary/trial_selection.csv` records every experimental trial
+from the retained participants; `trial_exclusions.csv` identifies the fast
+responses and `trial_filter_summary.csv` gives counts by participant/condition.
+An unknown run or invalid decision stops the analysis.
 Previous primary analyses are archived on rerun; source data remain intact.
 
 The plotting command accepts `[analysis_dir] [plot_dir] [combined_csv] [--stage-only]`.
@@ -452,7 +477,7 @@ forward to this canonical builder; the primary analysis must be current first.
 | --- | --- | --- |
 | H1 | Manual pressure costs: accuracy, task discrimination and correct RT | One equally pattern-weighted HP-LP contrast each |
 | H2 | Aid benefits: accuracy/task-dprime gains, RT effects; compensation and descriptive completion/choice decomposition | Accuracy and task dprime: 11 each; RT: nine |
-| H3 | Human value beyond following the aid: all-trial accuracy and matched-human-answered task dprime | Nine each |
+| H3 | Human value beyond following the aid: retained-trial accuracy and matched-human-answered task dprime | Nine each |
 | H4 | Response bias: advice acceptance and BLACK category preference | Five each |
 | H5 | Discrimination: advice selectivity and final stimulus discrimination | Five each |
 | H6 | Reported trust, perceived reliability and signed calibration error | Five, five and four respectively |
@@ -477,7 +502,7 @@ families in the historical section, with models and participant data regenerated
 on the same included cohort. No full-cohort figure is copied into the current report.
 
 **Models and tests.** Trial-level accuracy and history agreement use logistic
-mixed models; correct positive finite RTs use a log-RT mixed model; SDT scores,
+mixed models; correct finite RTs >=200 ms use a log-RT mixed model; SDT scores,
 ratings and participant human-minus-aid differences use linear mixed models.
 All include participant random intercepts. Performance models use
 `mode * pressure * allocation pattern`; aided-score models use
@@ -517,8 +542,10 @@ is to compare estimates from alternative analysis methods.
 
 H8 controls current advice
 correctness, previous response error and trial progress; it standardises current
-advice correctness to assigned reliability. Its lags are computed before filtering
-and never bridge timeouts, missing trials or block boundaries.
+advice correctness to assigned reliability. Its lags retain original trial
+numbers and never bridge RT-excluded trials, timeouts, missing trials or block
+boundaries. A history pair requires both the current and immediately preceding
+trial to be eligible answered trials.
 
 Tests are two-sided, with **Holm correction separately within hypothesis and
 outcome**. H2's accuracy/task-dprime families include the compensation contrasts
@@ -530,12 +557,15 @@ from log contrasts. Holm-adjusted p-values drive every significance annotation.
 An unavailable test is labelled unavailable, not nonsignificant.
 
 Loglinear SDT correction `(k + 0.5)/(n + 1)` is primary; extreme-only correction
-is a sensitivity analysis. Both frames exclude timeouts but retain answered
-trials with nonpositive RT. Advice -c is acceptance and advice dprime is selectivity;
+is a sensitivity analysis. Both frames exclude timeouts and answered RT <200 ms. Advice -c is acceptance and advice dprime is selectivity;
 task -c is BLACK preference and task dprime is final stimulus discrimination.
-These summarise the same decisions, not independent replication. All-trial
-accuracy includes timeout costs. H3's accuracy benchmark assumes timely advice
-on every trial; its task-SDT benchmark uses exactly human-answered trials.
+These summarise the same decisions, not independent replication. Retained-trial
+accuracy includes timeout costs; all accuracy/completion denominators reflect
+the RT exclusion. H3's accuracy benchmark assumes timely advice and uses realised
+advice accuracy on the same retained trials. Its task-SDT benchmark uses exactly
+the eligible human-answered trials. Post-block trust and perceived-reliability
+ratings remain unchanged; their associations with behavioural scores and the
+perceived-versus-realised accuracy comparisons use the filtered scores.
 Nonsignificant compensation/benchmark differences do not establish equivalence.
 
 **Validation and audit.** The validator independently reconstructs source counts,
@@ -566,7 +596,7 @@ review evidence and an exclusion-candidate list; **it does not remove participan
 or trials, rewrite canonical CSVs, or rerun behavioural analyses**.
 
 ```bash
-/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python participant_qc/run_qc.py
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python participant_qc/run_qc.py --audit-only
 /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m unittest discover -s tests -p 'test_participant_qc.py'
 /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_participant_qc.py --expect-current-cohort
 ```
@@ -641,8 +671,8 @@ silently remove comparison participants. All pool IDs, rankings, and missing
 comparators are exported.
 
 Recorded IDs and run timestamps remain alongside analysis IDs. The audit validates
-`config/participant_identity_corrections.csv`, including the later recorded-p083
-run assigned analysis ID 084. Allocation is checked against `python/virus_task.py`
+`config/participant_identity_corrections.csv`, including both recorded-83 runs
+labelled 83a and 83b; actual participant 84 retains ID 84. Allocation is checked against `python/virus_task.py`
 using the **recorded** ID, preserving that run's administered allocation.
 
 Builds use a staging directory and are published only when generation completes.
@@ -660,13 +690,15 @@ failed the calibration-target criterion. Fourteen participants had an `M_LP`
 target-deviation diagnostic flag, including candidate 010; the other 13 were
 diagnostic-only. All scopes were assessable. The initial audit did not apply exclusions.
 
-The subsequent user-approved selection excludes 004, 010 and 048 from all current
-hypothesis tests and figures, leaving **84 participants**. The QC index, summary
-JSON and `exclusion_summary.txt` document the applied decisions. The identity
-section and `identity_corrections_summary.csv` explicitly record both p083 runs,
-their analysis IDs (083/084), retained status and unchanged administered allocation.
-Identity reuse does not add an exclusion or reduce the 87-person source count.
-Validation receipts and visual-review evidence are saved separately in
+The **2026-11-03** audit includes all **95 collected participants**. Its only
+exclusion-rule candidates remain `4a`, `10a`, and `48a`; none fails the calibration
+target screen. The clean exports exclude those three and additionally `83a` by
+the user's duplicate-selection decision, retaining **91 participants**. Both 83
+runs appear in the QC plots. QC candidate counts do not include administrative
+selection decisions, and the audit does not itself apply exclusions or refit
+hypothesis models. See `clean/cohort_selection.csv` for applied clean-data
+selection and the QC report's `identity_corrections_summary.csv` for all reused
+recorded IDs. Independent QC validation is saved in
 `analysis_outputs/semester2_2026_qc_validation/`.
 
 ## Historical task-performance SDT component: stimulus versus final response

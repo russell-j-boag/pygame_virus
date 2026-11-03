@@ -166,7 +166,7 @@ primary_measure_subtitles <- c(
   "S03_task_manual_context"="Task response preference and discrimination",
   "S04_sdt_correction_sensitivity"="SDT contrasts and trust-association slopes",
   "S05_model_participant_sensitivity"="Standardised contrast estimates and Holm decisions",
-  "S06_completion_accuracy_context"="Response completion, all-trial accuracy and answered-trial accuracy",
+  "S06_completion_accuracy_context"="Response completion, retained-trial accuracy and answered-trial accuracy",
   "S07_historical_conditional_agreement"="Agreement with correct and incorrect advice",
   "S08_historical_agreement_selectivity"="Correct-minus-incorrect advice agreement"
 )
@@ -205,7 +205,7 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
     subtitle <- unname(primary_measure_subtitles[[row$filename]])
     title <- paste(strwrap(row$title,width=88),collapse="\n")
     figures[[row$filename]] <<- p + plot_annotation(title=title,subtitle=subtitle,
-      caption=paste(strwrap(paste0("N = ",nrow(d$cohort),"; reviewed participant exclusions applied. ",caption),width=153),collapse="\n"),theme=primary_plot_theme()+theme(plot.title=element_text(size=19,face="bold"),plot.subtitle=element_text(size=11)))
+      caption=paste(strwrap(paste0("N = ",nrow(d$cohort),"; Participant exclusions and RT <200 ms filter applied; timeouts retained. ",caption),width=153),collapse="\n"),theme=primary_plot_theme()+theme(plot.title=element_text(size=19,face="bold"),plot.subtitle=element_text(size=11)))
   }
   common_caption <- "Faint points: participants; open diamonds: model estimates with pointwise 95% CIs. Holm within hypothesis and outcome: *** p<.001, ** p<.01, * p<.05, ns p>=.05."
   cell_panel <- function(raw,means,t,title,ylab,ratio=FALSE,zero=FALSE,brackets=TRUE) {
@@ -266,7 +266,7 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
       annotate("segment",x=1,xend=2,y=yy,yend=yy)+annotate("segment",x=c(1,2),xend=c(1,2),y=yy,yend=yy-.025*span)+
       annotate("text",x=1.5,y=yy+.04*span,label=primary_p_label(t$p_holm),size=4)+
       scale_x_continuous(breaks=1:2,labels=c("HP (1 s)","LP (3 s)"),limits=c(.6,2.4))+
-      labs(title=switch(o,accuracy="All-trial accuracy",task_dprime="Task discrimination",correct_rt="Correct-response speed"),x=NULL,
+      labs(title=switch(o,accuracy="Retained-trial accuracy",task_dprime="Task discrimination",correct_rt="Correct-response speed"),x=NULL,
         y=switch(o,accuracy="Accuracy (%)",task_dprime="Task d-prime",correct_rt="Geometric mean RT (s)"))+primary_plot_theme()+
       coord_cartesian(ylim=c(rg[1]-.03*span,yy+.13*span))
     panels[[o]] <- p;register(stem_for(1),"H1",o,t,raw,m)
@@ -277,7 +277,7 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
     for(o in if(order==2)c("accuracy","task_dprime") else "correct_rt") {
       raw <- gainraw(o);if(o=="accuracy")raw$value <- raw$value*100
       t <- select_tests("H2",o,c(names(primary_cells(primary_grid())),names(primary_five(primary_grid()))));m <- filter(t,grepl("^cell_",contrast_id))
-      panels[[o]] <- cell_panel(raw,m,t,if(o=="accuracy")"All-trial accuracy gain" else if(o=="task_dprime")"Task discrimination gain" else "Correct-response RT: aided / manual",
+      panels[[o]] <- cell_panel(raw,m,t,if(o=="accuracy")"Retained-trial accuracy gain" else if(o=="task_dprime")"Task discrimination gain" else "Correct-response RT: aided / manual",
         if(o=="accuracy")"Aided minus manual (percentage points)" else if(o=="task_dprime")"Aided minus manual (d-prime)" else "Geometric mean RT ratio",ratio=o=="correct_rt",zero=TRUE)
       register(stem_for(order),"H2",o,t,raw,m)
     }
@@ -319,7 +319,7 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
       inner_join(filter(human,mode=="Automation") %>% select(participant_id,pressure,reliability,human=dprime),
         filter(d$task_scores,actor=="aid_matched",correction=="loglinear") %>% select(participant_id,pressure,aid=dprime),by=c("participant_id","pressure")) %>% mutate(value=human-aid)
     t <- select_tests("H3",o); m <- filter(t,grepl("^cell_",contrast_id))
-    panels[[o]] <- cell_panel(raw,m,t,if(o=="accuracy_benchmark")"All trials: accuracy beyond aid" else "Human-answered trials: d-prime beyond aid",
+    panels[[o]] <- cell_panel(raw,m,t,if(o=="accuracy_benchmark")"Retained trials: accuracy beyond aid" else "Human-answered trials: d-prime beyond aid",
       if(o=="accuracy_benchmark")"Human minus aid (percentage points)" else "Human minus matched aid (d-prime)",zero=TRUE)
     register(stem_for(5),"H3",o,t,raw,m)
   }
@@ -429,9 +429,9 @@ primary_plot_build <- function(bundle,registry,out,association_models) {
   cc <- d$performance %>% select(participant_id,pressure,mode,completion,answered_accuracy,accuracy) %>% pivot_longer(c(completion,answered_accuracy,accuracy),names_to="measure",values_to="value")
   pp <- ggplot(cc,aes(pressure,100*value,colour=mode))+geom_boxplot(outlier.shape=NA,width=.5)+
     geom_point(position=position_jitterdodge(jitter.width=.1,dodge.width=.5,seed=26),alpha=.2,size=.6)+
-    facet_wrap(~measure,nrow=1,labeller=as_labeller(c(accuracy="All-trial accuracy",answered_accuracy="Answered-trial accuracy",completion="Completion")))+
+    facet_wrap(~measure,nrow=1,labeller=as_labeller(c(accuracy="Retained-trial accuracy",answered_accuracy="Answered-trial accuracy",completion="Completion")))+
     scale_colour_manual(values=c(Manual="#697681",Automation="#6C75A3"),labels=c(Manual="Manual",Automation="Aided"))+labs(x=NULL,y="Percentage",colour=NULL)+primary_plot_theme()
-  add_figure(16,pp,"Descriptive raw participant context. All-trial accuracy equals completion times answered accuracy; SDT describes answered trials. Boxes show medians and quartiles. No additional inferential tests.")
+  add_figure(16,pp,"Descriptive raw participant context. Retained-trial accuracy equals completion times answered accuracy; SDT describes answered trials. Boxes show medians and quartiles. No additional inferential tests.")
   write_csv(cc,file.path(out,"data",paste0(stem_for(16),"_data.csv")))
   # Superseded probability-based measures, refitted on the included cohort.
   hist <- bundle$historical;panels <- list()

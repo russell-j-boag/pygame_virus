@@ -6,6 +6,7 @@ import csv
 import json
 import math
 import os
+import re
 import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -27,14 +28,22 @@ META = ("participant_id", "source_participant_id", "run_timestamp",
         "automation_reliability_pattern", "key_black", "key_white", "main_block_order")
 
 
+def display_id(value):
+    """Pad the numeric part for existing plot/file conventions, preserving suffixes."""
+    match = re.fullmatch(r"([0-9]+)([a-z]*)", str(value))
+    if not match:
+        raise ValueError(f"Invalid participant ID: {value}")
+    return f"{int(match[1]):03d}{match[2]}"
+
+
 def identity_corrections(path=IDENTITY_FILE):
     with Path(path).open(newline="") as handle:
         records = list(csv.DictReader(handle))
     mapping, targets = {}, set()
     for r in records:
         key = (int(r["source_participant_id"]), r["run_timestamp"])
-        target = int(r["participant_id"])
-        if key in mapping or target in targets or min(key[0], target) < 1 or not key[1] or not r["reason"]:
+        target = r["participant_id"]
+        if key in mapping or target in targets or key[0] < 1 or not re.fullmatch(r"[1-9][0-9]*[a-z]*", target) or not key[1] or not r["reason"]:
             raise ValueError("Invalid or conflicting identity corrections")
         mapping[key] = target
         targets.add(target)
@@ -143,7 +152,7 @@ def load_trials(path):
             raise ValueError("Missing required trial columns: " + ", ".join(sorted(missing)))
         for line, raw in enumerate(reader, 2):
             row = dict(raw)
-            for key in ("participant_id", "source_participant_id", "block_idx", "trial", "global_trial"):
+            for key in ("source_participant_id", "block_idx", "trial", "global_trial"):
                 value = number(row[key])
                 if value is None or value <= 0 or value % 1:
                     raise ValueError(f"Invalid {key} at CSV line {line}")
@@ -151,7 +160,7 @@ def load_trials(path):
             if empty(row["run_timestamp"]):
                 raise ValueError(f"Missing run identity at CSV line {line}")
             source_identity = (row["source_participant_id"], row["run_timestamp"])
-            if row["participant_id"] != corrections.get(source_identity, row["source_participant_id"]):
+            if row["participant_id"] != corrections.get(source_identity, str(row["source_participant_id"])):
                 raise ValueError(f"Inconsistent recorded and analysis participant identities at CSV line {line}")
             allocation = task.counterbalance_allocation_for_participant(row["source_participant_id"])
             row["main_block_order"] = "|".join(
@@ -173,7 +182,7 @@ def load_trials(path):
         if len({(r["source_participant_id"], r["run_timestamp"]) for r in rows}) != 1:
             raise ValueError(f"Ambiguous multiple runs for participant {pid}; select one run explicitly")
         rows.sort(key=lambda r: r["global_trial"])
-    return dict(sorted(people.items()))
+    return dict(sorted(people.items(), key=lambda item: display_id(item[0])))
 
 
 def validate_person(rows):
@@ -349,7 +358,7 @@ def exclusion_summary(result):
                        allocation_source_participant_id=source_id,
                        included_in_primary=(s["participant_id"] not in application.get("excluded_participant_ids", [])) if application else None)
                   for s in sorted(runs,key=lambda s:s["run_timestamp"])],
-            resolution="Recorded ID reused across separate participant runs. The later run has a distinct analysis ID; "
+            resolution="Recorded ID reused across separate participant runs. Chronological suffixes distinguish all runs; "
                        "both runs retain the allocation actually administered under the recorded ID. "
                        "Identity correction is not an exclusion criterion."))
     return dict(
@@ -397,7 +406,7 @@ def choose_comparators(result):
                 centers[key] = statistics.median(overall[p][key] for p in pool)
                 scales[key] = statistics.median(abs(overall[p][key]-centers[key]) for p in pool)
         ranked = sorted([{"participant_id": p, "score": sum(abs(overall[p][k]-centers[k])/scales[k] for k in centers if scales[k] > EPS)} for p in pool], key=lambda r: (r["score"], r["participant_id"]))
-        output.append(dict(group=match[0], key_black=match[1], key_white=match[2], targets=sorted(targets),
+        output.append(dict(group=match[0], key_black=match[1], key_white=match[2], targets=sorted(targets, key=display_id),
             comparator=ranked[0]["participant_id"] if ranked else None, ranked_candidates=ranked,
             centers=centers, median_absolute_deviations=scales,
             note="Zero-MAD metrics contribute zero distance; ties use participant ID." if ranked else "No complete, non-anticipatory-flagged matching comparator available."))

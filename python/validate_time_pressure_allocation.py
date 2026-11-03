@@ -5,6 +5,7 @@ Run with the r-pygame interpreter. Never starts the participant task.
 """
 import csv
 import os
+import re
 from collections import Counter
 from pathlib import Path
 import sys
@@ -20,8 +21,8 @@ def identity_corrections():
     mapping, targets = {}, set()
     for row in rows:
         key = (int(row["source_participant_id"]), row["run_timestamp"])
-        target = int(row["participant_id"])
-        if key in mapping or target in targets or min(key[0], target) < 1 or not key[1] or not row["reason"]:
+        target = row["participant_id"]
+        if key in mapping or target in targets or key[0] < 1 or not re.fullmatch(r"[1-9][0-9]*[a-z]*", target) or not key[1] or not row["reason"]:
             raise ValueError("Invalid or conflicting identity corrections")
         mapping[key] = target
         targets.add(target)
@@ -47,7 +48,7 @@ def validate(input_dir):
         if not rows:
             raise ValueError(f"Empty export: {path}")
         pid = int(rows[0]["participant_id"])
-        analysis_id = corrections.get((pid, rows[0]["run_timestamp"]), pid)
+        analysis_id = corrections.get((pid, rows[0]["run_timestamp"]), str(pid))
         if analysis_id in seen:
             raise ValueError(f"Ambiguous duplicate run or collision for analysis participant {analysis_id}")
         seen.add(analysis_id)

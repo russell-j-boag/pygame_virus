@@ -8,6 +8,8 @@ source(file.path(PRIMARY_ROOT, "analyse_time_pressure_task_sdt.R"), local=TRUE)
 source(file.path(PRIMARY_ROOT, "analyse_time_pressure_sdt.R"), local=TRUE)
 source(file.path(PRIMARY_ROOT, "analyse_time_pressure_exploratory.R"), local=TRUE)
 suppressPackageStartupMessages(library(sandwich))
+source(file.path(PRIMARY_ROOT, "R/participant_selection.R"))
+source(file.path(PRIMARY_ROOT, "R/behavioural_trial_selection.R"))
 rm(.primary_files, .primary_file)
 
 primary_grid <- function() expand_grid(pressure=c("HP","LP"), reliability=c("65%","95%"))
@@ -40,7 +42,7 @@ primary_performance <- function(g, compensation=TRUE) {
 }
 primary_source_paths <- function(root) file.path(root,c("analyse_time_pressure_primary.R","analyse_time_pressure.R",
   "analyse_time_pressure_task_sdt.R","analyse_time_pressure_sdt.R","analyse_time_pressure_exploratory.R",
-  "R/participant_identity.R","config/participant_identity_corrections.csv","config/participant_exclusions.csv","config/hypothesis_figures.csv"))
+  "R/participant_identity.R","R/participant_selection.R","R/behavioural_trial_selection.R","config/participant_identity_corrections.csv","config/participant_exclusions.csv","config/hypothesis_figures.csv"))
 
 primary_fit <- function(name, formula, d, binary_outcome, out) {
   message("Primary fit: ",name," (",nrow(d)," rows)")
@@ -84,7 +86,7 @@ run_time_pressure_primary <- function(base,input,root=PRIMARY_ROOT) {
   base <- normalizePath(base); input <- normalizePath(input)
   stage <- tempfile(".primary_build_",tmpdir=base);dir.create(file.path(stage,"models"),recursive=TRUE)
   on.exit(if(dir.exists(stage))unlink(stage,recursive=TRUE),add=TRUE)
-  manifest <- read_csv(file.path(base,"input_manifest.csv"),show_col_types=FALSE)
+  manifest <- read_csv(file.path(dirname(input),"input_manifest.csv"),show_col_types=FALSE)
   check(identical(unname(tools::md5sum(manifest$path)),manifest$md5),"Historical source files have changed")
   raw <- read_identity_csv(input); dat <- prepare_trials(raw)
   check(nrow(dat)==1600*n_distinct(dat$participant_id),"Incomplete experimental cohort")
@@ -96,20 +98,32 @@ run_time_pressure_primary <- function(base,input,root=PRIMARY_ROOT) {
   check(isTRUE(all.equal(as.data.frame(x),as.data.frame(y),check.attributes=FALSE)),"Combined CSV differs from original runs")
   # Apply reviewed participant/run decisions after identity correction, before any
   # trial summary, SDT score, rating, model, or participant sensitivity is formed.
-  policy <- read_csv(file.path(root,"config/participant_exclusions.csv"),show_col_types=FALSE,
-    col_types=cols(run_timestamp=col_character()))
-  identity_keys <- c("participant_id","source_participant_id","run_timestamp")
-  check(!anyDuplicated(policy$participant_id) && all(policy$decision=="exclude") &&
-    all(!is.na(policy$reason) & nzchar(policy$reason)),"Invalid participant exclusion decisions")
-  input_cohort <- dat %>% distinct(participant_id,source_participant_id,run_timestamp,pattern) %>% mutate(run_timestamp=as.character(run_timestamp))
-  check(nrow(anti_join(policy,input_cohort,by=identity_keys))==0,"Exclusion decision does not match a source run")
-  selection <- input_cohort %>% left_join(policy,by=identity_keys) %>% mutate(included=is.na(decision),
-    decision=coalesce(decision,"include"),reason=coalesce(reason,"Retained"))
+  input_cohort <- dat %>% distinct(participant_id,source_participant_id,run_timestamp,pattern)
+  selection <- select_reviewed_participants(input_cohort, file.path(root,"config/participant_exclusions.csv"))
   exclusions <- filter(selection,!included)
   dat <- droplevels(filter(dat,participant_id %in% selection$participant_id[selection$included]))
   check(nrow(dat)==1600*sum(selection$included),"Excluded cohort trial count mismatch")
-  cohort_note <- sprintf("%d source participants; excluded %s under reviewed QC decisions; %d included in all current analyses and figures.",
-    nrow(selection),paste(sprintf("%03d",exclusions$participant_id),collapse=", "),n_distinct(dat$participant_id))
+  marked <- mark_behavioural_trials(dat)
+  trial_selection <- marked %>% select(all_of(keys), source_participant_id, condition_deadline_code,
+    response, rt_s, timeout, excluded_fast_rt, included_behavioural)
+  trial_exclusions <- filter(trial_selection, !included_behavioural)
+  trial_filter_summary <- marked %>% group_by(participant_id, source_participant_id, run_timestamp,
+    condition_deadline_code, pressure, mode) %>% summarise(
+      n_collected=n(), n_excluded_fast_rt=sum(excluded_fast_rt), n_retained=sum(included_behavioural),
+      n_timeouts=sum(timeout), .groups="drop")
+  dat <- filter(marked, included_behavioural)
+  check(n_distinct(dat$participant_id)==sum(selection$included) &&
+    nrow(count(dat,participant_id,condition_deadline_code))==4*sum(selection$included),
+    "RT filtering removed a participant or condition")
+  write_csv(trial_selection,file.path(stage,"trial_selection.csv"))
+  write_csv(trial_exclusions,file.path(stage,"trial_exclusions.csv"))
+  write_csv(trial_filter_summary,file.path(stage,"trial_filter_summary.csv"))
+  trial_filter_note <- sprintf(
+    "Answered RT <200 ms excluded: %d of %d experimental trials (%.3f%%); %d retained. Exactly 200 ms retained; timeouts retained. Applies to every trial-based outcome, benchmark, sensitivity and plot. Post-block ratings unchanged.",
+    nrow(trial_exclusions),nrow(marked),100*nrow(trial_exclusions)/nrow(marked),nrow(dat))
+  message(trial_filter_note)
+  cohort_note <- sprintf("%d source participants; excluded %s under reviewed participant/run decisions; %d included in all current analyses and figures.",
+    nrow(selection),paste(exclusions$participant_id,collapse=", "),n_distinct(dat$participant_id))
   perf <- dat %>% group_by(participant_id,subject,pattern,pressure,mode,reliability) %>% summarise(
     answered_accuracy=mean(accuracy[!timeout]),accuracy=mean(accuracy),
     correct_rt=mean(log(rt_s[valid_correct_rt])),completion=mean(!timeout),.groups="drop")
@@ -278,7 +292,7 @@ run_time_pressure_primary <- function(base,input,root=PRIMARY_ROOT) {
     agreement_sensitivity=hpt,selectivity_sensitivity=hst)
   for(nm in names(historical))write_csv(historical[[nm]],file.path(stage,paste0("historical_",nm,".csv")))
   saveRDS(list(em=he,agreement=hm,selectivity=sm),file.path(stage,"historical_audit.rds"))
-  data <- list(performance=perf,task_counts=counts,task_scores=scores,advice_counts=acount,advice_scores=advice,trust=trust,
+  data <- list(trial_filter_summary=trial_filter_summary,performance=perf,task_counts=counts,task_scores=scores,advice_counts=acount,advice_scores=advice,trust=trust,
     ratings=rating,benchmark=bench,decomposition=decom,sequence_raw=sequence_raw,associations=associations,
     cohort=dat %>% distinct(participant_id,source_participant_id,run_timestamp,pattern),cohort_selection=selection,exclusions=exclusions)
   for(nm in names(data))write_csv(data[[nm]],file.path(stage,paste0(nm,".csv")))
@@ -288,20 +302,22 @@ run_time_pressure_primary <- function(base,input,root=PRIMARY_ROOT) {
   saveRDS(list(data=data,results=results,estimates=estimates,diagnostics=bind_rows(diagnostics),historical=historical),file.path(stage,"bundle.rds"))
   writeLines(c("Revised primary framework agreed 2026-10-17 after inspection of previous results; not preregistered.",
     cohort_note,
-    "Recorded ID 083 was reused for two different participant runs: 20261015_125827 retains analysis ID 083; 20261015_130522 has analysis ID 084. Both retained with the allocation actually administered under recorded ID 083. This is an identity correction, not a participant exclusion.",
+    "Duplicate recorded IDs have chronological a/b suffixes. Retain 4b, 10b, 48b and 83b; exclude 4a, 10a, 48a and 83a. Actual participant 84 retains ID 84. Recorded allocations are unchanged.",
+    trial_filter_note,
+    "The 200 ms trial exclusion was added on 2026-11-03 at the researcher request. Accuracy and completion denominators use retained trials, including timeouts; realised advice benchmarks use the same retained trials. Raw and participant-clean CSVs and QC remain untrimmed.",
     "Two-sided tests; Holm separately within hypothesis x outcome x correction x analysis. Sensitivities never replace primary tests.",
     "Pointwise 95% model confidence intervals. Binary predictions condition on zero participant random effect; response-scale contrasts follow regridding.",
     "H1 manual effect equally weights allocation patterns. At fixed pressure/reliability the aided simple contrasts compare allocation groups.",
-    "RT uses correct, positive, finite responses, log-scale models, geometric-mean ratios; ratios below one indicate shorter response time.",
+    "RT uses correct, finite responses at or above 200 ms, log-scale models, geometric-mean ratios; ratios below one indicate shorter response time.",
     "Task dprime and bias use answered BLACK/WHITE classifications. Advice SDT uses agreement on correct/incorrect advice. Loglinear primary; extreme-only sensitivity.",
-    "H3 accuracy: human all-trial accuracy minus realised advice accuracy, assuming timely advice. H3 task dprime: matched human-answered trials.",
+    "H3 accuracy: human retained-trial accuracy minus realised advice accuracy on the same trials, assuming timely advice. H3 task dprime: matched human-answered trials.",
     "H4 advice -c = acceptance; task -c = BLACK preference. H5 advice dprime = selectivity; task dprime = participant-plus-aid discrimination.",
     "SDT frames summarise the same decisions and are not independent replication. Answered-trial selection remains relevant.",
     "H2 compensation is a derived contrast; completion/choice is descriptive accounting, not causal mediation.",
     "H7 revised 2026-10-18: within- and between-person trust slopes vary by allocation pattern, adjusting for pressure x pattern and block position. Pressure x pattern spans the same four condition means as pressure x reliability.",
     "H7 has six tests per SDT outcome: four group slopes and two HP95_LP65-minus-HP65_LP95 slope differences, Holm-adjusted together. Both SDT corrections and participant-cluster sensitivities use this specification. Post-block trust associations are not causal effects.",
     "H7 additive models remain as common_slope_sensitivity with separate two-test Holm families per SDT outcome and correction. The group-interaction update followed inspection of common-slope plots and is retrospective.",
-    "H8 excludes current/previous timeouts and nonconsecutive trials, controls previous response errors and progress, and weights current advice by assigned reliability.",
+    "H8 excludes current/previous RT <200 ms, timeouts and nonconsecutive trials, controls previous response errors and progress, and weights current advice by assigned reliability.",
     "Random-intercept models are accompanied by participant contrast/cluster sensitivities and dispersion/residual diagnostics. Numerical convergence does not establish adequacy.",
     "Singular, nonconverged or rank-deficient models have no primary p-values. Missing inference is not nonsignificance."),file.path(stage,"methods.txt"))
   writeLines(capture.output(sessionInfo()),file.path(stage,"session_info.txt"))

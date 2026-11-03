@@ -3,7 +3,7 @@ import csv
 import html
 from pathlib import Path
 
-from participant_qc.core import CATEGORIES, EXCLUSION_CATEGORIES, DIAGNOSTIC_CATEGORIES, exclusion_summary
+from participant_qc.core import display_id, CATEGORIES, EXCLUSION_CATEGORIES, DIAGNOSTIC_CATEGORIES, exclusion_summary
 
 LABELS = {
     "calibration_target":"Calibration target", "manual_target":"Manual target (diagnostic only)",
@@ -20,7 +20,7 @@ def exclusion_table_rows(exclusions):
         rows.append(dict(criterion=category, label=LABELS[category],
             role="Exclusion criterion" if category in EXCLUSION_CATEGORIES else "Diagnostic only",
             participant_n=len(ids), percent_of_cohort=100*len(ids)/total if total else 0,
-            participant_ids="; ".join(f"{p:03d}" for p in ids)))
+            participant_ids="; ".join(f"{display_id(p)}" for p in ids)))
     for key,label,n,ids in [
         ("any_exclusion_rule","Total unique exclusion candidates",exclusions["unique_flagged_n"],exclusions["participant_ids"]),
         ("remaining_if_applied","Included in primary analyses" if exclusions["exclusions_applied"] and
@@ -28,7 +28,7 @@ def exclusion_table_rows(exclusions):
          exclusions["remaining_if_applied_n"],[])]:
         rows.append(dict(criterion=key,label=label,role="Total",participant_n=n,
             percent_of_cohort=100*n/total if total else 0,
-            participant_ids="; ".join(f"{p:03d}" for p in ids)))
+            participant_ids="; ".join(f"{display_id(p)}" for p in ids)))
     return rows
 
 
@@ -39,7 +39,7 @@ def write_exclusion_summary(out, exclusions):
              f"Source participants: {exclusions['participant_n']}",
              "QC audit population: all source participants; source data are not deleted."]
     if exclusions["exclusions_applied"]:
-        lines.extend([f"Excluded from primary analyses: {', '.join(f'{p:03d}' for p in application['excluded_participant_ids'])}",
+        lines.extend([f"Excluded from primary analyses: {', '.join(f'{display_id(p)}' for p in application['excluded_participant_ids'])}",
                       f"Included in primary analyses and all current hypothesis figures: {application['included_participant_n']}"])
     else:
         lines.append("No applied primary-analysis exclusion decision is recorded in this audit.")
@@ -47,9 +47,9 @@ def write_exclusion_summary(out, exclusions):
                   "Manual-target deviation is diagnostic only.", "", "Identity corrections (not exclusions):"])
     rows = []
     for case in exclusions["identity_reuse_cases"]:
-        lines.append(f"Recorded participant ID {case['source_participant_id']:03d} was reused for {len(case['runs'])} separate participant runs.")
+        lines.append(f"Recorded participant ID {display_id(case['source_participant_id'])} was reused for {len(case['runs'])} separate participant runs.")
         for run in case["runs"]:
-            lines.append(f"  Run {run['run_timestamp']}: analysis ID {run['participant_id']:03d}; allocation remains recorded ID {case['source_participant_id']:03d}; "
+            lines.append(f"  Run {run['run_timestamp']}: analysis ID {display_id(run['participant_id'])}; allocation remains recorded ID {display_id(case['source_participant_id'])}; "
                          + ("primary inclusion not recorded." if run["included_in_primary"] is None else
                             "included in primary analyses." if run["included_in_primary"] else "not included in primary analyses."))
             rows.append(dict(source_participant_id=case["source_participant_id"], **run, note=case["resolution"]))
@@ -87,10 +87,10 @@ def write_report(out,result,cfg,individuals,comparison_pages):
         "Raw data and audit diagnostics remain intact." if exclusions["exclusions_applied"] else
         f"{len(result['summaries'])} participants. Flags are review evidence; no primary-analysis exclusions are recorded here.")
     applied_note=(f'<p><strong>Applied to the current hypothesis analyses and figures:</strong> '
-                  f'{", ".join(f"{p:03d}" for p in application["excluded_participant_ids"])}. '
+                  f'{", ".join(f"{display_id(p)}" for p in application["excluded_participant_ids"])}. '
                   f'<a href="analysis_cohort_selection.csv">Complete inclusion/exclusion record</a>.</p>' if application else '')
-    identity_rows="".join(f'<tr><td>{case["source_participant_id"]:03d}</td><td>{esc(run["run_timestamp"])}</td>'
-        f'<td>{run["participant_id"]:03d}</td><td>{run["allocation_source_participant_id"]:03d}</td>'
+    identity_rows="".join(f'<tr><td>{display_id(case["source_participant_id"])}</td><td>{esc(run["run_timestamp"])}</td>'
+        f'<td>{display_id(run["participant_id"])}</td><td>{display_id(run["allocation_source_participant_id"])}</td>'
         f'<td>{"Not recorded" if run["included_in_primary"] is None else "Included" if run["included_in_primary"] else "Excluded"}</td></tr>'
         for case in exclusions["identity_reuse_cases"] for run in case["runs"])
     identity_section=(f'<h2>Reused participant ID: identity correction, not exclusion</h2>'
@@ -102,25 +102,25 @@ def write_report(out,result,cfg,individuals,comparison_pages):
     remaining_note=(f"leaving <strong>{application['included_participant_n']}</strong> in the current primary analyses" if exclusions["exclusions_applied"] else
                     f"leaving <strong>{exclusions['remaining_if_applied_n']}</strong> if the three criteria are applied")
     final_table="".join(f'<tr><td>{esc(r["label"])}</td><td>{esc(r["role"])}</td><td>{r["participant_n"]}</td><td>{r["percent_of_cohort"]:.1f}%</td><td>{esc(r["participant_ids"]) or "-"}</td></tr>' for r in exclusion_table_rows(exclusions))
-    candidate_links=", ".join(f'<a href="#p{p:03d}">{p:03d}</a>' for p in exclusions["participant_ids"]) or "None"
-    overlap_rows="".join(f'<tr><td>{r["n_rules"]}</td><td>{r["participant_n"]}</td><td>{", ".join(f"{p:03d}" for p in r["participant_ids"]) or "None"}</td></tr>' for r in exclusions["overlap"])
+    candidate_links=", ".join(f'<a href="#p{display_id(p)}">{display_id(p)}</a>' for p in exclusions["participant_ids"]) or "None"
+    overlap_rows="".join(f'<tr><td>{r["n_rules"]}</td><td>{r["participant_n"]}</td><td>{", ".join(f"{display_id(p)}" for p in r["participant_ids"]) or "None"}</td></tr>' for r in exclusions["overlap"])
     incomplete_note=(f'<p>{len(exclusions["incomplete_assessment_ids"])} participants have unassessable checks. These checks are not counted as exclusions or evidence of eligibility.</p>' if exclusions["incomplete_assessment_ids"] else '')
     table=[]; details=[]
     for s in result["summaries"]:
         pid=s["participant_id"]
         cells="".join(f'<td class="{s[c]}">{esc(s[c].replace("_"," "))}</td>' for c in CATEGORIES)
-        table.append(f'<tr data-review="{str(s["review_required"]).lower()}"><td><a href="#p{pid:03d}">{pid:03d}</a></td><td>{esc(s["automation_reliability_pattern"])}</td>{cells}<td>{s["n_exclusion_rules"]}</td><td>{s["n_flags"]}</td></tr>')
+        table.append(f'<tr data-review="{str(s["review_required"]).lower()}"><td><a href="#p{display_id(pid)}">{display_id(pid)}</a></td><td>{esc(s["automation_reliability_pattern"])}</td>{cells}<td>{s["n_exclusion_rules"]}</td><td>{s["n_flags"]}</td></tr>')
         scopes=[m for m in result["metrics"] if m["participant_id"]==pid]
         checks=[c for c in result["checks"] if c["participant_id"]==pid and c["status"]!="clear"]
         reasons="".join(f'<li><strong>{esc(LABELS[c["category"]])}</strong> / {esc(c["scope_label"])}: {esc(c["rule"])} ({esc(c["status"])})</li>' for c in checks) or "<li>No review flags on the configured screens.</li>"
         rows="".join(f'<tr><td>{esc(m["scope_label"])}</td><td>{m["n_trials"]}/{m["n_expected"]}</td><td>{interval(m,"accuracy")}</td><td>{pct(m["answered_accuracy"])}</td><td>{m["n_timeouts"]} ({pct(m["timeout_fraction"])})</td><td>{m["n_fast"]}</td><td>{pct(m["fast_fraction"])}</td><td>{interval(m,"fast_accuracy")}</td><td>{m["n_nonpositive_rt"]}</td><td>{esc(m["integrity_issues"]) or "Complete"}</td></tr>' for m in scopes)
-        details.append(f'''<details id="p{pid:03d}"><summary>Participant {pid:03d} - {esc(s['automation_reliability_pattern'])} - {s['n_exclusion_rules']} exclusion criteria / {s['n_flags']} flagged checks including diagnostics</summary>
-<p>Recorded ID: {s['source_participant_id']:03d}. Run: {esc(s['run_timestamp'])}. Order: {esc(s['main_block_order'])}. Keys: black={esc(s['key_black'])}, white={esc(s['key_white'])}.
-<a href="individual/p{pid:03d}_diagnostics.pdf">Diagnostic PDF</a> | <a href="individual/p{pid:03d}_diagnostics.png">PNG</a></p>
+        details.append(f'''<details id="p{display_id(pid)}"><summary>Participant {display_id(pid)} - {esc(s['automation_reliability_pattern'])} - {s['n_exclusion_rules']} exclusion criteria / {s['n_flags']} flagged checks including diagnostics</summary>
+<p>Recorded ID: {display_id(s['source_participant_id'])}. Run: {esc(s['run_timestamp'])}. Order: {esc(s['main_block_order'])}. Keys: black={esc(s['key_black'])}, white={esc(s['key_white'])}.
+<a href="individual/p{display_id(pid)}_diagnostics.pdf">Diagnostic PDF</a> | <a href="individual/p{display_id(pid)}_diagnostics.png">PNG</a></p>
 <ul>{reasons}</ul><div class="scroll"><table><thead><tr><th>Scope</th><th>Trials</th><th>Accuracy [{interval_label} interval]</th><th>Answered accuracy</th><th>Timeouts</th><th>Fast n</th><th>Fast rate</th><th>Fast accuracy [{interval_label} interval]</th><th>Nonpositive n</th><th>Integrity</th></tr></thead><tbody>{rows}</tbody></table></div></details>''')
     counts={c:sum(s[c]=="flag" for s in result["summaries"]) for c in CATEGORIES}
     counts_html="".join(f'<li>{esc(LABELS[c])}: <strong>{counts[c]}</strong> participants</li>' for c in CATEGORIES)
-    comparisons="".join(f'<li><a href="{p["stem"]}.pdf">Participants {", ".join(f"{x:03d}" for x in p["targets"])}</a>; comparator {p["comparator"] if p["comparator"] is not None else "unavailable"} (<a href="{p["stem"]}.png">PNG</a>)</li>' for p in comparison_pages)
+    comparisons="".join(f'<li><a href="{p["stem"]}.pdf">Participants {", ".join(f"{display_id(x)}" for x in p["targets"])}</a>; comparator {p["comparator"] if p["comparator"] is not None else "unavailable"} (<a href="{p["stem"]}.png">PNG</a>)</li>' for p in comparison_pages)
     if not comparisons: comparisons="<li>No anticipatory flags; no comparison pages required.</li>"
     bundle_link='<p><a href="anticipatory_comparisons.pdf">All anticipatory comparisons (PDF)</a></p>' if comparison_pages else ''
     figure_titles={"screening_overview":"Screening overview", "calibration_manual_accuracy":"Calibration and manual accuracy", "whole_scope_accuracy":"Whole-scope accuracy", "anticipatory_cohort":"Anticipatory cohort context"}

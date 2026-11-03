@@ -1,2 +1,9 @@
 source_participant_id,run_timestamp,participant_id,reason
-83,20261015_130522,84,"Presumed experimenter ID reuse; user instructed retaining both p083 runs as different people on 2026-10-17. Analysis ID only; administered allocation remains that of recorded ID 83."
+4,20260805_110526,4a,Chronological duplicate label; separate collected participants. Recorded allocation preserved. User decision 2026-11-03.
+4,20261021_105525,4b,Chronological duplicate label; separate collected participants. Recorded allocation preserved. User decision 2026-11-03.
+10,20260806_091311,10a,Chronological duplicate label; separate collected participants. Recorded allocation preserved. User decision 2026-11-03.
+10,20261021_130034,10b,Chronological duplicate label; separate collected participants. Recorded allocation preserved. User decision 2026-11-03.
+48,20260826_131716,48a,Chronological duplicate label; separate collected participants. Recorded allocation preserved. User decision 2026-11-03.
+48,20261021_130721,48b,Chronological duplicate label; separate collected participants. Recorded allocation preserved. User decision 2026-11-03.
+83,20261015_125827,83a,Chronological duplicate label; separate collected participants. Recorded allocation preserved. User decision 2026-11-03.
+83,20261015_130522,83b,Chronological duplicate label; separate collected participants. Recorded allocation preserved. User decision 2026-11-03.

@@ -147,7 +147,7 @@ if (nrow(missing_conditions) > 0) {
 }
 
 participant_order <- tibble(participant_id = participant_ids) %>%
-  mutate(participant_num = suppressWarnings(as.numeric(participant_id))) %>%
+  mutate(participant_num = suppressWarnings(as.numeric(sub("[a-z]+$", "", participant_id)))) %>%
   arrange(is.na(participant_num), participant_num, participant_id) %>%
   pull(participant_id)
 

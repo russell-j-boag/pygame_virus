@@ -7,10 +7,10 @@ rm(.identity_files)
 read_identity_corrections <- function(path = IDENTITY_CORRECTIONS_FILE) {
   x <- readr::read_csv(path, col_types = readr::cols(
     source_participant_id = readr::col_integer(), run_timestamp = readr::col_character(),
-    participant_id = readr::col_integer(), reason = readr::col_character()))
+    participant_id = readr::col_character(), reason = readr::col_character()))
   needed <- c("source_participant_id", "run_timestamp", "participant_id", "reason")
   if (!all(needed %in% names(x)) || anyNA(x[needed]) ||
-      any(x$source_participant_id < 1 | x$participant_id < 1) ||
+      any(x$source_participant_id < 1) || any(!grepl("^[1-9][0-9]*[a-z]*$", x$participant_id)) ||
       any(!nzchar(x$run_timestamp) | !nzchar(x$reason)) ||
       anyDuplicated(x[c("source_participant_id", "run_timestamp")]) ||
       anyDuplicated(x$participant_id)) stop("Invalid or conflicting identity corrections")
@@ -24,7 +24,7 @@ apply_participant_identity <- function(x, corrections = read_identity_correction
   if (!had_source) x$source_participant_id <- x$participant_id
   key <- paste(x$source_participant_id, x$run_timestamp, sep = "/")
   index <- match(key, paste(corrections$source_participant_id, corrections$run_timestamp, sep = "/"))
-  expected <- x$source_participant_id
+  expected <- as.character(x$source_participant_id)
   changed <- !is.na(index)
   expected[changed] <- corrections$participant_id[index[changed]]
   if (anyNA(expected) || anyNA(x$run_timestamp) ||
