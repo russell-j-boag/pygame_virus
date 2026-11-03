@@ -292,7 +292,7 @@ build_dynamic_reliability_legacy_slides <- function(input, plot_base, root, retu
     paste("Observed means + Morey 95% CIs: two manual accuracy cells; five log-RT cells, then back-transformed.",
       "RT brackets compare adjacent aided stages and manual pre/post. Changes also include practice and fatigue.",test_caption,sep = "\n")),
     "06_e2_speed_and_manual_change","E2","What changes in response speed and manual performance accompany the sequence?",
-    "Manual accuracy uses two-condition Morey intervals. RTs are equal-weight participant geometric means, normalized over all five log-RT stages before back-transformation. All correct finite positive RTs are retained. Accuracy timeouts count as incorrect. RT tests use the saved log-RT model; no between-group comparison is inferred from Morey interval overlap. RT brackets include P1-manual pre, P2-P1, P3-P2, and manual post-manual pre.",
+    "Manual accuracy uses two-condition Morey intervals. RTs are equal-weight participant geometric means, normalized over all five log-RT stages before back-transformation. Answered RTs below 200 ms are excluded from all behavioural outcomes. Accuracy timeouts count as incorrect. RT tests use the saved log-RT model; no between-group comparison is inferred from Morey interval overlap. RT brackets include P1-manual pre, P2-P1, P3-P2, and manual post-manual pre.",
     bind_rows(mutate(manual$summary,panel = "Manual accuracy"),mutate(rt$summary,panel = "Correct RT")),
     bind_rows(mutate(manual$participants,panel = "Manual accuracy"),mutate(rt$participants,panel = "Correct RT")))
 

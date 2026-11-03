@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from participant_qc.core import (CATEGORIES, REQUIRED, SEGMENTS, analyse,
-    choose_comparators, exclusion_summary, load_config, load_trials, scope_metrics, screen,
+    choose_comparators, display_id, exclusion_summary, identity_corrections, load_config, load_trials, scope_metrics, screen,
     validate_person, wilson)
 from participant_qc.run_qc import check_destination
 
@@ -29,7 +29,7 @@ def fixture(pid=1):
             reliable = .7 if p == 2 else .95
             advice_correct = (t-lo) % 20 < round(20*reliable)
             row = dict.fromkeys(REQUIRED, "")
-            row.update(participant_id=pid, run_timestamp="20260101_120000", block=block, block_idx=b,
+            row.update(participant_id=str(pid), source_participant_id=pid, run_timestamp="20260101_120000", block=block, block_idx=b,
                 trial=t-{1:0,2:300,3:500,4:1700}[b], global_trial=t,
                 calibration_target_group=group, calibration_target_accuracy=target,
                 main_block_order="SPLIT_MANUAL", manual_segment=phase if b in (2,4) else "",
@@ -119,11 +119,11 @@ class ParticipantQCTests(unittest.TestCase):
         incomplete = fixture(13); incomplete.pop(599)
         result = analyse(parsed(first+second+fixture(9)+incomplete),self.cfg)
         summary = exclusion_summary(result)
-        self.assertEqual(summary["participant_ids"],[1,5])
+        self.assertEqual(summary["participant_ids"],["1","5"])
         self.assertEqual(summary["unique_flagged_n"],2)
         self.assertEqual(summary["unique_flagged_percent"],50)
         self.assertEqual(summary["remaining_if_applied_n"],2)
-        self.assertEqual(summary["incomplete_assessment_ids"],[13])
+        self.assertEqual(summary["incomplete_assessment_ids"],["13"])
         self.assertEqual([r["participant_n"] for r in summary["overlap"]],[1,1,0])
         self.assertEqual(result["summaries"][0]["n_flagged_rules"],3)
         self.assertEqual(result["summaries"][0]["n_exclusion_rules"],2)
@@ -152,7 +152,7 @@ class ParticipantQCTests(unittest.TestCase):
         self.assertEqual(summary["participant_ids"],[])
         self.assertEqual(summary["remaining_if_applied_n"],1)
         self.assertEqual(summary["diagnostic_rule_counts"],{"manual_target":1})
-        self.assertEqual(summary["diagnostic_only_participant_ids"],[1])
+        self.assertEqual(summary["diagnostic_only_participant_ids"],["1"])
 
     def test_anticipatory_joint_rule_and_rt_boundary(self):
         raw = fixture()
@@ -199,6 +199,23 @@ class ParticipantQCTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"Duplicate"): parsed(raw+[raw[0]])
         raw[-1]["run_timestamp"] = "20260102_120000"
         with self.assertRaisesRegex(ValueError,"multiple runs"): parsed(raw)
+
+    def test_duplicate_labels_keep_recorded_allocation(self):
+        rows = []
+        for (source, stamp), analysis_id in identity_corrections().items():
+            if source != 75:
+                continue
+            run = fixture(source)
+            for row in run:
+                row.update(participant_id=analysis_id, run_timestamp=stamp)
+            rows.extend(run)
+        people = parsed(rows)
+        self.assertEqual(set(people), {"75a", "75b"})
+        self.assertFalse(analyse(people, self.cfg)["issues"])
+        self.assertEqual(display_id("75b"), "075b")
+        rows[0]["source_participant_id"] = 76
+        with self.assertRaisesRegex(ValueError, "Inconsistent"):
+            parsed(rows)
 
     def test_missing_schema_and_empty_input_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -249,7 +266,7 @@ class ParticipantQCTests(unittest.TestCase):
         result=analyse(parsed(fixture(1)+fixture(5)+fixture(9)),self.cfg)
         result["summaries"][0]["anticipatory"]="flag"
         matches=choose_comparators(result)
-        self.assertEqual(matches[0]["comparator"],5)
+        self.assertEqual(matches[0]["comparator"],"5")
         self.assertEqual(matches[0]["ranked_candidates"][0]["score"],0)
         for s in result["summaries"]: s["anticipatory"]="flag"
         self.assertIsNone(choose_comparators(result)[0]["comparator"])

@@ -73,7 +73,7 @@ perf_plot <- function(value, manual=FALSE) {
     scale_x_continuous(breaks=if(manual) 1:2 else 1:5,labels=if(manual) c("Manual pre","Manual post") else stage_labels,expand=expansion(add=.3)) +
     scale_y_continuous(expand=expansion(mult=c(.1,.15))) + theme_findings() +
     labs(title=if(percent) "Accuracy across the session" else "Correct-response times across the session",
-      subtitle=if(percent) "All experimental trials; timeouts count as incorrect." else "Arithmetic participant means; inferential comparisons use log RT.",
+      subtitle=if(percent) "Responses <200 ms excluded; timeouts count as incorrect." else "Correct responses >=200 ms; inferential comparisons use log RT.",
       y=if(percent) "Accuracy (%)" else "Mean correct RT (s)", caption=desc_caption)
 }
 effect_data <- function(d) d %>% mutate(
@@ -220,7 +220,7 @@ writeLines(c('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="v
   '<header><h1>Dynamic reliability: behavioural figures</h1>',
   sprintf('<p>%d participants. CAL65 is blue; CAL90 is orange. Open diamonds show mixed-model estimates; filled circles show participant sensitivity estimates.</p>',N),
   '<p>All hypotheses were specified after data collection. Convergence alone does not establish model adequacy; read participant sensitivities alongside mixed-model estimates. Confidence intervals are pointwise.</p>',
-  '<p><a href="presentation/index.html">Revised H1-H7 report: 11 core pages with matched SDT views and cohort sensitivities</a>. Click any historical supporting figure below for its full-resolution PNG or PDF. Numerical panel data are in the <a href="data/">data folder</a>.</p></header><main>',
+  '<p>Answered RT &lt;200 ms is excluded from all behavioural outcomes; timeouts remain in accuracy. <a href="presentation/index.html">Revised H1-H7 report: 12 core pages with matched SDT views and cohort sensitivities</a>. Click any supporting figure below for its full-resolution PNG or PDF. Numerical panel data are in the <a href="data/">data folder</a>.</p></header><main>',
   cards,'</main></html>'),file.path(out,"index.html"))
 if (!components_only) {
   source(file.path(root,"plot_dynamic_reliability_slides.R"))

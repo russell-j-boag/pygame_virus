@@ -16,7 +16,7 @@ bad <- raw; bad$correct[1] <- !as.logical(bad$correct[1])
 fails(prepare_trials(bad),"correctness disagrees")
 fails(prepare_trials(bind_rows(raw,raw[1,])),"Duplicate trial keys")
 bad <- raw; bad$run_timestamp <- "20990101_010101"
-fails(prepare_trials(bind_rows(raw,bad)),"duplicate participant runs")
+fails(prepare_trials(bind_rows(raw,bad)),"duplicate participant run")
 fails(prepare_trials(raw[-501,]),"Incomplete global")
 bad <- raw; bad$reliability_phase_label[501] <- "P2_70"
 fails(prepare_trials(bad),"phase metadata")

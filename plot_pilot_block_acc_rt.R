@@ -24,6 +24,8 @@ fontconfig_cache <- file.path(tempdir(), "fontconfig-cache")
 dir.create(fontconfig_cache, recursive = TRUE, showWarnings = FALSE)
 Sys.setenv(XDG_CACHE_HOME = fontconfig_cache)
 
+display_id <- function(x) paste0(sprintf("%03d", as.integer(sub("[a-z]+$", "", x))),
+  sub("^[0-9]+", "", x))
 args <- commandArgs(trailingOnly = TRUE)
 
 INPUT_PATH <- if (length(args) >= 1) args[[1]] else "output/pilot_harry"
@@ -226,7 +228,7 @@ observed_phase <- function(block, manual_segment, reliability_phase_label) {
 prepare_trial_data <- function(dat) {
   dat <- dat %>%
     mutate(
-      participant_id = suppressWarnings(as.integer(participant_id)),
+      participant_id = as.character(participant_id),
       trial = suppressWarnings(as.integer(trial)),
       rt_s = suppressWarnings(as.numeric(rt_s)),
       delta_stair_realised = suppressWarnings(as.numeric(delta_stair_realised)),
@@ -394,7 +396,7 @@ make_participant_aid_correctness_summary <- function(dat) {
 prepare_slider_data <- function(dat) {
   out <- dat %>%
     mutate(
-      participant_id = suppressWarnings(as.integer(participant_id)),
+      participant_id = as.character(participant_id),
       response_percent = suppressWarnings(as.numeric(response_percent)),
       calibration_target_accuracy = suppressWarnings(
         as.numeric(calibration_target_accuracy)
@@ -1669,13 +1671,13 @@ written <- character(0)
 
 if (PLOT_MODE %in% c("single", "cohort")) {
   for (pid in participant_ids) {
-    pid_prefix <- sprintf("p%03d", pid)
+    pid_prefix <- paste0("p", display_id(pid))
     participant_dir <- if (PLOT_MODE == "single") {
       OUTPUT_DIR
     } else {
       file.path(OUTPUT_DIR, "individual", pid_prefix)
     }
-    participant_label <- paste("Participant", sprintf("%03d", pid))
+    participant_label <- paste("Participant", display_id(pid))
     calibration_pid <- trial_dat %>%
       filter(participant_id == pid, block == "CALIBRATION")
     observed_pid <- participant_observed %>% filter(participant_id == pid)

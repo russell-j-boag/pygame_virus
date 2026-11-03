@@ -14,7 +14,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 import numpy as np
 
-from participant_qc.core import CATEGORIES, SCOPES, SEGMENTS, exclusion_summary
+from participant_qc.core import display_id, CATEGORIES, SCOPES, SEGMENTS, exclusion_summary
 
 BLUE, FAST, NEG, GREY = "#236B8E", "#E18422", "#B42042", "#7E8790"
 GROUP_COLORS = {"CAL65": BLUE, "CAL90": "#CE6A16"}
@@ -94,7 +94,7 @@ def trace_figure(selected, people, result, cfg, by_id, references, pools, compar
         rows, s = people[pid], overall[pid]
         center = (axs[0,col].get_position().x0+axs[0,col].get_position().x1)/2
         flagged = summaries[pid]["anticipatory"] == "flag"
-        label = f"Participant {pid:03d} | {s['calibration_target_group']}" + (" | comparator" if pid == comparator else "")
+        label = f"Participant {display_id(pid)} | {s['calibration_target_group']}" + (" | comparator" if pid == comparator else "")
         fig.text(center,.894,label,ha="center",fontsize=13.5,fontweight="bold",color=NEG if flagged else BLUE)
         fig.text(center,.865,f"Experimental <{threshold_ms:g} ms: {s['n_fast']}/{s['n_trials']} ({percent(s['fast_fraction'])}) | nonpositive: {s['n_nonpositive_rt']}",ha="center",fontsize=9.8)
         note = " | INTEGRITY REVIEW" if summaries[pid]["n_not_assessable"] else ""
@@ -166,7 +166,7 @@ def screening_figure(result):
     for ax,indices in zip(axs[0],chunks):
         matrix=np.array([[{"clear":0,"flag":1,"not_assessable":2}[people[i][c]] for c in CATEGORIES] for i in indices])
         ax.imshow(matrix,cmap=cmap,vmin=0,vmax=2,aspect="auto")
-        ax.set_yticks(range(len(indices))); ax.set_yticklabels([f"{people[i]['participant_id']:03d}  {people[i]['calibration_target_group']}" for i in indices],fontsize=8)
+        ax.set_yticks(range(len(indices))); ax.set_yticklabels([f"{display_id(people[i]['participant_id'])}  {people[i]['calibration_target_group']}" for i in indices],fontsize=8)
         ax.set_xticks(range(len(CATEGORIES))); ax.set_xticklabels(CATEGORY_LABELS,fontsize=9)
         ax.tick_params(length=0)
         for y,row in enumerate(matrix):
@@ -197,7 +197,7 @@ def calibration_figure(result,cfg):
             pick=[i for i,p in enumerate(ids) if (p,scope) in flagged]
             ax.scatter(xx[pick],np.array(yy)[pick],facecolors="none",edgecolors=NEG,s=72,linewidths=.9,zorder=4)
         ax.set_title(f"{group} | target {100*target:g}% | n = {len(ids)}",loc="left",fontweight="bold")
-        ax.set_xticks(range(len(ids)));ax.set_xticklabels([f"{p:03d}" for p in ids],rotation=90,fontsize=8)
+        ax.set_xticks(range(len(ids)));ax.set_xticklabels([f"{display_id(p)}" for p in ids],rotation=90,fontsize=8)
         ax.set_ylim(0,103);ax.set_ylabel("Accuracy (%)"); ax.set_xlabel("Participant")
         ax.spines[["top","right"]].set_visible(False);ax.grid(axis="y",color="#EFF2F4")
     handles,labels=axs[0].get_legend_handles_labels()
@@ -219,7 +219,7 @@ def chance_figure(result,cfg):
         matrix=np.array([[lookup[people[i]["participant_id"],s[0]]["accuracy"] if lookup[people[i]["participant_id"],s[0]]["accuracy"] is not None else np.nan for s in SCOPES] for i in indices])
         ax.imshow(matrix,cmap=cmap,vmin=0,vmax=1,aspect="auto")
         ax.set_xticks(range(len(SCOPES)));ax.set_xticklabels(labels,rotation=45,ha="right",fontsize=8)
-        ax.set_yticks(range(len(indices)));ax.set_yticklabels([f"{people[i]['participant_id']:03d}" for i in indices],fontsize=8);ax.tick_params(length=0)
+        ax.set_yticks(range(len(indices)));ax.set_yticklabels([f"{display_id(people[i]['participant_id'])}" for i in indices],fontsize=8);ax.tick_params(length=0)
         for y,row in enumerate(matrix):
             for x,value in enumerate(row):
                 ax.text(x,y,"?" if np.isnan(value) else f"{100*value:.0f}",ha="center",va="center",fontsize=6.8,color="white" if value>.7 else "#243746")
@@ -243,7 +243,7 @@ def cohort_figure(result,cfg,comparisons):
     values=[100*overall[s["participant_id"]]["fast_fraction"] if overall[s["participant_id"]]["fast_fraction"] is not None else np.nan for s in rank]
     ax.bar(range(len(rank)),values,color=colors,width=.82)
     ax.axhline(100*cfg["fast_fraction_min"],ls="--",color=NEG,lw=1)
-    ax.set_xticks(range(len(rank)));ax.set_xticklabels([f"{s['participant_id']:03d}" for s in rank],rotation=90,fontsize=7)
+    ax.set_xticks(range(len(rank)));ax.set_xticklabels([f"{display_id(s['participant_id'])}" for s in rank],rotation=90,fontsize=7)
     ax.set_ylabel(f"Experimental responses <{ms:g} ms (%)");ax.set_xlabel("Participant, ranked by fast-response proportion")
     ax.set_title("A. Whole experimental session",loc="left",fontweight="bold")
     ax.spines[["top","right"]].set_visible(False);ax.grid(axis="y",color="#E8ECEF");ax.set_axisbelow(True)
@@ -252,14 +252,14 @@ def cohort_figure(result,cfg,comparisons):
     matrix=np.array([[100*lookup[p,s[0]]["fast_fraction"] if lookup[p,s[0]]["fast_fraction"] is not None else np.nan for s in SEGMENTS] for p in selected])
     ax.imshow(matrix,cmap="YlOrRd",vmin=0,vmax=100,aspect="auto")
     ax.set_xticks(range(6));ax.set_xticklabels([s[1].replace(" ","\n",1) for s in SEGMENTS],fontsize=9)
-    ax.set_yticks(range(len(selected)));ax.set_yticklabels([f"{p:03d}" for p in selected]);ax.set_title("B. Phase-specific fast-response proportions",loc="left",fontweight="bold",pad=12)
+    ax.set_yticks(range(len(selected)));ax.set_yticklabels([f"{display_id(p)}" for p in selected]);ax.set_title("B. Phase-specific fast-response proportions",loc="left",fontweight="bold",pad=12)
     for i,row in enumerate(matrix):
         for j,v in enumerate(row):ax.text(j,i,"?" if np.isnan(v) else f"{v:.1f}%",ha="center",va="center",fontsize=9,color="white" if v>65 else "#243746")
     ax.tick_params(length=0)
     ax=fig.add_subplot(grid[1,1])
     for i,p in enumerate(selected):
         yy=[100*overall[p][f"fraction_rt_lt_{t}ms"] if overall[p][f"fraction_rt_lt_{t}ms"] is not None else np.nan for t in cfg["sensitivity_thresholds_ms"]]
-        ax.plot(cfg["sensitivity_thresholds_ms"],yy,marker="o",lw=1.5,label=f"{p:03d}",color=plt.get_cmap("tab10")(i%10))
+        ax.plot(cfg["sensitivity_thresholds_ms"],yy,marker="o",lw=1.5,label=f"{display_id(p)}",color=plt.get_cmap("tab10")(i%10))
     ax.set_title("C. Sensitivity to the descriptive RT threshold",loc="left",fontweight="bold",pad=12)
     ax.set_xlabel("RT threshold (ms), including nonpositive RTs");ax.set_ylabel("Experimental responses below threshold (%)")
     ax.set_xticks(cfg["sensitivity_thresholds_ms"]);ax.set_ylim(bottom=-1);ax.grid(color="#E8ECEF")
@@ -281,11 +281,11 @@ def generate_plots(people,result,cfg,comparisons,out):
     individuals=[];comparison_pages=[]
     with PdfPages(out/"all_individual_diagnostics.pdf") as pdf:
         for pid in people:
-            stem=f"individual/p{pid:03d}_diagnostics"
+            stem=f"individual/p{display_id(pid)}_diagnostics"
             fig=trace_figure([pid],people,result,cfg,by_id,references,pools)
             save_pair(fig,out,stem);pdf.savefig(fig);plt.close(fig)
             individuals.append(dict(participant_id=pid,stem=stem))
-            print(f"Rendered participant {pid:03d}",flush=True)
+            print(f"Rendered participant {display_id(pid)}",flush=True)
     if comparisons:
         with PdfPages(out/"anticipatory_comparisons.pdf") as pdf:
             page=0

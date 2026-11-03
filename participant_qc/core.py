@@ -5,6 +5,7 @@ No inclusion decisions, trial removal, or hypothesis-model fitting occur here.
 import csv
 import json
 import math
+import re
 import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -27,13 +28,39 @@ CATEGORIES = ["calibration_target", "manual_target",
 EXCLUSION_CATEGORIES = ["calibration_target", "near_chance_or_worse", "anticipatory"]
 DIAGNOSTIC_CATEGORIES = ["manual_target"]
 REQUIRED = {
-    "participant_id", "run_timestamp", "block", "block_idx", "trial", "global_trial",
+    "participant_id", "source_participant_id", "run_timestamp", "block", "block_idx", "trial", "global_trial",
     "calibration_target_group", "calibration_target_accuracy", "main_block_order",
     "manual_segment", "reliability_phase_label", "reliability_phase_idx",
     "trial_in_reliability_phase", "aid_reliability_level", "automation_reliability_group",
     "condition_code", "key_black", "key_white", "trial_deadline_s", "stimulus",
     "response", "correct", "feedback", "rt_s", "aid_label", "aid_correct",
 }
+
+IDENTITY_FILE = Path(__file__).resolve().parents[1]/"config/participant_identity_corrections.csv"
+
+
+def display_id(value):
+    """Pad the numeric ID while preserving chronological duplicate suffixes."""
+    match = re.fullmatch(r"([0-9]+)([a-z]*)", str(value))
+    if not match:
+        raise ValueError(f"Invalid participant ID: {value}")
+    return f"{int(match[1]):03d}{match[2]}"
+
+
+def identity_corrections(path=IDENTITY_FILE):
+    with Path(path).open(newline="") as handle:
+        records = list(csv.DictReader(handle))
+    mapping, targets = {}, set()
+    for r in records:
+        key = (int(r["source_participant_id"]), r["run_timestamp"])
+        target = r["participant_id"]
+        if (key in mapping or target in targets or key[0] < 1
+                or not re.fullmatch(r"[1-9][0-9]*[a-z]*", target)
+                or not key[1] or not r["reason"]):
+            raise ValueError("Invalid or conflicting identity corrections")
+        mapping[key] = target
+        targets.add(target)
+    return mapping
 
 
 def number(value):
@@ -93,6 +120,7 @@ def wilson(k, n, level=.95):
 
 def load_trials(path):
     people, keys, globals_seen = defaultdict(list), set(), set()
+    corrections = identity_corrections()
     with Path(path).open(newline="") as handle:
         reader = csv.DictReader(handle)
         missing = REQUIRED - set(reader.fieldnames or [])
@@ -100,13 +128,16 @@ def load_trials(path):
             raise ValueError("Missing required trial columns: " + ", ".join(sorted(missing)))
         for line, raw in enumerate(reader, 2):
             row = dict(raw)
-            for key in ("participant_id", "block_idx", "trial", "global_trial"):
+            for key in ("source_participant_id", "block_idx", "trial", "global_trial"):
                 value = number(row[key])
                 if value is None or value <= 0 or value % 1:
                     raise ValueError(f"Invalid {key} at CSV line {line}")
                 row[key] = int(value)
             if empty(row["run_timestamp"]):
                 raise ValueError(f"Missing run identity at CSV line {line}")
+            source_identity = (row["source_participant_id"], row["run_timestamp"])
+            if row["participant_id"] != corrections.get(source_identity, str(row["source_participant_id"])):
+                raise ValueError(f"Inconsistent recorded and analysis participant identities at CSV line {line}")
             identity = (row["participant_id"], row["run_timestamp"])
             key = (*identity, row["block_idx"], row["trial"])
             global_key = (*identity, row["global_trial"])
@@ -121,14 +152,14 @@ def load_trials(path):
     if not people:
         raise ValueError("No trial records")
     for pid, rows in people.items():
-        if len({r["run_timestamp"] for r in rows}) != 1:
+        if len({(r["source_participant_id"], r["run_timestamp"]) for r in rows}) != 1:
             raise ValueError(f"Ambiguous multiple runs for participant {pid}; select one run explicitly")
         rows.sort(key=lambda r: r["global_trial"])
-    return dict(sorted(people.items()))
+    return dict(sorted(people.items(), key=lambda item: display_id(item[0])))
 
 
 def validate_person(rows):
-    first = rows[0]; pid = first["participant_id"]
+    first = rows[0]; pid = first["source_participant_id"]
     errors, global_errors = defaultdict(list), []
     group = "CAL65" if pid % 2 else "CAL90"
     target = .65 if pid % 2 else .9
@@ -194,7 +225,7 @@ def scope_metrics(rows, scope, label, lo, hi, cfg, errors, global_errors):
     lower, upper = wilson(k, n, cfg["interval_level"]) if assessable else (None, None)
     fl, fu = wilson(fk, nf, cfg["interval_level"]) if assessable else (None, None)
     positive = [r["rt"] for r in selected if r["answered"] and r["rt"] is not None and r["rt"] > 0]
-    m = {k: first[k] for k in ("participant_id", "run_timestamp", "calibration_target_group",
+    m = {k: first[k] for k in ("participant_id", "source_participant_id", "run_timestamp", "calibration_target_group",
                                "key_black", "key_white", "main_block_order")}
     m.update(calibration_target_accuracy=number(first["calibration_target_accuracy"]),
         scope=scope, scope_label=label, trial_start=lo, trial_end=hi,
@@ -231,7 +262,7 @@ def screen(m, category, cfg):
                 f"n >= {cfg['fast_count_min']}; fast accuracy <= {cfg['fast_accuracy_max']:g}")
         flagged = (f is not None and fa is not None and f >= cfg["fast_fraction_min"]-EPS
                    and m["n_fast"] >= cfg["fast_count_min"] and fa <= cfg["fast_accuracy_max"]+EPS)
-    return {**{k: m[k] for k in ("participant_id", "run_timestamp", "calibration_target_group", "scope", "scope_label",
+    return {**{k: m[k] for k in ("participant_id", "source_participant_id", "run_timestamp", "calibration_target_group", "scope", "scope_label",
         "n_trials", "accuracy", "target_difference_pp", "n_fast", "fast_fraction", "fast_accuracy", "integrity_issues")},
         "category": category, "use_for_exclusion": category in EXCLUSION_CATEGORIES, "rule": rule,
         "status": "not_assessable" if not m["assessable"] else "flag" if flagged else "clear"}
@@ -251,13 +282,13 @@ def analyse(people, cfg):
                 categories += ["manual_target"]
             person_checks.extend(screen(m, category, cfg) for category in categories)
             if not m["assessable"]:
-                issues.append({k: m[k] for k in ("participant_id", "run_timestamp", "scope", "n_trials", "n_expected", "integrity_issues")})
+                issues.append({k: m[k] for k in ("participant_id", "source_participant_id", "run_timestamp", "scope", "n_trials", "n_expected", "integrity_issues")})
         for s in SEGMENTS:
             for lo in range(s[2], s[3]+1, cfg["bin_size"]):
                 b = scope_metrics(rows, s[0], s[1], lo, lo+cfg["bin_size"]-1, cfg, errors, global_errors)
                 b["trial_midpoint"] = lo+(cfg["bin_size"]-1)/2
                 bins.append(b)
-        summary = {k: rows[0][k] for k in ("participant_id", "run_timestamp", "calibration_target_group", "calibration_target_accuracy", "key_black", "key_white", "main_block_order")}
+        summary = {k: rows[0][k] for k in ("participant_id", "source_participant_id", "run_timestamp", "calibration_target_group", "calibration_target_accuracy", "key_black", "key_white", "main_block_order")}
         for category in CATEGORIES:
             statuses = [c["status"] for c in person_checks if c["category"] == category]
             summary[category] = "flag" if "flag" in statuses else "not_assessable" if "not_assessable" in statuses else "clear"
@@ -286,18 +317,18 @@ def exclusion_summary(result):
         unique_flagged_n=n,
         unique_flagged_percent=100*n/total if total else 0,
         remaining_if_applied_n=total-n,
-        participant_ids=sorted(s["participant_id"] for s in candidates),
+        participant_ids=sorted((s["participant_id"] for s in candidates), key=display_id),
         exclusion_categories=EXCLUSION_CATEGORIES,
         diagnostic_categories=DIAGNOSTIC_CATEGORIES,
         rule_counts={c:sum(s[c] == "flag" for s in summaries) for c in EXCLUSION_CATEGORIES},
         diagnostic_rule_counts={c:sum(s[c] == "flag" for s in summaries) for c in DIAGNOSTIC_CATEGORIES},
-        rule_participant_ids={c:sorted(s["participant_id"] for s in summaries if s[c] == "flag") for c in CATEGORIES},
-        diagnostic_only_participant_ids=sorted(diagnostic_only),
+        rule_participant_ids={c:sorted((s["participant_id"] for s in summaries if s[c] == "flag"), key=display_id) for c in CATEGORIES},
+        diagnostic_only_participant_ids=sorted(diagnostic_only, key=display_id),
         diagnostic_only_n=len(diagnostic_only),
         overlap=[dict(n_rules=k, participant_n=sum(s["n_exclusion_rules"] == k for s in candidates),
-                      participant_ids=sorted(s["participant_id"] for s in candidates if s["n_exclusion_rules"] == k))
+                      participant_ids=sorted((s["participant_id"] for s in candidates if s["n_exclusion_rules"] == k), key=display_id))
                  for k in range(1,len(EXCLUSION_CATEGORIES)+1)],
-        incomplete_assessment_ids=sorted(incomplete),
+        incomplete_assessment_ids=sorted(incomplete, key=display_id),
         exclusions_applied=False,
         note="Union of participants meeting calibration, near-chance, or anticipatory exclusion criteria; repeated scopes count once. "
              "Manual target deviation is diagnostic only and never contributes to the exclusion total. "
@@ -323,7 +354,7 @@ def choose_comparators(result):
                 centers[key] = statistics.median(overall[p][key] for p in pool)
                 scales[key] = statistics.median(abs(overall[p][key]-centers[key]) for p in pool)
         ranked = sorted([{"participant_id": p, "score": sum(abs(overall[p][k]-centers[k])/scales[k] for k in centers if scales[k] > EPS)} for p in pool], key=lambda r: (r["score"], r["participant_id"]))
-        output.append(dict(group=match[0], key_black=match[1], key_white=match[2], targets=sorted(targets),
+        output.append(dict(group=match[0], key_black=match[1], key_white=match[2], targets=sorted(targets, key=display_id),
             comparator=ranked[0]["participant_id"] if ranked else None, ranked_candidates=ranked,
             centers=centers, median_absolute_deviations=scales,
             note="Zero-MAD metrics contribute zero distance; ties use participant ID." if ranked else "No complete, non-anticipatory-flagged matching comparator available."))

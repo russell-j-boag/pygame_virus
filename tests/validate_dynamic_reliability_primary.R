@@ -22,7 +22,8 @@ results <- read(file.path(primary,"contrasts.csv"));registry <- read(file.path(r
 inputs <- read(file.path(primary,"input_checksums.csv"))
 raw <- read(inputs$path[basename(inputs$path)=="data_virus_all.csv"][1])
 qc <- read(inputs$path[basename(inputs$path)=="participant_summary.csv"][1])
-excluded <- qc$participant_id[qc$calibration_target=="flag" | qc$near_chance_or_worse=="flag" | qc$anticipatory=="flag"]
+policy <- read(file.path(root,"config/participant_exclusions.csv"))
+excluded <- policy$participant_id
 stopifnot(setequal(bundle$membership$participant_id,unique(raw$participant_id)),
   setequal(bundle$membership$participant_id[!bundle$membership$in_primary],excluded),
   all(qc$participant_id[qc$manual_target=="flag" & !qc$exclude_by_rules] %in% bundle$membership$participant_id[bundle$membership$in_primary]))
@@ -36,8 +37,14 @@ trial <- filter(raw,block!="CALIBRATION") %>% mutate(group=calibration_target_gr
   accuracy=as.numeric(answered & response==stimulus),agreement=ifelse(block=="AUTOMATION" & answered,as.numeric(response==aid_label),NA_real_),
   advice=ifelse(block=="AUTOMATION",ifelse(aid_label==stimulus,"Correct","Incorrect"),NA_character_),
   progress=(trial_in_reliability_phase-1)/399,x=(trial_in_reliability_phase-200.5)/399,
+  excluded_fast_rt=answered & is.finite(rt_s) & rt_s<.2,
   valid_correct_rt=accuracy==1 & is.finite(rt_s) & rt_s>0,
   log_rt=ifelse(accuracy==1 & is.finite(rt_s) & rt_s>0,log(pmax(rt_s,.Machine$double.xmin)),NA_real_))
+all_trials <- trial
+trial <- filter(trial,!excluded_fast_rt)
+stopifnot(n_distinct(trial$participant_id)==93,
+  nrow(filter(trial,!participant_id %in% excluded))==137312,
+  sum(all_trials$excluded_fast_rt[!all_trials$participant_id %in% excluded])==288)
 rate <- function(k,n,co)if(co=="loglinear")(k+.5)/(n+1) else ifelse(k==0,.5/n,ifelse(k==n,1-.5/n,k/n))
 models <- new.env(parent=emptyenv())
 getmodel <- function(sample,name) {
@@ -52,13 +59,34 @@ hc3 <- function(m) {
 for(sample_name in c("primary","all_participants")) {
   ids <- bundle$membership$participant_id[if(sample_name=="primary")bundle$membership$in_primary else TRUE]
   tr <- filter(trial,participant_id %in% ids);d <- bundle$data[[sample_name]]
+  original <- filter(all_trials,participant_id %in% ids)
+  selection <- read(file.path(primary,sample_name,"trial_selection.csv"))
+  stopifnot(nrow(selection)==nrow(original),!anyDuplicated(selection[c("participant_id","global_trial")]))
+  expected <- select(original,participant_id,global_trial,rt_s,excluded_fast_rt)
+  joined <- left_join(selection,expected,by=c("participant_id","global_trial"),suffix=c("","_expected"))
+  stopifnot(identical(joined$excluded_fast_rt,joined$excluded_fast_rt_expected),
+    all(joined$included_behavioural==!joined$excluded_fast_rt),
+    all(selection$included_behavioural[selection$timeout]),
+    setequal(paste(selection$participant_id[selection$included_behavioural],selection$global_trial[selection$included_behavioural]),
+      paste(tr$participant_id,tr$global_trial)))
+  near(joined$rt_s,joined$rt_s_expected)
+  removed <- read(file.path(primary,sample_name,"trial_exclusions.csv"))
+  stopifnot(nrow(removed)==sum(original$excluded_fast_rt),all(removed$rt_s<.2))
   for(name in c("performance","task_scores","advice_scores","ratings","benchmark","task_benchmark"))
     stopifnot(setequal(d[[name]]$participant_id,ids))
   index <- filter(bundle$model_index,sample==sample_name)
   for(name in index$model) {
     m <- getmodel(sample_name,name)
-    if(inherits(m,"merMod"))stopifnot(setequal(as.integer(as.character(model.frame(m)$subject)),ids))
+    if(inherits(m,"merMod"))stopifnot(setequal(as.character(model.frame(m)$subject),ids))
     else stopifnot(nobs(m)==length(ids))
+    response_name <- all.vars(formula(m))[1]
+    if(response_name %in% c("accuracy","agreement","log_rt")) {
+      wanted <- tr
+      if("phase" %in% all.vars(formula(m)))wanted <- filter(wanted,!is.na(phase))
+      if(response_name=="agreement")wanted <- filter(wanted,answered)
+      if(response_name=="log_rt")wanted <- filter(wanted,valid_correct_rt)
+      stopifnot(nobs(m)==nrow(wanted))
+    }
   }
   # Check every saved fitted mean/curve directly against the model, not emmeans.
   for(name in names(bundle$estimates[[sample_name]])) {
@@ -117,8 +145,15 @@ for(sample_name in c("primary","all_participants")) {
     near(r$value,s$dprime[s$agent=="participant"]-s$dprime[s$agent=="aid_matched"])
   }
   raw_manifest <- read(file.path(base,"input_manifest.csv")) %>% filter(participant_id %in% ids)
-  q <- bind_rows(lapply(raw_manifest$path[raw_manifest$kind=="trust"],read))
-  sliders <- bind_rows(lapply(raw_manifest$path[raw_manifest$kind=="sliders"],read))
+  read_ratings <- function(export_kind) {
+    m <- filter(raw_manifest,.data$kind==.env$export_kind)
+    bind_rows(lapply(seq_len(nrow(m)),function(j) {
+      z <- read(m$path[j]);stopifnot(all(z$participant_id==m$source_participant_id[j]))
+      z$participant_id <- m$participant_id[j];z
+    }))
+  }
+  q <- read_ratings("trust")
+  sliders <- read_ratings("sliders")
   rr <- d$ratings %>% left_join(q %>% group_by(participant_id) %>% summarise(expected_trust=mean(response),.groups="drop"),by="participant_id") %>%
     left_join(filter(sliders,question_key=="perc_auto_correct") %>% select(participant_id,expected_perceived=response_percent),by="participant_id") %>%
     left_join(filter(tr,!is.na(phase)) %>% group_by(participant_id) %>% summarise(expected_realised=100*mean(aid_label==stimulus),.groups="drop"),by="participant_id")

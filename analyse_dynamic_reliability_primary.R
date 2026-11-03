@@ -93,7 +93,10 @@ run_dynamic_reliability_primary <- function(base, input, qc, root=DPR_ROOT) {
     mutate(stage=factor(recode(stage, PRE="Manual pre", POST="Manual post"), STAGES),
       phase=factor(ifelse(stage %in% c("P1", "P2", "P3"), as.character(stage), NA), c("P1", "P2", "P3")),
       group=factor(group, GROUPS), subject=factor(participant_id), task_bias=-criterion_c)
-  trials <- filter(original$trials, !is.na(stage))
+  trials <- filter(original$trials, !is.na(stage), included_behavioural)
+  check(setequal(paste(trials$participant_id, trials$global_trial),
+    paste(selected$trials$participant_id, selected$trials$global_trial)),
+    "Behavioural and task-SDT trial selections disagree")
   acounts <- filter(trials, !is.na(agreement)) %>% group_by(participant_id, group, phase, advice) %>%
     summarise(n_answered=n(), n_agree=sum(agreement), .groups="drop")
   pooled <- acounts %>% group_by(participant_id, group, advice) %>%
@@ -111,6 +114,14 @@ run_dynamic_reliability_primary <- function(base, input, qc, root=DPR_ROOT) {
     ids <- selected$membership$participant_id[if (sample_name=="primary") selected$membership$in_primary else TRUE]
     pick <- function(d) droplevels(filter(d, participant_id %in% ids))
     out <- file.path(stage, sample_name); dir.create(file.path(out, "models"), recursive=TRUE)
+    trial_selection <- pick(selected$trial_selection)
+    write_csv(trial_selection, file.path(out, "trial_selection.csv"))
+    write_csv(filter(trial_selection, excluded_fast_rt) %>% mutate(reason="Answered RT < 200 ms"),
+      file.path(out, "trial_exclusions.csv"))
+    write_csv(trial_selection %>% group_by(participant_id, stage) %>% summarise(
+      n_collected=n(), n_excluded_fast=sum(excluded_fast_rt),
+      n_retained=sum(included_behavioural), n_timeouts_retained=sum(timeout), .groups="drop"),
+      file.path(out, "trial_selection_summary.csv"))
     cached <- if (sample_name=="primary") file.path(base, "hypothesis_components/primary/analysis") else base
     if (dir.exists(cached))historical_sources <- bind_rows(historical_sources,dpr_verify_historical(cached,root))
     z <- dpr_analyse_sample(pick(trials), pick(scores), pick(advice), pick(ratings), out, cached, sample_name,if(!is.null(trend_cache))trend_cache$path else NULL)

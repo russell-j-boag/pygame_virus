@@ -17,6 +17,7 @@ dynamic_prepare_cohorts <- function(base, input, qc, root) {
   # The saved behavioural fits and current collation must describe identical runs/trials.
   raw <- readr::read_csv(input, show_col_types = FALSE)
   original <- dplyr::bind_rows(lapply(manifest$path[manifest$kind == "trials"], readr::read_csv, show_col_types = FALSE))
+  original <- apply_participant_identity(original)
   keys <- c("participant_id", "run_timestamp", "global_trial")
   columns <- c(keys, "block", "stimulus", "response", "aid_label", "correct", "rt_s",
     "calibration_target_group", "calibration_target_accuracy", "key_black", "key_white",
@@ -44,11 +45,9 @@ dynamic_prepare_cohorts <- function(base, input, qc, root) {
       archive <- file.path(components, "archive"); dir.create(archive, showWarnings = FALSE)
       stopifnot(file.rename(primary, tempfile("primary_analysis_", tmpdir = archive)))
     }
-    selected <- manifest[manifest$participant_id %in% membership$participant_id[membership$in_primary], ]
-    selection <- file.path(components, "primary", "selected_raw")
-    if (dir.exists(selection)) unlink(selection, recursive = TRUE)
-    dir.create(selection, recursive = TRUE)
-    stopifnot(all(file.symlink(selected$path, file.path(selection, basename(selected$path)))))
+    selection <- file.path(dirname(input), "clean")
+    stopifnot(file.exists(file.path(selection, "cohort_selection.csv")))
+    dir.create(dirname(primary), recursive = TRUE, showWarnings = FALSE)
     log <- file.path(components, "primary", "fit.log")
     message("Fitting QC-retained behavioural cohort: ", sum(membership$in_primary), " participants. Log: ", log)
     status <- system2(file.path(R.home("bin"), "Rscript"),

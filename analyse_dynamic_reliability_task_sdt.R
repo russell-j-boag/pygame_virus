@@ -3,6 +3,14 @@
 suppressPackageStartupMessages({
   library(dplyr); library(tidyr); library(readr); library(ggplot2); library(patchwork)
 })
+.task_files <- Filter(Negate(is.null), lapply(sys.frames(), function(x) x$ofile))
+.task_file <- if (length(.task_files)) tail(.task_files, 1)[[1]] else
+  sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1])
+TASK_ROOT <- dirname(normalizePath(.task_file))
+source(file.path(TASK_ROOT, "R/participant_identity.R"))
+source(file.path(TASK_ROOT, "R/participant_selection.R"))
+source(file.path(TASK_ROOT, "R/behavioural_trial_selection.R"))
+rm(.task_files, .task_file)
 task_check <- function(ok, message) if (!isTRUE(ok)) stop(message, call. = FALSE)
 task_sha <- function(path) digest::digest(file = path, algo = "sha256")
 task_hashes <- function(paths) tibble(path = normalizePath(paths, mustWork = TRUE),
@@ -39,7 +47,7 @@ task_read_inputs <- function(input, qc) {
     all(selected == people$exclude_by_rules) &&
     setequal(people$participant_id[selected], unlist(summary$participant_ids)) &&
     sum(selected) == summary$unique_flagged_n, "QC union and participant decisions disagree")
-  raw <- read_csv(input, show_col_types = FALSE)
+  raw <- read_identity_csv(input)
   required <- c("participant_id", "run_timestamp", "calibration_target_group", "calibration_target_accuracy",
     "key_black", "key_white", "main_block_order", "manual_segment", "reliability_phase_label",
     "automation_reliability_group", "block", "global_trial", "stimulus", "response", "aid_label", "aid_correct", "correct", "rt_s")
@@ -49,7 +57,7 @@ task_read_inputs <- function(input, qc) {
     all(raw$stimulus %in% c("BLACK", "WHITE")) &&
     all(raw$response %in% c("BLACK", "WHITE", "TIMEOUT")) &&
     all(raw$block %in% c("CALIBRATION", "MANUAL", "AUTOMATION")), "Invalid or duplicate trial identities/labels")
-  metadata <- raw %>% distinct(participant_id, run_timestamp, calibration_target_group,
+  metadata <- raw %>% distinct(participant_id, source_participant_id, run_timestamp, calibration_target_group,
     calibration_target_accuracy, key_black, key_white, main_block_order)
   task_check(!anyDuplicated(metadata$participant_id) && !anyNA(metadata) &&
     setequal(metadata$participant_id, people$participant_id) &&
@@ -83,9 +91,28 @@ task_read_inputs <- function(input, qc) {
     all(aided$aid_correct == (aided$aid_label == aided$stimulus)) &&
     all(aided$automation_reliability_group == ifelse(aided$stage == "P2", "low", "high")),
     "Invalid aid labels/correctness/reliability metadata")
-  membership <- metadata %>% left_join(select(people, participant_id, exclude_by_rules, exclusion_reasons,
-      manual_target), by = "participant_id") %>% mutate(in_primary = !exclude_by_rules, in_all_participants = TRUE)
-  list(trials = trials, membership = membership, inputs = unique(consumed))
+  # QC remains the all-collected audit. Primary membership comes from the same
+  # reviewed, run-specific decisions as the participant-clean data export.
+  policy <- file.path(TASK_ROOT, "config/participant_exclusions.csv")
+  membership <- select_reviewed_participants(metadata, policy) %>%
+    left_join(select(people, participant_id, exclude_by_rules, exclusion_reasons,
+      manual_target), by = "participant_id") %>% mutate(in_primary = included, in_all_participants = TRUE)
+  clean_dir <- file.path(dirname(input), "clean")
+  clean_paths <- file.path(clean_dir, c("data_virus_all.csv", "cohort_selection.csv", "input_checksums.csv"))
+  hashes <- read_csv(clean_paths[3], show_col_types = FALSE)
+  task_check(identical(unname(tools::md5sum(hashes$path)), hashes$md5), "Clean-data inputs changed; rerun prepare_clean_data.R")
+  clean <- read_identity_csv(clean_paths[1])
+  expected <- filter(raw, participant_id %in% membership$participant_id[membership$in_primary])
+  task_check(isTRUE(all.equal(clean, expected, check.attributes = FALSE, tolerance = 1e-12)),
+    "Clean export and primary participant selection disagree")
+  consumed <- c(consumed, clean_paths, policy, IDENTITY_CORRECTIONS_FILE,
+    file.path(TASK_ROOT, c("R/participant_identity.R", "R/participant_selection.R", "R/behavioural_trial_selection.R")))
+  trials <- mark_behavioural_trials(mutate(trials, timeout = !answered))
+  selection <- select(trials, participant_id, source_participant_id, run_timestamp,
+    global_trial, block_idx, trial, stage, response, rt_s, timeout,
+    excluded_fast_rt, included_behavioural)
+  list(trials = filter(trials, included_behavioural), trial_selection = selection,
+    membership = membership, inputs = unique(consumed))
 }
 
 task_confusion <- function(d, agent) {
@@ -267,7 +294,7 @@ task_figures <- function(sample_name, summaries, performance_summary, results, s
   p <- task_line(filter(d, outcome == "dprime"), task_stages, "Final-response discrimination", "Task d-prime") +
     task_line(filter(d, outcome == "criterion_c"), task_stages, "Colour-response criterion", "Criterion c (positive = WHITE bias)") +
     plot_layout(guides = "collect") + task_annotation("Task SDT across the full experimental sequence", sample_label,
-      paste(mean_note, "\nAnswered trials, all RTs; loglinear correction. Aided d-prime reflects the participant + aid system.",
+      paste(mean_note, "\nAnswered trials with RT >=200 ms; loglinear correction. Aided d-prime reflects the participant + aid system.",
         "\nCriterion concerns BLACK/WHITE responses, not advice reliance.", limits_note))
   save("01_task_sdt_sequence", p, "Task SDT across the full experimental sequence", d)
   specs <- list(
@@ -294,7 +321,7 @@ task_figures <- function(sample_name, summaries, performance_summary, results, s
   p <- task_line(filter(perf, outcome == "accuracy"), task_stages, "Accuracy on all trials", "Accuracy (%)") +
     task_line(filter(perf, outcome == "timeout_rate"), task_stages, "Timeouts on all trials", "Timeouts (%)") +
     plot_layout(guides = "collect") + task_annotation("Accuracy and missing-response context", sample_label,
-      paste(mean_note, "\nTimeouts count as incorrect for accuracy and are excluded from SDT. No RT-based trial trimming.",
+      paste(mean_note, "\nResponses <200 ms excluded. Timeouts count as incorrect for accuracy and are excluded from SDT.",
         "\nIntervals are on the unbounded percentage scale; small negative timeout limits are possible.\n", limits_note))
   save("07_accuracy_timeouts", p, "Accuracy and missing-response context", perf)
   cairo_pdf(file.path(folder, "task_sdt_figures.pdf"), width = 12, height = 6.75, onefile = TRUE)
@@ -309,7 +336,7 @@ task_notes <- function() c(
   "Primary: participants retained by the three QC rules; manual target deviation remains diagnostic only. All participants provide a separate sensitivity analysis.",
   "QC was chosen retrospectively and includes performance after aid exposure. Selection can change group comparisons; inspect the all-participant sensitivity alongside the primary results.",
   "Manual pre/post are 200 trials; each aided phase is 400. Adaptive calibration is not a performance baseline. Equal participant weights.",
-  "SDT includes all answered trials regardless of RT; timeouts are excluded, never coded as WHITE. All-trial accuracy counts timeouts as incorrect. No trial-level RT trimming.",
+  "Answered RT <200 ms is excluded from all behavioural outcomes. SDT uses retained answered trials; timeouts are excluded, never coded as WHITE. Accuracy retains timeouts as incorrect. Exactly 200 ms is eligible and original trial positions are unchanged.",
   "Loglinear correction (k+0.5)/(n+1) in every rate; extreme-only sensitivity substitutes 0.5/n or 1-0.5/n only for zero/one rates. Both stimulus classes must be present.",
   "Aid-matched SDT uses the same answered trials as participant SDT for paired benchmarks. Aid-all SDT additionally describes every aided trial, including participant timeouts.",
   "Manual-benefit family: P1-PRE, P2-PRE, P3-PRE. Reliability family: P2-P1 (H1 complement), P3-P2 and P3-P1 (H3 complements).",

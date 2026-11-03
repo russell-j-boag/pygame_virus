@@ -3,6 +3,109 @@
 Experimental task built in Pygame for studying decision-making and automation use.
 Based on Bartlett & McCarley RDC task.
 
+## Collection refresh: 3 November 2026
+
+`output/semester2_2026_data/` now contains **93 complete collected runs** across
+89 recorded IDs. The replacements for 23, 49 and 51 were recovered from the
+Week 14 PC2 data ZIP in Downloads: all 39 source files were copied unchanged.
+Replacement 75 was already present. Replacements for **65 and 79 are pending**
+confirmation from the RA; the original runs remain in the collected data.
+The import receipt is `analysis_outputs/data_refresh_20261103/download_import_manifest.csv`.
+
+The four combined CSVs in `data/` retain every collected run: **176,700 trial
+rows, 558 trust-item rows and 372 slider rows**. Duplicate recorded IDs are
+labelled oldest to newest as `23a/23b`, `49a/49b`, `51a/51b` and `75a/75b`.
+`config/participant_identity_corrections.csv` records the timestamp-specific
+mapping. `source_participant_id` preserves the recorded ID and administered
+allocation. Original source files are unchanged. Historical trust files without
+a timestamp column obtain `run_timestamp` from their exact same-run filename.
+Collation matches all three export families by run and rejects unresolved ID
+collisions; it no longer selects one run by modification time.
+
+**Behavioural and modelling input:** `data/clean/` contains the same four CSVs
+after the seven reviewed participant exclusions: `23a`, `49a`, `51a`, `65`,
+`75a`, `79` and `81`. This retains **86 participants** (42 CAL65, 44 CAL90),
+163,400 trial rows, 516 trust-item rows and 344 slider rows. Selection uses the
+analysis ID, recorded ID and timestamp together, so exclusions of the original
+participants cannot remove their replacements. `config/participant_exclusions.csv`
+is the decision register; `clean/cohort_selection.csv`, `clean/exclusions.csv`
+and the input manifests/checksums provide the audit trail. All trials belonging
+to retained participants are preserved, including calibration, timeouts and
+historical nonpositive RTs. The participant-clean exporter does not trim trials;
+the behavioural analysis applies the separate RT rule below.
+
+**Calibration and anticipatory diagnostics use all 93 collected runs**, including
+the excluded originals and replacements. The unchanged QC rules flag the same
+seven original participants: six near-chance, five anticipatory and zero
+calibration-target exclusions, with overlaps. Manual target deviations remain
+diagnostic only. Open `analysis_outputs/semester2_2026_qc/index.html` and
+`plots/semester2_2026_data/`. Previous combined CSVs and plot/QC bundles are
+preserved in timestamped archive directories.
+
+Reproduce the collection refresh from this repository:
+
+```sh
+Rscript collate_data.R output/semester2_2026_data data
+Rscript prepare_clean_data.R
+Rscript tests/test_participant_identity.R
+Rscript tests/validate_dynamic_reliability_collation.R
+Rscript plot_pilot_block_acc_rt.R data/data_virus_all.csv plots/semester2_2026_data semester2_2026 'Semester 2 2026' cohort data/data_virus_sliders_all.csv
+Rscript plot_calibration_manual_accuracy.R
+Rscript plot_calibration_accuracy_by_group.R
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python participant_qc/run_qc.py
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_participant_qc.py --expect-current-cohort
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_dynamic_reliability_descriptive_plots.py
+Rscript tests/validate_dynamic_reliability_clean_data.R
+```
+
+Add timestamp-specific identity mappings before collating future duplicate IDs,
+and update the snapshot assertions in the validators when the cohort grows.
+Keep existing exclusion decisions attached to their original timestamps.
+QC only audits; `prepare_clean_data.R` applies the reviewed decisions.
+
+### Behavioural refresh and 200 ms cutoff
+
+The behavioural analyses and H1–H7 hypothesis figures use **86 participants**
+(42 CAL65, 44 CAL90). Answered experimental trials with **RT <200 ms** are removed
+from every trial-based outcome: accuracy, correct RT, agreement, both SDT
+definitions, aid benchmarks, adaptation curves and behavioural rating predictors.
+Exactly 200 ms remains eligible. The cutoff removes **288 of 137,600** experimental
+trials, leaving **137,312**, including **102 timeouts**. Timeouts remain incorrect
+for accuracy and are excluded from answered-response SDT/agreement denominators.
+Original trial indices, phase centring and 100-trial bin boundaries are preserved.
+Ratings themselves are unchanged; realised aid accuracy uses the retained trials.
+
+The existing all-collected sensitivity uses the same cutoff: 93 participants,
+2,224 removed trials and 146,576 retained trials. Both cohorts keep the established
+model specifications, contrasts, quadratic H5 fits and Holm families. These are
+local behavioural mixed models, not a new cognitive-model fit.
+
+The canonical report is `plots/semester2_2026_behavioural/presentation/index.html`.
+Its 12 core and 22 total primary figures, plus 22 matched sensitivity figures,
+include refreshed versions of the historical hypothesis formulations. Earlier
+fits and reports are preserved in timestamped archives. Trial selections and
+exclusions are exported in `analysis_outputs/semester2_2026_behavioural/primary/`
+under each cohort and copied into the report's `data/analysis/` directory.
+Raw data, all-collected CSVs, participant-clean CSVs and QC plots remain untrimmed.
+
+For a full rebuild, preserve the existing analysis directory before these steps:
+
+```sh
+Rscript tests/test_behavioural_trial_selection.R
+Rscript analyse_dynamic_reliability.R output/semester2_2026_data analysis_outputs/semester2_2026_behavioural
+Rscript R/dynamic_reliability_cohorts.R
+Rscript analyse_dynamic_reliability_primary.R
+Rscript tests/validate_dynamic_reliability_primary.R --analysis-only
+Rscript plot_dynamic_reliability_hypotheses.R
+Rscript plot_dynamic_reliability_results.R analysis_outputs/semester2_2026_behavioural/hypothesis_components/primary/analysis plots/semester2_2026_behavioural --components-only
+```
+
+The standalone behavioural runner defaults to `data/clean/`; its independent
+default output is `analysis_outputs/semester2_2026_behavioural_clean/`. The unified
+workflow above keeps the all-collected and clean fits together with their matched
+sensitivity report. Primary/task-SDT membership uses the reviewed run-specific
+register and verifies agreement with the clean CSV. Stale inputs fail validation.
+
 ## Structure
 - Python experiment code in `/python`
 - Output data saved to `/output`
@@ -222,17 +325,15 @@ subjective evaluations. All hypotheses were specified **after data collection**.
 The legacy `fit_brms.R` uses obsolete aid-onset factors and must not be used for
 this design.
 
-Run from this repository:
+Use the full rebuild sequence under "Behavioural refresh and 200 ms cutoff"
+above to refit the current cohorts. To render and validate already refreshed fits,
+run from this repository:
 
 ```sh
-Rscript analyse_dynamic_reliability.R
-/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python participant_qc/run_qc.py
-Rscript analyse_dynamic_reliability_primary.R
 Rscript plot_dynamic_reliability_hypotheses.R
+Rscript plot_dynamic_reliability_results.R analysis_outputs/semester2_2026_behavioural/hypothesis_components/primary/analysis plots/semester2_2026_behavioural --components-only
 Rscript tests/validate_dynamic_reliability_primary.R
-Rscript tests/test_dynamic_reliability_analysis.R
 Rscript tests/validate_dynamic_reliability_outputs.R
-Rscript tests/validate_dynamic_reliability_slides.R
 ```
 
 Required packages: `dplyr`, `tidyr`, `readr`, `lme4`, `lmerTest`, `emmeans`,
@@ -242,9 +343,10 @@ rendered review uses `pdftoppm`. The analysis does not install packages or launc
 the participant task.
 
 The analysis accepts `[input_dir] [output_dir]`, defaulting to
-`output/semester2_2026_data` and `analysis_outputs/semester2_2026_behavioural`.
-The plotting script accepts `[analysis_dir] [plot_dir]`, defaulting to the same
-analysis directory and `plots/semester2_2026_behavioural`. Paths supplied on the
+`data/clean` and `analysis_outputs/semester2_2026_behavioural_clean`.
+The plotting script accepts `[analysis_dir] [plot_dir]`; pass the new clean
+analysis directory and a matching plot directory when plotting a new fit.
+Its defaults still open the historical `semester2_2026_behavioural` outputs. Paths supplied on the
 command line are relative to the calling directory. Generated outputs are ignored
 by Git; task exports and existing descriptive plots are not modified.
 
@@ -276,13 +378,14 @@ contrasts per outcome. Adaptation has nine accuracy and 18 agreement contrasts.
 
 ### Cohort, outcomes and models
 
-The complete cohort contains 89 participants (45 CAL65, 44 CAL90); sample size
-is discovered from exports. The unified hypothesis report applies the agreed QC
-rules for its 82-person primary sample and retains all 89 as sensitivity. Every retained run must have 300
+The complete cohort contains 93 participants (49 CAL65, 44 CAL90); sample size
+is discovered from exports. The unified hypothesis report uses the reviewed
+86-person primary sample and all 93 as sensitivity. Before RT filtering, every run must have 300
 calibration trials, 200 manual-pre trials, three 400-trial aided phases, and 200
 manual-post trials. The pipeline validates allocation, key mapping, sequence,
 trial identities, response correctness, advice correctness and rating scopes.
-Duplicate complete runs are rejected. Missing or invalid questionnaire items are
+Unresolved duplicate identities are rejected; timestamp-specific chronological labels
+distinguish the collected replacements. Missing or invalid questionnaire items are
 reported as input errors rather than silently excluding participants; resolve
 such inputs explicitly before rerunning.
 
@@ -293,11 +396,10 @@ hashes and source hashes are recorded. The base raw-data analysis retains all
 complete participants. The revised analysis runner applies the agreed QC rules to its primary cohort;
 manual target deviation never causes exclusion. Plotting consumes saved fits.
 
-- **Accuracy:** all 1,600 experimental trials per participant; timeouts count as
-  incorrect. Answered trials with invalid RT remain in accuracy and agreement.
-- **Correct RT:** correct responses with finite positive `rt_s`; log RT for
-  modelling. Sub-100-ms and beyond-deadline responses are audited, not trimmed.
-- **Agreement:** `response == aid_label` on answered aided trials, separately by
+- **Accuracy:** experimental trials remaining after excluding answered RT <200 ms;
+  timeouts count as incorrect. Historical zero and negative responses are removed.
+- **Correct RT:** correct responses with finite `rt_s >= 0.2`; log RT for modelling.
+- **Agreement:** `response == aid_label` on retained answered aided trials, separately by
   advice correctness. Timeouts are excluded from this denominator.
 - **Trust:** mean of six valid 1–5 items, once after the full aided sequence.
 - **Perceived aid error:** perceived aid accuracy minus the participant's realised
@@ -402,10 +504,10 @@ is the panel-level contract for ordering, filenames, model, outcome, exact contr
 correction family and historical sources. The report exports that contract and
 `hypothesis_mapping.csv`; it does not silently relabel historical tests as new ones.
 
-**Cohorts.** The primary sample has 82 participants (38 CAL65, 44 CAL90), excluding
-23, 49, 51, 65, 75, 79 and 81 under calibration, near-chance and anticipatory rules.
-Manual target deviation remains diagnostic. All 89 participants (45 CAL65, 44 CAL90)
-form a matched sensitivity. Membership is obtained from validated QC, not hardcoded.
+**Cohorts.** The primary sample has 86 participants (42 CAL65, 44 CAL90), excluding
+23a, 49a, 51a, 65, 75a, 79 and 81 under the reviewed run-specific decisions.
+Manual target deviation remains diagnostic. All 93 participants (49 CAL65, 44 CAL90)
+form a matched sensitivity. Both cohorts exclude answered RT <200 ms.
 All models, ratings, SDT outcomes and plots use the same cohort for each variant.
 Selection is retrospective and includes post-exposure performance; compare both samples.
 
@@ -536,8 +638,9 @@ Cap length scales with panel width and is independent of the axis range; interva
 Seven supporting pages show full-sequence context, manual pre/post comparisons
 (three tests per outcome), completion/answered accuracy, correction sensitivity,
 model/participant sensitivity, cohort sensitivity, and Phase-2 evaluation associations.
-Three historical pages retain original incorrect-agreement, recovery and rating-agreement
-plotted data and correction families; display text follows the current report order.
+Three historical pages retain the earlier incorrect-agreement, recovery and rating-agreement
+questions and correction families, recomputed for the current cohorts and RT cutoff.
+Display text follows the current report order.
 
 The independent validator reconstructs raw confusion counts, pooled scores, performance,
 benchmarks and ratings; checks model contrasts from coefficients/covariance, HC3 arithmetic,
@@ -552,8 +655,9 @@ validator; the older component validators remain available for historical compon
 
 ### Historical advice-SDT component methods
 
-The historical advice SDT analyses remain in each cohort's `hypothesis_components/`
-subdirectory, and original all-participant outputs remain in `sdt_alternates/`.
+The earlier advice SDT component analyses are preserved in the timestamped
+`analysis_outputs/semester2_2026_behavioural.previous_*/` archives. The current
+advice SDT scores and mixed-model results are in `primary/`.
 Their old H1/H3 labels and nine-test paired/Welch families are historical; revised
 H3/H4 now use the mixed models and families above. The former H4 associations used
 P2 acceptance as a predictor; revised H7 uses pooled whole-block acceptance and
@@ -565,7 +669,7 @@ or advice-caused switching, and acceptance is not necessarily excessive reliance
 ### Stimulus-based SDT: final performance with and without aid
 
 Task SDT is integrated into the revised models above. Earlier paired/Welch
-component outputs remain in `hypothesis_components/task_sdt/`; the revised model
+component outputs are preserved in the timestamped analysis archives; the revised model
 scores and tests are in `primary/` and copied to `presentation/data/analysis/`. For isolated component work the runner accepts
 `[trials_csv] [qc_dir] [analysis_dir] [plot_dir]`; the validator accepts
 `[analysis_dir] [plot_dir]`. Running the analysis entry point with no arguments
@@ -589,16 +693,16 @@ The new analysis instead uses actual stimulus classes, following
 
 The primary sample applies the **three agreed QC exclusion rules** consistently
 across the unified report; manual target deviation remains diagnostic. The current cohort
-retains 82 participants (38 CAL65, 44 CAL90), excluding IDs 23, 49, 51, 65, 75,
-79 and 81. A separate sensitivity retains all 89 (45 CAL65, 44 CAL90). Membership
-is read from the validated QC report, not hardcoded. Canonical CSVs and the original all-participant behavioural fits remain unfiltered;
+retains 86 participants (42 CAL65, 44 CAL90), excluding IDs 23a, 49a, 51a, 65, 75a,
+79 and 81. A separate sensitivity retains all 93 (49 CAL65, 44 CAL90). Membership
+uses the reviewed run-specific register and verified clean CSV. Canonical CSVs remain unfiltered;
 new retained-cohort fits and both SDT analyses are stored separately. These are
 retrospective exclusions that include post-exposure performance, so selection
 can affect comparisons; inspect both samples.
 
 Each participant receives separate scores for manual pre, the three aided
 phases, and manual post. Adaptive calibration is not a performance baseline.
-All answered trials are retained, including short, nonpositive or missing RTs.
+Answered trials with RT <200 ms are removed before constructing the SDT counts.
 Timeouts are excluded from SDT and reported separately; all-trial accuracy counts
 them as incorrect. Every rate uses the loglinear `(k + 0.5)/(n + 1)` correction,
 with the existing extreme-only correction as a sensitivity. Missing stimulus
@@ -717,7 +821,8 @@ overlaps by number of distinct exclusion criteria, plus diagnostic-only cases.
 three exclusion criteria. Repeated flags across scopes count
 once per exclusion criterion and once in the overall total. Unassessable checks remain
 separate. The QC runner itself applies no exclusions; the unified hypothesis
-analysis runner consumes its decisions for the retained primary cohort. Anticipatory plots adapt
+analysis runner uses the reviewed participant/run register and checks its selection
+against `data/clean/`, while retaining the all-collected QC audit. Anticipatory plots adapt
 `hmm_pmdc/scripts/plot_anticipatory_response_audit.py` without importing or
 modifying that repository. They preserve phase shading, RT scatter on a
 linear/log scale, fast-response and accuracy panels, and peer median/IQR bands;

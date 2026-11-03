@@ -185,7 +185,7 @@ dpr_sample_caption <- function(membership,sample) {
   members <- membership[sample=="all_participants" | membership$in_primary,]
   paste0(if(sample=="primary")"QC-retained sample" else "All-participant sensitivity",
     "; N = ",nrow(members),"; CAL65 n = ",sum(members$calibration_target_group=="CAL65"),
-    ", CAL90 n = ",sum(members$calibration_target_group=="CAL90"),".")
+    ", CAL90 n = ",sum(members$calibration_target_group=="CAL90"),". Responses <200 ms excluded.")
 }
 
 dpr_plot_build <- function(bundle,registry,out) {

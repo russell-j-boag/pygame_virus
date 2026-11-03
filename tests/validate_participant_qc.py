@@ -25,6 +25,12 @@ CATEGORIES=["calibration_target","manual_target","near_chance_or_worse","anticip
 EXCLUSION_CATEGORIES=["calibration_target","near_chance_or_worse","anticipatory"]
 
 
+def display_id(value):
+    match = re.fullmatch(r"([0-9]+)([a-z]*)", str(value))
+    assert match, value
+    return f"{int(match[1]):03d}{match[2]}"
+
+
 def read(path):
     with Path(path).open(newline="") as handle:return list(csv.DictReader(handle))
 
@@ -53,7 +59,7 @@ class Links(HTMLParser):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir",type=Path,default=ROOT/"analysis_outputs/semester2_2026_qc")
-    parser.add_argument("--expect-current-cohort",action="store_true",help="Assert the approved 89-participant snapshot, not a rule for future cohorts")
+    parser.add_argument("--expect-current-cohort",action="store_true",help="Assert the 2026-11-03 participant snapshot, not a rule for future cohorts")
     args=parser.parse_args();out=args.output_dir.resolve()
     manifest=json.loads((out/"manifest.json").read_text());cfg=json.loads((out/"config_snapshot.json").read_text())
     assert manifest["generator"]=="participant_qc" and manifest["exclusions_applied"] is False
@@ -69,11 +75,11 @@ def main():
     assert {str(p.relative_to(out)) for p in out.rglob("*") if p.is_file() and p.name not in ("manifest.json","COMPLETE.txt")}=={r["path"] for r in manifest["outputs"]}
     raw=read(source);by_id=defaultdict(dict)
     for r in raw:
-        pid,t=int(r["participant_id"]),int(r["global_trial"])
+        pid,t=r["participant_id"],int(r["global_trial"])
         assert t not in by_id[pid]
         by_id[pid][t]=r
     summaries=read(out/"participant_summary.csv");metrics=read(out/"scope_metrics.csv");checks=read(out/"screening_results.csv")
-    assert {int(s["participant_id"]) for s in summaries}==set(by_id)
+    assert {s["participant_id"] for s in summaries}==set(by_id)
     assert len(summaries)==len(by_id)==manifest["participant_n"]
     assert len(raw)==manifest["trial_n"]
     bounds={"calibration_full":(1,300),"manual_pre":(301,500),"P1_95":(501,900),"P2_70":(901,1300),
@@ -83,7 +89,7 @@ def main():
 
     def reconcile(m,lo,hi):
         nonlocal values_checked
-        pid=int(m["participant_id"]);rr=[by_id[pid][t] for t in range(lo,hi+1) if t in by_id[pid]]
+        pid=m["participant_id"];rr=[by_id[pid][t] for t in range(lo,hi+1) if t in by_id[pid]]
         assert int(m["n_trials"])==len(rr) and int(m["n_expected"])==hi-lo+1
         if m["assessable"]!="True":
             assert m["integrity_issues"] and m["accuracy"]==m["fast_accuracy"]==""
@@ -118,7 +124,7 @@ def main():
     for m in metrics:
         lo,hi=bounds[m["scope"]]
         assert int(m["trial_start"])==lo and int(m["trial_end"])==hi
-        key=(int(m["participant_id"]),m["scope"])
+        key=(m["participant_id"],m["scope"])
         assert key not in expected
         expected[key]=reconcile(m,lo,hi)
     bins=read(out/"trial_bin_summary.csv");bin_lookup={}
@@ -126,11 +132,11 @@ def main():
     for b in bins:
         lo,hi=int(b["trial_start"]),int(b["trial_end"])
         assert (lo-1)%cfg["bin_size"]==0 and hi-lo+1==cfg["bin_size"]
-        bin_lookup[int(b["participant_id"]),float(b["trial_midpoint"])]=reconcile(b,lo,hi)
+        bin_lookup[b["participant_id"],float(b["trial_midpoint"])]=reconcile(b,lo,hi)
     flags=defaultdict(list);statuses=defaultdict(list)
     assert len(checks)==19*len(by_id)
     for c in checks:
-        pid,scope,category=int(c["participant_id"]),c["scope"],c["category"]
+        pid,scope,category=c["participant_id"],c["scope"],c["category"]
         assert category in CATEGORIES
         assert c["use_for_exclusion"]==str(category in EXCLUSION_CATEGORIES)
         e=expected[pid,scope]
@@ -148,7 +154,7 @@ def main():
     for s in summaries:
         assert "manual_aid_ordering" not in s
         for category in CATEGORIES:
-            st=statuses[int(s["participant_id"]),category]
+            st=statuses[s["participant_id"],category]
             want="flag" if "flag" in st else "not_assessable" if "not_assessable" in st else "clear"
             assert s[category]==want
         n_rules=sum(s[c]=="flag" for c in CATEGORIES)
@@ -160,9 +166,9 @@ def main():
         expected_reasons="; ".join(f"{c['category']}:{c['scope']}" for c in checks if c["participant_id"]==s["participant_id"] and c["status"]=="flag" and c["category"] in EXCLUSION_CATEGORIES)
         assert s["exclusion_reasons"]==expected_reasons
     assert read(out/"flagged_checks.csv")==[c for c in checks if c["status"]=="flag"]
-    union=sorted(set(pid for c in EXCLUSION_CATEGORIES for pid in flags[c]))
+    union=sorted(set(pid for c in EXCLUSION_CATEGORIES for pid in flags[c]), key=display_id)
     candidates=read(out/"exclusion_candidates.csv")
-    assert candidates==[s for s in summaries if int(s["participant_id"]) in union]
+    assert candidates==[s for s in summaries if s["participant_id"] in union]
     exclusions=json.loads((out/"exclusion_summary.json").read_text())
     assert exclusions["participant_ids"]==union
     assert exclusions["participant_n"]==len(by_id)
@@ -175,42 +181,42 @@ def main():
     assert exclusions["rule_counts"]==manifest["exclusion_rule_counts"]=={c:len(set(flags[c])) for c in EXCLUSION_CATEGORIES}
     assert manifest["flag_counts"]=={c:len(set(flags[c])) for c in CATEGORIES}
     assert exclusions["diagnostic_rule_counts"]=={"manual_target":len(set(flags["manual_target"]))}
-    assert exclusions["rule_participant_ids"]=={c:sorted(set(flags[c])) for c in CATEGORIES}
-    diagnostic_only=sorted(set(flags["manual_target"])-set(union))
+    assert exclusions["rule_participant_ids"]=={c:sorted(set(flags[c]), key=display_id) for c in CATEGORIES}
+    diagnostic_only=sorted(set(flags["manual_target"])-set(union), key=display_id)
     assert exclusions["diagnostic_only_participant_ids"]==diagnostic_only
     assert exclusions["diagnostic_only_n"]==len(diagnostic_only)
-    assert exclusions["incomplete_assessment_ids"]==[int(s["participant_id"]) for s in summaries if int(s["n_not_assessable"])]
+    assert exclusions["incomplete_assessment_ids"]==[s["participant_id"] for s in summaries if int(s["n_not_assessable"])]
     assert len(exclusions["overlap"])==len(EXCLUSION_CATEGORIES)
     for k,r in enumerate(exclusions["overlap"],1):
-        ids=[int(s["participant_id"]) for s in summaries if sum(s[c]=="flag" for c in EXCLUSION_CATEGORIES)==k]
+        ids=[s["participant_id"] for s in summaries if sum(s[c]=="flag" for c in EXCLUSION_CATEGORIES)==k]
         assert r==dict(n_rules=k,participant_n=len(ids),participant_ids=ids)
     table=read(out/"exclusion_summary_table.csv")
     assert [r["criterion"] for r in table]==EXCLUSION_CATEGORIES+["manual_target","any_exclusion_rule","remaining_if_applied"]
     for row in table:
         category=row["criterion"]
-        ids=sorted(set(flags[category])) if category in CATEGORIES else union if category=="any_exclusion_rule" else []
+        ids=sorted(set(flags[category]), key=display_id) if category in CATEGORIES else union if category=="any_exclusion_rule" else []
         n=len(by_id)-len(union) if category=="remaining_if_applied" else len(ids)
         role="Exclusion criterion" if category in EXCLUSION_CATEGORIES else "Diagnostic only" if category=="manual_target" else "Total"
         assert row["role"]==role and int(row["participant_n"])==n
-        assert row["participant_ids"]=="; ".join(f"{p:03d}" for p in ids)
+        assert row["participant_ids"]=="; ".join(f"{display_id(p)}" for p in ids)
         near(row["percent_of_cohort"],100*n/len(by_id))
     pools=json.loads((out/"reference_pools.json").read_text())
     for s in summaries:
-        pid=int(s["participant_id"])
-        want=[int(q["participant_id"]) for q in summaries if q["participant_id"]!=s["participant_id"] and q["calibration_target_group"]==s["calibration_target_group"] and q["anticipatory"]=="clear" and int(q["n_not_assessable"])==0]
+        pid=s["participant_id"]
+        want=[q["participant_id"] for q in summaries if q["participant_id"]!=s["participant_id"] and q["calibration_target_group"]==s["calibration_target_group"] and q["anticipatory"]=="clear" and int(q["n_not_assessable"])==0]
         assert pools[str(pid)]==want
     # NumPy's default linear quantile, independently implemented for peer bands.
     def quantile(values,p):
         values=sorted(values);position=(len(values)-1)*p;lo=math.floor(position);hi=math.ceil(position)
         return values[lo]+(position-lo)*(values[hi]-values[lo])
     for row in read(out/"reference_bands.csv"):
-        pid=int(row["participant_id"]);mid=float(row["trial_midpoint"])
+        pid=row["participant_id"];mid=float(row["trial_midpoint"])
         for key in ("accuracy","fast_fraction"):
             values=[100*bin_lookup[p,mid][key] for p in pools[str(pid)] if bin_lookup[p,mid] is not None]
             for name,q in [("q25",.25),("median",.5),("q75",.75)]:near(row[key+"_"+name],quantile(values,q) if values else None)
     matches=json.loads((out/"comparator_selection.json").read_text())
     for m in matches:
-        candidates=[int(s["participant_id"]) for s in summaries if s["calibration_target_group"]==m["group"] and s["key_black"]==m["key_black"] and s["key_white"]==m["key_white"] and s["anticipatory"]!="flag" and int(s["n_not_assessable"])==0 and expected[int(s["participant_id"]),"experimental_overall"]["median_positive_rt_ms"] is not None]
+        candidates=[s["participant_id"] for s in summaries if s["calibration_target_group"]==m["group"] and s["key_black"]==m["key_black"] and s["key_white"]==m["key_white"] and s["anticipatory"]!="flag" and int(s["n_not_assessable"])==0 and expected[s["participant_id"],"experimental_overall"]["median_positive_rt_ms"] is not None]
         distances={p:0 for p in candidates}
         for metric in ("accuracy","median_positive_rt_ms"):
             if not candidates:continue
@@ -240,15 +246,15 @@ def main():
         with Image.open(path) as im:
             assert im.width>=1000 and im.height>=1000
             im.verify()
-    flags={c:sorted(set(flags[c])) for c in CATEGORIES}
+    flags={c:sorted(set(flags[c]), key=display_id) for c in CATEGORIES}
     if args.expect_current_cohort:
-        assert len(by_id)==89 and len(raw)==169100 and not read(out/"integrity_issues.csv")
+        assert len(by_id)==93 and len(raw)==176700 and not read(out/"integrity_issues.csv")
         assert flags["calibration_target"]==[]
-        assert flags["anticipatory"]==[23,49,51,65,79]
-        assert flags["near_chance_or_worse"]==[23,49,51,75,79,81]
+        assert flags["anticipatory"]==["23a","49a","51a","65","79"]
+        assert flags["near_chance_or_worse"]==["23a","49a","51a","75a","79","81"]
         assert len(flags["manual_target"])==11
-        assert union==[23,49,51,65,75,79,81]
-        assert diagnostic_only==[1,21,25,37,63,85]
+        assert union==["23a","49a","51a","65","75a","79","81"]
+        assert diagnostic_only==["1","21","25","37","63","85"]
     print(json.dumps(dict(status="passed",participants=len(by_id),numeric_values_checked=values_checked,
         checks_verified=len(checks),pdfs_verified=len(pdfs),pngs_verified=len(pngs),flagged_participants=flags,
         unique_flagged_n=len(union),unique_participant_ids=union,diagnostic_only_participant_ids=diagnostic_only,

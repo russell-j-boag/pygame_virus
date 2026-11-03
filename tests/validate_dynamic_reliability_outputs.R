@@ -4,7 +4,7 @@ suppressPackageStartupMessages({library(readr); library(dplyr); library(tidyr)})
 args <- commandArgs(trailingOnly=TRUE)
 script <- normalizePath(sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1])); root <- dirname(dirname(script))
 input <- if(length(args)) args[1] else file.path(root,"analysis_outputs/semester2_2026_behavioural/hypothesis_components/primary/analysis")
-plots <- if(length(args)>1) args[2] else file.path(root,"analysis_outputs/semester2_2026_behavioural/hypothesis_components/primary/plots")
+plots <- if(length(args)>1) args[2] else file.path(root,"plots/semester2_2026_behavioural")
 read <- function(name) read_csv(file.path(input,paste0(name,".csv")),show_col_types=FALSE)
 near <- function(x,y,tol=1e-9) stopifnot(isTRUE(all.equal(as.numeric(x),as.numeric(y),tolerance=tol)))
 stopifnot(file.exists(file.path(input,"COMPLETE.txt")),file.exists(file.path(plots,"COMPLETE.txt")))
@@ -12,14 +12,26 @@ for(name in c("input_manifest","source_checksums","analysis_artifacts")) {
   m <- read(name); stopifnot(all(file.exists(m$path)),identical(unname(tools::md5sum(m$path)),m$md5))
 }
 m <- read("input_manifest")
-raw <- bind_rows(lapply(m$path[m$kind=="trials"],read_csv,show_col_types=FALSE))
+read_export <- function(kind) {
+  manifest <- m[m$kind==kind,]
+  bind_rows(lapply(seq_len(nrow(manifest)),function(i) {
+    d <- read_csv(manifest$path[i],show_col_types=FALSE)
+    stopifnot(all(d$participant_id==manifest$source_participant_id[i]))
+    d$participant_id <- manifest$participant_id[i];d
+  }))
+}
+raw <- read_export("trials")
 raw <- raw %>% mutate(stage=case_when(block_idx==2~"Manual pre",block_idx==4~"Manual post",block_idx==3~paste0("P",reliability_phase_idx)),
   accuracy=as.integer(response==stimulus),group=calibration_target_group)
+all_trials <- filter(raw,!is.na(stage))
+raw <- filter(raw,!(response!="TIMEOUT" & is.finite(rt_s) & rt_s<.2))
 p <- read("participant_performance") %>% arrange(participant_id,stage)
 independent <- raw %>% filter(!is.na(stage)) %>% group_by(participant_id,stage) %>% summarise(n=n(),
   rt=mean(rt_s[accuracy==1 & is.finite(rt_s) & rt_s>0]),accuracy=mean(accuracy),.groups="drop") %>% arrange(participant_id,stage)
 near(p$n,independent$n); near(p$accuracy,independent$accuracy); near(p$mean_correct_rt,independent$rt)
-stopifnot(sum(p$n)==1600*n_distinct(raw$participant_id))
+stopifnot(sum(p$n)==nrow(filter(raw,!is.na(stage))),
+  nrow(all_trials)==1600*n_distinct(raw$participant_id),
+  nrow(read("trial_exclusions"))==nrow(all_trials)-sum(p$n))
 a <- read("participant_agreement") %>% arrange(participant_id,phase,advice)
 ia <- raw %>% filter(block_idx==3,response!="TIMEOUT") %>% mutate(phase=paste0("P",reliability_phase_idx),
   advice=ifelse(aid_label==stimulus,"Correct","Incorrect")) %>% group_by(participant_id,phase,advice) %>%
@@ -54,7 +66,7 @@ for(v in c("accuracy","agreement")) {
   curves <- read(paste0(v,"_trend_curves")); curves$subject <- levels(model.frame(fit)$subject)[1]
   near(curves$prob,predict(fit,newdata=curves,type="response",re.form=NA),1e-7)
 }
-trust <- bind_rows(lapply(m$path[m$kind=="trust"],read_csv,show_col_types=FALSE)) %>%
+trust <- read_export("trust") %>%
   group_by(participant_id) %>% summarise(trust=mean(response),.groups="drop") %>% arrange(participant_id)
 near(read("participant_ratings") %>% arrange(participant_id) %>% pull(trust),trust$trust)
 pm <- read_csv(file.path(plots,"plot_manifest.csv"),show_col_types=FALSE)

@@ -60,8 +60,7 @@ plot_dynamic_reliability_hypotheses <- function(base,plot_base,root,input=NULL,q
   built$figures <- lapply(built$figures,dpr_style_errorbars)
   for(stem in names(built$figures))for(ext in c("pdf","png"))
     ggsave(file.path(stage,paste0(stem,".",ext)),built$figures[[stem]],width=12,height=6.75,dpi=300,bg="white",device=if(ext=="pdf")cairo_pdf else "png")
-  # Redraw historical pages from saved results with the shared display style.
-  old_stems <- c("19_historical_incorrect_agreement_drop","20_historical_accuracy_and_agreement_recovery","21_historical_trust_and_incorrect_agreement")
+  # Historical question formulations use freshly computed cohort/trial selections.
   histories <- filter(catalog,role=="Historical")
   historical_manifest <- list()
   legacy_stems <- c("01_h1_relative_competence","03_h3_recovery","04_h4_subjective_evaluation")
@@ -73,29 +72,38 @@ plot_dynamic_reliability_hypotheses <- function(base,plot_base,root,input=NULL,q
     legacy[[sample]] <- build_dynamic_reliability_legacy_slides(legacy_input,file.path(scratch,sample),root,return_bundle=TRUE)
     start_hashes <- distinct(bind_rows(start_hashes,task_hashes(legacy[[sample]]$inputs)),path,.keep_all=TRUE)
   }
+  bundle$historical_diagnostics <- bind_rows(lapply(c("primary","all_participants"),function(sample) {
+    folder <- if(sample=="primary")file.path(base,"hypothesis_components/primary/analysis") else base
+    mutate(read_csv(file.path(folder,"model_diagnostics.csv"),show_col_types=FALSE),sample=sample)
+  }))
+  write_csv(bundle$historical_diagnostics,file.path(stage,"data/historical_model_diagnostics.csv"))
   for(sample in c("primary","all_participants"))for(i in seq_len(nrow(histories))) {
     prefix <- if(sample=="primary")"" else "sensitivity_";stem <- paste0(prefix,histories$filename[i])
-    candidates <- file.path(plot_base,"presentation",paste0(prefix,c(histories$filename[i],old_stems[i])))
-    found <- candidates[file.exists(paste0(candidates,".pdf")) & file.exists(paste0(candidates,".png"))][1]
-    if(is.na(found))stop("Missing historical figure: ",stem,call.=FALSE)
     historical_caption <- paste(dpr_sample_caption(bundle$membership,sample),
       legacy[[sample]]$figures[[legacy_stems[i]]]$patches$annotation$caption)
-    p <- legacy[[sample]]$figures[[legacy_stems[i]]]+plot_annotation(
+    hdiag <- bundle$historical_diagnostics
+    if(i<=2 && any(hdiag$sample==sample & hdiag$model=="agreement" & !hdiag$inference_available))
+      historical_caption <- paste(historical_caption,
+        "NA: historical agreement-model inference unavailable because its convergence check failed.")
+    # Legacy plots were constructed under a temporary global theme. Attach the
+    # report theme explicitly before rendering them after that theme is restored.
+    p <- legacy[[sample]]$figures[[legacy_stems[i]]] & dpr_theme() &
+      theme(legend.title=element_blank())
+    p <- p+plot_annotation(
       title=c("20. Incorrect-advice agreement after the drop","21. Accuracy and agreement recovery",
         "22. Final evaluations and incorrect-advice agreement")[i],
       subtitle=unname(dpr_measure_subtitles[[histories$filename[i]]]),
-      caption=paste(strwrap(historical_caption,width=155),collapse="\n"))
+      caption=paste(strwrap(historical_caption,width=155),collapse="\n"),
+      theme=dpr_theme()+theme(plot.title=element_text(size=19,face="bold"),plot.subtitle=element_text(size=11)))
     p <- dpr_style_errorbars(p)
     for(ext in c("pdf","png")) {
       dst <- file.path(stage,paste0(stem,".",ext))
       ggsave(dst,p,width=12,height=6.75,dpi=300,bg="white",device=if(ext=="pdf")cairo_pdf else "png")
       historical_manifest[[length(historical_manifest)+1L]] <- tibble(path=paste0(stem,".",ext),sha256=task_sha(dst))
     }
-    for(path in list.files(file.path(dirname(found),"data"),pattern=paste0("^",basename(found),"_.*\\.csv$"),full.names=TRUE)) {
-      target <- file.path("data",sub(basename(found),stem,basename(path),fixed=TRUE))
-      regenerated <- file.path(scratch,sample,"presentation/data",sub(basename(found),legacy_stems[i],basename(path),fixed=TRUE))
-      stopifnot(file.exists(regenerated),isTRUE(all.equal(read_csv(path,show_col_types=FALSE),
-        read_csv(regenerated,show_col_types=FALSE),check.attributes=FALSE)))
+    for(path in list.files(file.path(scratch,sample,"presentation/data"),
+        pattern=paste0("^",legacy_stems[i],"_.*\\.csv$"),full.names=TRUE)) {
+      target <- file.path("data",sub(legacy_stems[i],stem,basename(path),fixed=TRUE))
       stopifnot(file.copy(path,file.path(stage,target)))
       historical_manifest[[length(historical_manifest)+1L]] <- tibble(sha256=task_sha(path),path=target)
     }
@@ -158,6 +166,7 @@ dpr_report_html <- function(out,catalog,bundle,annotations) {
     '<p><a href="core_hypotheses.pdf">12-page core PDF</a> | <a href="all_hypotheses.pdf">All 22 primary-sample figures</a> | <a href="sensitivity_hypotheses.pdf">22-page all-participant sensitivity</a> | <a href="hypothesis_mapping.csv">Hypothesis crosswalk</a></p>',
     '<div class="method"><p>The revised H1-H7 framework was agreed on 17 October 2026 after inspecting earlier results. It is retrospective, not preregistered. The hypotheses and correction families below replace the earlier presentation numbering; historical figures retain their original tests.</p>',
     '<p>Faint points show participants; open diamonds show fitted estimates with pointwise 95% intervals. Tests are two-sided, with Holm correction within hypothesis and outcome. *** p&lt;.001; ** p&lt;.01; * p&lt;.05; ns p&ge;.05. Unavailable inference is labelled unavailable. Sensitivity analyses do not replace primary inference.</p>',
+    '<p>Answered trials with RT &lt;200 ms are excluded from every trial-based behavioural analysis and plot. Exactly 200 ms remains eligible. Timeouts are retained for accuracy and completion. Calibration/QC and the participant-clean source CSVs remain untrimmed.</p>',
     '<p>Advice -c means acceptance; task -c means BLACK preference. Advice d-prime measures selective following; task d-prime measures final stimulus discrimination. These use the same responses and are not independent replications.</p></div>',
     '<nav><a href="#H1">H1 Benefits</a> | <a href="#H2">H2 Human value</a> | <a href="#H3">H3 Drop</a> | <a href="#H4">H4 Recovery</a> | <a href="#H5">H5 Adaptation</a> | <a href="#H6">H6 Evaluations</a> | <a href="#H7">H7 Associations</a> | <a href="#supporting">Supporting</a> | <a href="#historical">Historical</a></nav>',
     '<details><summary>Methods, cohort decisions and diagnostics</summary>',
@@ -166,6 +175,10 @@ dpr_report_html <- function(out,catalog,bundle,annotations) {
     '<p><a href="data/analysis/methods.txt">Full methods</a> | <a href="data/analysis/cohort_membership.csv">Membership</a> | <a href="data/analysis/contrasts.csv">All tests</a> | <a href="data/analysis/model_diagnostics.csv">Model diagnostics</a> | <a href="data/primary_sample_comparison.csv">Cohort sensitivity</a> | <a href="data/primary_participant_comparison.csv">Participant sensitivity</a> | <a href="data/primary_correction_comparison.csv">Correction sensitivity</a></p></details>')
   bad <- filter(bundle$diagnostics,!inference_available)
   if(nrow(bad))html <- c(html,paste0('<p class="warn">Primary inference unavailable for: ',esc(paste(paste(bad$sample,bad$model,sep="/"),collapse=", ")),'. See model diagnostics.</p>'))
+  historical_bad <- filter(bundle$historical_diagnostics,!inference_available)
+  if(nrow(historical_bad))html <- c(html,paste0('<p class="warn">Historical model inference unavailable for: ',
+    esc(paste(paste(historical_bad$sample,historical_bad$model,sep="/"),collapse=", ")),
+    '. Affected historical figures show NA rather than a significance decision. See <a href="data/historical_model_diagnostics.csv">historical model diagnostics</a>. Revised H1-H7 diagnostics are reported separately above.</p>'))
   links <- function(stem) {
     s <- paste0('<a href="',stem,'.pdf">PDF</a> | <a href="',stem,'.png">PNG</a>')
     for(kind in c("data","participants","annotations"))if(file.exists(file.path(out,"data",paste0(stem,"_",kind,".csv"))))
@@ -179,9 +192,9 @@ dpr_report_html <- function(out,catalog,bundle,annotations) {
       html <- c(html,paste0('<h2 id="',r$hypothesis,'">',r$hypothesis,'</h2><p>',prose[[r$hypothesis]],'</p>'));last <- r$hypothesis
     }
     if(i==which(primary$role=="Supporting")[1])html <- c(html,'<h2 id="supporting">Supporting analyses and sensitivities</h2>')
-    if(i==which(primary$role=="Historical")[1])html <- c(html,'<h2 id="historical">Historical hypothesis formulations</h2><p>Original plotted data and tests are retained, with updated display text and the shared error-bar style. Their hypothesis labels belong to the earlier framework.</p>')
+    if(i==which(primary$role=="Historical")[1])html <- c(html,'<h2 id="historical">Historical hypothesis formulations</h2><p>The earlier hypothesis formulations are refreshed using the current participant cohort and RT cutoff. Their hypothesis labels belong to the earlier framework.</p>')
     r$notes <- gsub("; nonsignificance is not equivalence|; the post block is not an untreated control","",r$notes)
-    r$notes <- sub("Original figure and test families retained unchanged", "Original plotted data and test families retained; display text and error-bar style updated",r$notes,fixed=TRUE)
+    r$notes <- sub("Original figure and test families retained unchanged", "Earlier questions and test families recomputed for the current cohort and RT cutoff",r$notes,fixed=TRUE)
     html <- c(html,paste0('<article><h3>',esc(r$title),'</h3><p class="meta">',esc(r$legacy_labels),' | ',esc(r$notes),'</p>',
       '<img loading="lazy" src="',r$filename,'.png" alt="',esc(r$title),'"><p>',links(r$filename),'</p>'))
     a <- filter(annotations,filename==r$filename)

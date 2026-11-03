@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0,str(ROOT))
 os.environ.setdefault("MPLCONFIGDIR",str(Path(tempfile.gettempdir())/"dynamic_reliability_qc_matplotlib"))
 
-from participant_qc.core import CATEGORIES, EXCLUSION_CATEGORIES, DIAGNOSTIC_CATEGORIES, analyse, choose_comparators, exclusion_summary, load_config, load_trials
+from participant_qc.core import IDENTITY_FILE, CATEGORIES, EXCLUSION_CATEGORIES, DIAGNOSTIC_CATEGORIES, analyse, choose_comparators, exclusion_summary, load_config, load_trials
 from participant_qc.reporting import exclusion_table_rows, write_csv, write_report
 
 
@@ -45,7 +45,7 @@ def main(argv=None):
     args=parser.parse_args(argv)
     source=args.input.resolve(); destination=args.output_dir.resolve(); config_path=args.config.resolve()
     check_destination(source,destination)
-    sources=sorted(Path(__file__).parent.glob("*.py"))+[config_path]
+    sources=sorted(Path(__file__).parent.glob("*.py"))+[config_path, IDENTITY_FILE]
     source_hashes=[dict(path=str(p),sha256=sha256(p)) for p in sources]
     cfg=load_config(config_path); before=sha256(source); config_before=sha256(config_path)
     people=load_trials(source); result=analyse(people,cfg); comparisons=choose_comparators(result)

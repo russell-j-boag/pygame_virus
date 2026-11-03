@@ -1,5 +1,5 @@
 # Retrospectively specified behavioural analyses of the 95 -> 70 -> 95 sequence.
-# Usage: Rscript analyse_dynamic_reliability.R [raw_input_dir] [output_dir]
+# Usage: Rscript analyse_dynamic_reliability.R [clean_or_raw_input_dir] [output_dir]
 suppressPackageStartupMessages({
   library(dplyr); library(tidyr); library(readr); library(lme4)
   library(lmerTest); library(emmeans); library(ggplot2)
@@ -15,6 +15,13 @@ binary <- function(x, label) {
 }
 read_table <- function(path) read_csv(path, show_col_types = FALSE)
 hash_table <- function(paths) tibble(path = normalizePath(paths), md5 = unname(tools::md5sum(paths)))
+.analysis_files <- Filter(Negate(is.null), lapply(sys.frames(), function(x) x$ofile))
+.analysis_file <- if (length(.analysis_files)) tail(.analysis_files, 1)[[1]] else
+  sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1])
+ANALYSIS_ROOT <- dirname(normalizePath(.analysis_file))
+source(file.path(ANALYSIS_ROOT, "R/participant_identity.R"))
+source(file.path(ANALYSIS_ROOT, "R/behavioural_trial_selection.R"))
+rm(.analysis_files, .analysis_file)
 
 prepare_trials <- function(raw) {
   required <- c("participant_id", "run_timestamp", "block", "block_idx", "trial", "global_trial",
@@ -24,7 +31,7 @@ prepare_trials <- function(raw) {
     "response", "stimulus", "aid_label", "aid_correct", "correct", "rt_s")
   check(all(required %in% names(raw)), "Missing required trial columns")
   check(!anyDuplicated(raw[c("participant_id", "run_timestamp", "block_idx", "trial")]), "Duplicate trial keys")
-  check(all(is.finite(raw$participant_id) & raw$participant_id >= 1 & raw$participant_id %% 1 == 0), "Invalid participant IDs")
+  raw <- apply_participant_identity(raw)
   check(all(raw$response %in% c("BLACK", "WHITE", "TIMEOUT")), "Invalid response")
   check(all(raw$stimulus %in% c("BLACK", "WHITE")), "Invalid stimulus")
   correct <- binary(raw$correct, "correctness"); aid <- binary(raw$aid_correct, "advice")
@@ -39,8 +46,10 @@ prepare_trials <- function(raw) {
     d <- raw[raw$participant_id == pid, ]
     check(n_distinct(d$run_timestamp) == 1 && !anyNA(d$run_timestamp), "Ambiguous duplicate participant runs")
     check(nrow(d) == 1900 && setequal(d$global_trial, 1:1900), "Incomplete global trial sequence")
-    expected_group <- if (pid %% 2 == 1) "CAL65" else "CAL90"
-    flip <- ((pid - 1) %/% 2) %% 2 == 1
+    recorded_id <- unique(d$source_participant_id)
+    check(length(recorded_id) == 1, "Ambiguous recorded participant identity")
+    expected_group <- if (recorded_id %% 2 == 1) "CAL65" else "CAL90"
+    flip <- ((recorded_id - 1) %/% 2) %% 2 == 1
     check(all(d$calibration_target_group == expected_group) &&
       all(d$calibration_target_accuracy == if (expected_group == "CAL65") .65 else .9) &&
       all(d$main_block_order == "SPLIT_MANUAL") && all(d$trial_deadline_s == 5) &&
@@ -75,11 +84,20 @@ prepare_trials <- function(raw) {
     log_rt = ifelse(valid_correct_rt, log(pmax(rt_s, .Machine$double.xmin)), NA_real_),
     agreement = ifelse(aided & !timeout, as.integer(response == aid_label), NA_integer_),
     progress = (trial_in_reliability_phase - 1) / 399,
-    bin = ceiling(trial_in_reliability_phase / 100))
+    bin = ceiling(trial_in_reliability_phase / 100)) %>% mark_behavioural_trials()
 }
 
 load_cohort <- function(input) {
-  files <- sort(list.files(input, "^results_.*_b00_ALL\\.csv$", full.names = TRUE))
+  # A clean export supplies an explicit manifest of retained source runs. Raw
+  # directories remain available when deliberately fitting an all-collected sensitivity.
+  clean_input <- file.exists(file.path(input, "cohort_selection.csv"))
+  if (clean_input) {
+    checksums <- read_table(file.path(input, "input_checksums.csv"))
+    check(identical(unname(tools::md5sum(checksums$path)), checksums$md5), "Stale clean-data inputs")
+    manifest <- read_table(file.path(input, "input_manifest.csv"))
+    check(identical(unname(tools::md5sum(manifest$path)), manifest$md5), "Changed clean source exports")
+    files <- sort(manifest$path[manifest$kind == "trials"])
+  } else files <- sort(list.files(input, "^results_.*_b00_ALL\\.csv$", full.names = TRUE))
   check(length(files) > 0, "No complete trial exports found")
   selected <- lapply(files, function(path) {
     paths <- c(path, sub("_ALL.csv$", "_POSTBLOCK_ALL.csv", path), sub("_ALL.csv$", "_POSTBLOCK_SLIDERS_ALL.csv", path))
@@ -107,13 +125,21 @@ load_cohort <- function(input) {
       all(s$postblock_scope == c("completed_block", "completed_block", "full_automation_block", "completed_block")) &&
       s$reliability_phase_label[3] == "DROP95_70_95" &&
       s$manual_segment[2] == "PRE_AUTOMATION" && s$manual_segment[4] == "POST_AUTOMATION", "Invalid slider scopes or values")
-    list(trials = d, ratings = tibble(participant_id = pid, group = factor(d$calibration_target_group[1], GROUPS),
+    d <- apply_participant_identity(d)
+    list(trials = d, ratings = tibble(participant_id = d$participant_id[1], group = factor(d$calibration_target_group[1], GROUPS),
       trust = mean(q$response), perceived_aid_accuracy = s$response_percent[3],
       self_calibration = s$response_percent[1], self_pre = s$response_percent[2], self_post = s$response_percent[4]),
-      manifest = hash_table(paths) %>% mutate(participant_id = pid, run_timestamp = stamp,
+      manifest = hash_table(paths) %>% mutate(participant_id = d$participant_id[1], source_participant_id = pid, run_timestamp = stamp,
         kind = c("trials", "trust", "sliders"), n_rows = vapply(x, nrow, integer(1))))
   })
   raw <- bind_rows(lapply(selected, `[[`, "trials"))
+  if (clean_input) {
+    exported <- read_identity_csv(file.path(input, "data_virus_all.csv"))
+    keys <- c("participant_id", "global_trial")
+    x <- arrange(raw, across(all_of(keys)))
+    y <- exported %>% select(all_of(names(raw))) %>% arrange(across(all_of(keys)))
+    check(isTRUE(all.equal(x, y, check.attributes = FALSE, tolerance = 1e-12)), "Clean CSV differs from selected source runs")
+  }
   list(trials = prepare_trials(raw), ratings = bind_rows(lapply(selected, `[[`, "ratings")),
        manifest = bind_rows(lapply(selected, `[[`, "manifest")))
 }
@@ -284,14 +310,27 @@ subjective_models <- function(ratings, out) {
 main <- function(args = commandArgs(trailingOnly = TRUE)) {
   check(length(args) <= 2, "Usage: Rscript analyse_dynamic_reliability.R [input_dir] [output_dir]")
   script <- normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1])); root <- dirname(script)
-  input <- if (length(args)) args[1] else file.path(root, "output/semester2_2026_data")
-  out <- if (length(args) >= 2) args[2] else file.path(root, "analysis_outputs/semester2_2026_behavioural")
+  input <- if (length(args)) args[1] else file.path(root, "data/clean")
+  out <- if (length(args) >= 2) args[2] else file.path(root, "analysis_outputs/semester2_2026_behavioural_clean")
   dir.create(file.path(out, "models"), recursive = TRUE, showWarnings = FALSE)
   unlink(file.path(out, "COMPLETE.txt"))
-  cohort <- load_cohort(input); all <- cohort$trials; d <- filter(all, !is.na(stage))
+  cohort <- load_cohort(input); all <- cohort$trials
+  experimental <- filter(all, !is.na(stage))
+  d <- filter(experimental, included_behavioural)
   check(setequal(unique(d$group), GROUPS), "Both calibration groups required")
   write <- function(x, name) write_csv(x, file.path(out, paste0(name, ".csv")))
-  write(cohort$manifest, "input_manifest"); write(hash_table(c(script, file.path(root, "python/virus_task.py"))), "source_checksums")
+  write(cohort$manifest, "input_manifest")
+  write(select(experimental, participant_id, source_participant_id, run_timestamp,
+    global_trial, block_idx, trial, stage, response, rt_s, timeout,
+    excluded_fast_rt, included_behavioural), "trial_selection")
+  write(filter(experimental, excluded_fast_rt) %>% select(participant_id,
+    source_participant_id, run_timestamp, global_trial, stage, response, rt_s) %>%
+    mutate(reason = "Answered RT < 200 ms"), "trial_exclusions")
+  sources <- c(script, file.path(root, "python/virus_task.py"),
+    file.path(root, c("R/participant_identity.R", "R/behavioural_trial_selection.R")), IDENTITY_CORRECTIONS_FILE)
+  if (file.exists(file.path(input, "cohort_selection.csv"))) sources <- c(sources,
+    file.path(input, c("input_checksums.csv", "cohort_selection.csv", "data_virus_all.csv")))
+  write(hash_table(sources), "source_checksums")
   write(d %>% distinct(participant_id, group) %>% count(group, name = "n_participants"), "cohort_counts")
   write(all %>% filter(block == "CALIBRATION", trial > 150) %>% group_by(participant_id, group) %>%
     summarise(n = n(), accuracy = mean(accuracy), target = first(calibration_target_accuracy), .groups = "drop"), "calibration_check")
@@ -388,8 +427,8 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   report <- c("DYNAMIC RELIABILITY: BEHAVIOURAL ANALYSIS", "",
     sprintf("%d participants (%d CAL65, %d CAL90); %d experimental trials.", n_distinct(d$subject),
       n_distinct(d$subject[d$group == "CAL65"]), n_distinct(d$subject[d$group == "CAL90"]), nrow(d)),
-    sprintf("%d experimental timeouts counted as incorrect; %d answered trials with nonpositive RT retained for accuracy/agreement.", sum(d$timeout), sum(!d$timeout & is.finite(d$rt_s) & d$rt_s <= 0)),
-    sprintf("RT audit: %d valid correct RTs below 100 ms; %d beyond 5 s. No automatic trimming.", sum(d$valid_correct_rt & d$rt_s < .1, na.rm=TRUE), sum(d$valid_correct_rt & d$rt_s > 5, na.rm=TRUE)),
+    sprintf("%d answered experimental trials with RT <200 ms excluded from every trial-based outcome; %d timeouts retained and counted as incorrect.", sum(experimental$excluded_fast_rt), sum(d$timeout)),
+    "Exactly 200 ms is eligible. Calibration/QC data are untrimmed. Original trial positions and bins are preserved.",
     "", "Central comparisons (model and participant estimates must be read together):",
     vapply(seq_len(nrow(key_results)), function(i) { x <- key_results[i, ]; sprintf(
       "%s | %s | %s: %+.2f pp [%.2f, %.2f], Holm p = %.4g",
@@ -401,7 +440,9 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     "Extra participant-cell variation limits random-intercept-model uncertainty. Emphasise participant sensitivity alongside each model result, not whichever test is significant.",
     sprintf("DHARMa available: %s; not run. Correct-RT residual spread differs across participant/stage cells; inspect residual plots and participant sensitivity.", requireNamespace("DHARMa", quietly = TRUE)),
     "", "Interpretation and methods:",
-    "All hypotheses were specified after data collection. Calibration/manual performance screens do not exclude participants.",
+    if (file.exists(file.path(input, "cohort_selection.csv")))
+      "All hypotheses were specified after data collection. This fit uses the participant-clean cohort with reviewed run-specific exclusions; manual target deviation remains diagnostic only."
+    else "All hypotheses were specified after data collection. Calibration/manual performance screens do not exclude participants.",
     "Fixed phase order confounds reliability with time, practice and fatigue; group differences also reflect calibrated visual difficulty.",
     "Agreement is not advice-caused switching. P3-P1 nonsignificance is not equivalence or proof of full recovery.",
     "Participant random intercepts only. Mixed-model probability means condition on a zero participant random effect.",
