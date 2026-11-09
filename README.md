@@ -250,8 +250,8 @@ by Git. The 2026-10-17 refresh includes 87 analysis participants (44 HP95_LP65,
 
 ### Collection refresh and duplicate IDs (2026-11-03)
 
-The all-collected dataset contains **95 participants/runs** across recorded IDs
-1–91: 180,500 trial rows (including calibration), 1,140 trust-item rows and 475
+The 2026-11-03 all-collected snapshot contains **95 participants/runs** across
+recorded IDs 1–91: 180,500 trial rows (including calibration), 1,140 trust-item rows and 475
 slider rows. All collected participants are retained for calibration and
 anticipatory-response checks. The duplicate recorded IDs are labelled oldest to
 newest as `4a/4b`, `10a/10b`, `48a/48b`, and `83a/83b`. The timestamp-specific
@@ -266,12 +266,12 @@ Allocation validation uses the recorded ID and the live task functions. The
 occupies its recorded cell twice.
 
 **Clean data for behavioural and modelling analyses:**
-`data/semester2_2026_data/clean/` contains the same four CSV products with reviewed
-participant exclusions applied: **91 participants**, 172,900 trial rows,
+`data/semester2_2026_data/clean/` retains the 2026-11-03 snapshot of the four CSV
+products with reviewed participant exclusions applied: **91 participants**, 172,900 trial rows,
 1,092 trust-item rows and 455 slider rows. Exclude only `4a`, `10a`, `48a` (the
 original reviewed QC exclusions) and `83a` (the user's duplicate-selection
 decision). Retain `4b`, `10b`, `48b`, `83b`, and actual 84.
-`clean/cohort_selection.csv` accounts for every collected run and
+`clean/cohort_selection.csv` accounts for every run in that snapshot and
 `clean/exclusions.csv` gives the reasons. Selection is by analysis ID, recorded
 ID and timestamp together. No individual-trial trimming is performed here.
 
@@ -300,6 +300,33 @@ additional trial selection separately. `--audit-only` permits a full-cohort QC
 refresh without claiming current hypothesis fits; without that option the QC
 runner verifies primary-analysis provenance. The primary fitter applies the same
 reviewed participant/run-selection function as the clean exporter.
+
+### Combined-data and QC refresh (2026-11-09)
+
+Participant **92**, run `20261104_105807`, was added from the complete trial and
+questionnaire exports in `output/semester2_2026_data/`. The four combined CSVs now
+contain **96 participants/runs** across recorded IDs 1–92: **182,400 trial rows**
+(including calibration), **1,152 trust-item rows**, and **480 slider rows**.
+These runs occupy 92 distinct allocation cells; the four reused recorded IDs
+remain separate runs with their existing chronological labels.
+
+This refresh updates only combined data, provenance manifests, and the full-cohort
+QC report. Participant-clean exports and behavioural models retain their
+**2026-11-03, 91-participant snapshot**; participant 92 is not yet included in them.
+Reviewed exclusions and identity corrections are unchanged. Generated data and
+reports remain local, Git-ignored artifacts.
+
+Reproduce this limited refresh from the repository root:
+
+```sh
+Rscript collate_data.R output/semester2_2026_data data/semester2_2026_data
+Rscript tests/validate_time_pressure_collation.R
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m participant_qc.run_qc --audit-only
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m unittest discover -s tests -p 'test_participant_qc.py'
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_participant_qc.py
+```
+
+### Behavioural analysis workflow
 
 The analysis reads raw trial exports and same-run questionnaires, rejects duplicate
 participant runs after documented identity correction, records input checksums, and checks block order, deadlines,
@@ -431,8 +458,8 @@ Open `index.html`, `core_hypotheses.pdf` (ten main figures), or
 `all_hypotheses.pdf` (18 figures including supporting and historical views).
 The revised framework was agreed on **17 October 2026 after inspection of the
 previous results**. These are the primary analyses for the revised question list;
-they are not preregistered. The current analysis uses **91 of 95 collected
-participants**, excluding `4a`, `10a`, `48a` and `83a`. The 2026-11-03 refresh
+they are not preregistered. The current analysis uses **91 of the 95 participants
+collected as of 2026-11-03**, excluding `4a`, `10a`, `48a` and `83a`. That refresh
 additionally removes answered RT **<200 ms** before any trial-based summary,
 model or plot: **355 / 145,600 trials (0.244%)** are excluded, leaving **145,245
 experimental trials**. All 91 participants and all four conditions remain.
@@ -598,7 +625,7 @@ or trials, rewrite canonical CSVs, or rerun behavioural analyses**.
 ```bash
 /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python participant_qc/run_qc.py --audit-only
 /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m unittest discover -s tests -p 'test_participant_qc.py'
-/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_participant_qc.py --expect-current-cohort
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_participant_qc.py
 ```
 
 Open `analysis_outputs/semester2_2026_qc/index.html` for the report. The generator
@@ -606,7 +633,7 @@ accepts `--input`, `--config`, `--output-dir`, and `--primary-analysis-dir`; def
 `data/semester2_2026_data/data_virus_all.csv`, `participant_qc/config.json`, and
 `analysis_outputs/semester2_2026_qc/`. NumPy and Matplotlib are available in
 `r-pygame`; validation also uses Pillow and `pdfinfo`. The optional validator
-`--expect-current-cohort` checks the first 87-person snapshot; omit it for future
+`--expect-current-cohort` checks the 2026-11-03 95-person snapshot; omit it for later
 cohorts. Sample size is otherwise data-driven. The primary-analysis directory
 defaults to `analysis_outputs/semester2_2026_behavioural/primary/`. When completed
 primary outputs are present, the audit verifies their input and exclusion hashes
@@ -700,6 +727,22 @@ hypothesis models. See `clean/cohort_selection.csv` for applied clean-data
 selection and the QC report's `identity_corrections_summary.csv` for all reused
 recorded IDs. Independent QC validation is saved in
 `analysis_outputs/semester2_2026_qc_validation/`.
+
+The **2026-11-09** audit includes all **96 collected participants**. Participant
+**92 passes every exclusion screen**, with no diagnostic flags or unassessable
+checks: final-150 calibration accuracy is **112/150 (74.7%)**, experimental
+accuracy is **1,386/1,600 (86.6%)**, and there are **zero answered responses below
+200 ms** across all 1,900 trials. Exclusion candidates remain `4a`, `10a`, and
+`48a`; all previous participants' summaries, scope metrics, and screening results
+are unchanged. No new exclusions were applied.
+
+Validation passed source-to-combined reconciliation, all **14 QC unit tests**, and
+the independent audit of **1,536 screening checks**, **104 PDFs**, and **102 PNGs**.
+The four cohort figures and participant 92's diagnostic PDF also passed visual
+review. Dated validation and completion receipts are saved as
+`analysis_outputs/semester2_2026_qc_validation/validation_20261109.txt` and
+`analysis_outputs/semester2_2026_qc_validation/completion_receipt_20261109.json`.
+The previous QC report was preserved by the generator.
 
 ## Historical task-performance SDT component: stimulus versus final response
 
