@@ -59,7 +59,7 @@ class Links(HTMLParser):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir",type=Path,default=ROOT/"analysis_outputs/semester2_2026_qc")
-    parser.add_argument("--expect-current-cohort",action="store_true",help="Assert the 2026-11-03 participant snapshot, not a rule for future cohorts")
+    parser.add_argument("--expect-current-cohort",action="store_true",help="Assert the 2026-11-09 participant snapshot, not a rule for future cohorts")
     args=parser.parse_args();out=args.output_dir.resolve()
     manifest=json.loads((out/"manifest.json").read_text());cfg=json.loads((out/"config_snapshot.json").read_text())
     assert manifest["generator"]=="participant_qc" and manifest["exclusions_applied"] is False
@@ -248,13 +248,15 @@ def main():
             im.verify()
     flags={c:sorted(set(flags[c]), key=display_id) for c in CATEGORIES}
     if args.expect_current_cohort:
-        assert len(by_id)==93 and len(raw)==176700 and not read(out/"integrity_issues.csv")
+        assert len(by_id)==97 and len(raw)==184300 and not read(out/"integrity_issues.csv")
         assert flags["calibration_target"]==[]
-        assert flags["anticipatory"]==["23a","49a","51a","65","79"]
-        assert flags["near_chance_or_worse"]==["23a","49a","51a","75a","79","81"]
+        assert flags["anticipatory"]==["23a","49a","51a","65a","79a"]
+        assert flags["near_chance_or_worse"]==["23a","49a","51a","65b","75a","79a","81"]
         assert len(flags["manual_target"])==11
-        assert union==["23a","49a","51a","65","75a","79","81"]
+        assert union==["23a","49a","51a","65a","65b","75a","79a","81"]
         assert diagnostic_only==["1","21","25","37","63","85"]
+        assert not any(r["source_participant_id"]=="81" and r["run_timestamp"]=="20261105_104000" for r in raw)
+        assert all(s[category]=="clear" for s in summaries if s["participant_id"] in ("79b","90","91") for category in CATEGORIES)
     print(json.dumps(dict(status="passed",participants=len(by_id),numeric_values_checked=values_checked,
         checks_verified=len(checks),pdfs_verified=len(pdfs),pngs_verified=len(pngs),flagged_participants=flags,
         unique_flagged_n=len(union),unique_participant_ids=union,diagnostic_only_participant_ids=diagnostic_only,

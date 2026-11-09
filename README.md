@@ -3,44 +3,64 @@
 Experimental task built in Pygame for studying decision-making and automation use.
 Based on Bartlett & McCarley RDC task.
 
-## Collection refresh: 3 November 2026
+## Collection refresh: 9 November 2026
 
-`output/semester2_2026_data/` now contains **93 complete collected runs** across
-89 recorded IDs. The replacements for 23, 49 and 51 were recovered from the
-Week 14 PC2 data ZIP in Downloads: all 39 source files were copied unchanged.
-Replacement 75 was already present. Replacements for **65 and 79 are pending**
-confirmation from the RA; the original runs remain in the collected data.
-The import receipt is `analysis_outputs/data_refresh_20261103/download_import_manifest.csv`.
+`output/semester2_2026_data/` contains **97 complete collected runs** across
+91 recorded IDs. Four complete runs were absent from the previous combined
+CSVs: replacements for **65** (`20261029_104950`) and **79** (`20261030_092044`),
+plus **90** (`20261105_110217`) and **91** (`20261105_110723`). All 279 source
+exports in the previous input manifest were verified unchanged. Intake,
+archive and validation receipts are in `analysis_outputs/data_refresh_20261109/`.
 
-The four combined CSVs in `data/` retain every collected run: **176,700 trial
-rows, 558 trust-item rows and 372 slider rows**. Duplicate recorded IDs are
-labelled oldest to newest as `23a/23b`, `49a/49b`, `51a/51b` and `75a/75b`.
-`config/participant_identity_corrections.csv` records the timestamp-specific
-mapping. `source_participant_id` preserves the recorded ID and administered
-allocation. Original source files are unchanged. Historical trust files without
-a timestamp column obtain `run_timestamp` from their exact same-run filename.
-Collation matches all three export families by run and rejects unresolved ID
-collisions; it no longer selects one run by modification time.
+The replacement for **P81** (`20261105_104000`) is **incomplete and omitted
+from combined CSVs and QC**. Its five raw files contain 300 calibration and
+200 manual-pre trials, calibration/manual slider responses and the calibration
+delta export. No aided or manual-post trial export or complete-run export was
+saved. The raw files remain preserved for later review. Original P81 remains
+in all-collected QC and retains its existing exclusion from clean data.
 
-**Behavioural and modelling input:** `data/clean/` contains the same four CSVs
-after the seven reviewed participant exclusions: `23a`, `49a`, `51a`, `65`,
-`75a`, `79` and `81`. This retains **86 participants** (42 CAL65, 44 CAL90),
-163,400 trial rows, 516 trust-item rows and 344 slider rows. Selection uses the
-analysis ID, recorded ID and timestamp together, so exclusions of the original
-participants cannot remove their replacements. `config/participant_exclusions.csv`
-is the decision register; `clean/cohort_selection.csv`, `clean/exclusions.csv`
-and the input manifests/checksums provide the audit trail. All trials belonging
-to retained participants are preserved, including calibration, timeouts and
-historical nonpositive RTs. The participant-clean exporter does not trim trials;
-the behavioural analysis applies the separate RT rule below.
+The four combined CSVs in `data/` retain every complete collected run:
+**184,300 trial rows, 582 trust-item rows and 388 slider rows**. Duplicate
+recorded IDs are labelled oldest to newest as `23a/23b`, `49a/49b`, `51a/51b`,
+`65a/65b`, `75a/75b` and `79a/79b`.
+`config/participant_identity_corrections.csv` records timestamp-specific mappings;
+`source_participant_id` preserves the recorded ID and administered allocation.
+Original source files are unchanged. Historical trust files without a timestamp
+column obtain `run_timestamp` from their exact same-run filename. Collation
+matches all three export families by run, rejects unresolved ID collisions,
+and selects complete-run exports rather than choosing a run by modification time.
 
-**Calibration and anticipatory diagnostics use all 93 collected runs**, including
-the excluded originals and replacements. The unchanged QC rules flag the same
-seven original participants: six near-chance, five anticipatory and zero
-calibration-target exclusions, with overlaps. Manual target deviations remain
-diagnostic only. Open `analysis_outputs/semester2_2026_qc/index.html` and
-`plots/semester2_2026_data/`. Previous combined CSVs and plot/QC bundles are
-preserved in timestamped archive directories.
+**Updated participant-clean input:** `data/clean/` applies eight reviewed run
+exclusions: `23a`, `49a`, `51a`, `65a`, `65b`, `75a`, `79a` and `81`. This retains
+**89 participants** (44 CAL65, 45 CAL90), **169,100 trial rows, 534 trust-item
+rows and 356 slider rows**. P65's replacement (`65b`) has manual-post accuracy
+of **110/200 (55%)**, meeting the unchanged near-chance-or-worse rule of
+accuracy <=55%; its exclusion was reviewed and approved on 9 November.
+Replacement `79b`, P90 and P91 pass all QC screens. None of the four additions
+has an anticipatory-response flag or an unassessable scope.
+
+Selection uses analysis ID, recorded ID and timestamp together, preserving
+exclusions of original runs independently of replacements.
+`config/participant_exclusions.csv` is the decision register;
+`data/clean/cohort_selection.csv`, `data/clean/exclusions.csv` and input
+manifests/checksums provide the audit trail. All trials belonging to retained
+participants are preserved, including calibration, timeouts and historical
+nonpositive RTs. The participant-clean exporter does not trim trials.
+
+**Calibration and anticipatory diagnostics use all 97 complete runs**,
+including excluded originals and the excluded P65 replacement. The unchanged
+QC rules identify eight exclusion candidates: seven near-chance, five
+anticipatory and zero calibration-target exclusions, with overlaps.
+Manual-target deviations remain diagnostic only. Open
+`analysis_outputs/semester2_2026_qc/index.html` and `plots/semester2_2026_data/`.
+Previous combined CSVs, clean exports and plot/QC bundles are preserved in
+timestamped archive directories recorded in the refresh receipt.
+
+**Behavioural fits and hypothesis figures have not been refreshed.** Their
+saved results still describe the **3 November cohort: 86 primary participants
+and 93 all-collected sensitivity runs**, not the updated 89/97 CSV cohorts.
+The following behavioural section documents those previous results. Rebuilding
+those models and hypothesis figures is a separate step.
 
 Reproduce the collection refresh from this repository:
 
@@ -63,9 +83,9 @@ and update the snapshot assertions in the validators when the cohort grows.
 Keep existing exclusion decisions attached to their original timestamps.
 QC only audits; `prepare_clean_data.R` applies the reviewed decisions.
 
-### Behavioural refresh and 200 ms cutoff
+### Previous behavioural refresh: 3 November 2026 and 200 ms cutoff
 
-The behavioural analyses and H1–H7 hypothesis figures use **86 participants**
+The saved behavioural analyses and H1–H7 hypothesis figures use **86 participants**
 (42 CAL65, 44 CAL90). Answered experimental trials with **RT <200 ms** are removed
 from every trial-based outcome: accuracy, correct RT, agreement, both SDT
 definitions, aid benchmarks, adaptation curves and behavioural rating predictors.

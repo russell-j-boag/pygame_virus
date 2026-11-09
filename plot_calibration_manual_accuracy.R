@@ -346,7 +346,10 @@ participant_labels <- participant_condition_means %>%
   group_by(condition_code, condition_label, accuracy) %>%
   summarise(
     participant_label = paste(
-      sort(as.integer(as.character(participant_id))),
+      as.character(participant_id)[order(
+        as.integer(sub("[a-z]+$", "", as.character(participant_id))),
+        as.character(participant_id)
+      )],
       collapse = ", "
     ),
     .groups = "drop"

@@ -2,7 +2,8 @@ participant_id,source_participant_id,run_timestamp,decision,reason,decision_date
 23a,23,20260804_091200,exclude,near_chance_or_worse:manual_post; anticipatory:manual_post,2026-10-17
 49a,49,20260909_110136,exclude,near_chance_or_worse:P2_70; anticipatory:P2_70; near_chance_or_worse:P3_95; anticipatory:P3_95; near_chance_or_worse:manual_post; anticipatory:manual_post; anticipatory:aided_overall; anticipatory:experimental_overall,2026-10-17
 51a,51,20260909_111746,exclude,anticipatory:P2_70; anticipatory:P3_95; near_chance_or_worse:manual_post,2026-10-17
-65,65,20260930_110112,exclude,anticipatory:manual_pre; anticipatory:P1_95; anticipatory:P2_70; anticipatory:P3_95; anticipatory:manual_post; anticipatory:aided_overall; anticipatory:experimental_overall,2026-10-17
+65a,65,20260930_110112,exclude,anticipatory:manual_pre; anticipatory:P1_95; anticipatory:P2_70; anticipatory:P3_95; anticipatory:manual_post; anticipatory:aided_overall; anticipatory:experimental_overall,2026-10-17
+65b,65,20261029_104950,exclude,near_chance_or_worse:manual_post (110/200 correct; 55% meets existing <=55% rule); reviewed by user 2026-11-09,2026-11-09
 75a,75,20261009_090813,exclude,near_chance_or_worse:manual_post,2026-10-17
-79,79,20261014_090529,exclude,near_chance_or_worse:manual_post; anticipatory:manual_post,2026-10-17
+79a,79,20261014_090529,exclude,near_chance_or_worse:manual_post; anticipatory:manual_post,2026-10-17
 81,81,20261014_110126,exclude,near_chance_or_worse:manual_post,2026-10-17

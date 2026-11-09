@@ -20,7 +20,8 @@ fails(read_identity_corrections(path)); unlink(path)
 trials <- read_identity_csv("data/data_virus_all.csv")
 cohort <- distinct(trials, participant_id, source_participant_id, run_timestamp)
 selection <- select_reviewed_participants(cohort, "config/participant_exclusions.csv")
-stopifnot(all(selection$included[selection$participant_id %in% c("23b", "49b", "51b", "75b")]))
+stopifnot(all(selection$included[selection$participant_id %in% c("23b", "49b", "51b", "75b", "79b")]),
+  !any(selection$included[selection$participant_id %in% c("65a", "65b", "79a")]))
 bad <- cohort; bad$run_timestamp[bad$participant_id == "75a"] <- "wrong_timestamp"
 fails(select_reviewed_participants(bad, "config/participant_exclusions.csv"))
 message("PASS: identity corrections, idempotence, collision rejection and run-specific selection.")
