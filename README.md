@@ -266,12 +266,13 @@ Allocation validation uses the recorded ID and the live task functions. The
 occupies its recorded cell twice.
 
 **Clean data for behavioural and modelling analyses:**
-`data/semester2_2026_data/clean/` retains the 2026-11-03 snapshot of the four CSV
-products with reviewed participant exclusions applied: **91 participants**, 172,900 trial rows,
-1,092 trust-item rows and 455 slider rows. Exclude only `4a`, `10a`, `48a` (the
+After the 2026-11-09 export refresh, `data/semester2_2026_data/clean/` contains
+the four CSV products with reviewed participant exclusions applied:
+**92 participants**, 174,800 trial rows, 1,104 trust-item rows and 460 slider rows.
+Exclude only `4a`, `10a`, `48a` (the
 original reviewed QC exclusions) and `83a` (the user's duplicate-selection
 decision). Retain `4b`, `10b`, `48b`, `83b`, and actual 84.
-`clean/cohort_selection.csv` accounts for every run in that snapshot and
+`clean/cohort_selection.csv` accounts for all 96 collected runs and
 `clean/exclusions.csv` gives the reasons. Selection is by analysis ID, recorded
 ID and timestamp together. No individual-trial trimming is performed here.
 
@@ -310,8 +311,9 @@ contain **96 participants/runs** across recorded IDs 1–92: **182,400 trial row
 These runs occupy 92 distinct allocation cells; the four reused recorded IDs
 remain separate runs with their existing chronological labels.
 
-This refresh updates only combined data, provenance manifests, and the full-cohort
-QC report. Participant-clean exports and behavioural models retain their
+This refresh updates combined data, provenance manifests, the full-cohort QC
+report, and participant-clean exports. The clean exports contain **92 participants**,
+including participant 92. Behavioural models retain their
 **2026-11-03, 91-participant snapshot**; participant 92 is not yet included in them.
 Reviewed exclusions and identity corrections are unchanged. Generated data and
 reports remain local, Git-ignored artifacts.
@@ -324,6 +326,8 @@ Rscript tests/validate_time_pressure_collation.R
 /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m participant_qc.run_qc --audit-only
 /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m unittest discover -s tests -p 'test_participant_qc.py'
 /Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python tests/validate_participant_qc.py
+Rscript prepare_clean_data.R
+Rscript tests/validate_time_pressure_clean_data.R
 ```
 
 ### Behavioural analysis workflow
@@ -719,8 +723,8 @@ diagnostic-only. All scopes were assessable. The initial audit did not apply exc
 
 The **2026-11-03** audit includes all **95 collected participants**. Its only
 exclusion-rule candidates remain `4a`, `10a`, and `48a`; none fails the calibration
-target screen. The clean exports exclude those three and additionally `83a` by
-the user's duplicate-selection decision, retaining **91 participants**. Both 83
+target screen. The clean exports at that time excluded those three and additionally
+`83a` by the user's duplicate-selection decision, retaining **91 participants**. Both 83
 runs appear in the QC plots. QC candidate counts do not include administrative
 selection decisions, and the audit does not itself apply exclusions or refit
 hypothesis models. See `clean/cohort_selection.csv` for applied clean-data
