@@ -3,6 +3,71 @@
 Experimental task built in Pygame for studying decision-making and automation use.
 Based on Bartlett & McCarley RDC task.
 
+## Dropbox backup
+
+Both backup scripts use `config/dropbox_filter.txt` and the same destination,
+`dropbox:pygame_virus_dynamic_reliability`. Preview transfers and any proposed
+deletions first:
+
+```sh
+bash sync_to_dropbox_dry_run.sh
+# Equivalent: bash sync_to_dropbox.sh --dry-run
+```
+
+Run the upload when ready:
+
+```sh
+bash sync_to_dropbox.sh
+```
+
+The backup preserves **all project CSVs**, including raw, combined, clean,
+archived and validation CSVs, plus code, configuration, documentation,
+manifests, task assets and the frozen source ZIP. CSV symlinks are copied as
+their file contents (`--copy-links`); the archived `selected_raw` links point
+to this repository's original raw exports. No size cutoff is applied to CSVs.
+
+All `.rds`, `.RData` and `.rda` files are excluded, including model fits,
+bundles and contrast audits. Figure files (PNG, JPEG, PDF, SVG, GIF, TIFF and
+WebP) are retained in the four current report trees:
+
+- `plots/semester2_2026_data/`
+- `plots/semester2_2026_behavioural/`
+- `analysis_outputs/semester2_2026_qc/`
+- `analysis_outputs/semester2_2026_behavioural/`
+
+Within these trees, archived, `.previous_*` and hidden build-directory figures
+are excluded. Figures from other generated-output locations (including pilot,
+validation, export and scratch runs) are also excluded. Historical CSVs, source
+scripts and small report/provenance files remain included even where figures
+are omitted. Manuscript documents and task assets outside generated-output
+locations remain included. "Current" means the latest saved report at its
+canonical path; the behavioural reports still describe their documented older
+cohort until those analyses are refreshed.
+
+Git internals, Python/RStudio caches, `.DS_Store`, Office `~$` lock files,
+`.Rhistory` and incidental `Rplots.pdf` output are excluded. Filters are
+case-insensitive. Keep CSV rules before figure exclusions and do not prune
+whole analysis archives: their CSVs and scripts must remain reachable.
+
+The scripts use `rclone sync`, which creates the remote folder if missing.
+Previously uploaded **excluded** files remain in Dropbox because
+`--delete-excluded` is not used. Included destination files absent locally may
+still be removed by normal sync; the preview shows these changes. Neither
+script deletes local artifacts. See [rclone sync documentation](https://rclone.org/commands/rclone_sync/).
+
+Inspect the local selection without contacting Dropbox:
+
+```sh
+rclone size . --filter-from config/dropbox_filter.txt --ignore-case --copy-links
+```
+
+The regression check uses a temporary local alias destination, with no Dropbox
+connection:
+
+```sh
+/Users/rjb779/Library/r-miniconda-arm64/envs/r-pygame/bin/python -m unittest discover -s tests -p 'test_dropbox_sync.py'
+```
+
 ## Collection refresh: 9 November 2026
 
 `output/semester2_2026_data/` contains **97 complete collected runs** across

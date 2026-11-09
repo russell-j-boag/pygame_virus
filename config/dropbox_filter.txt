@@ -1,0 +1,36 @@
+# Shared by both Dropbox wrappers. They pass --ignore-case.
+# First matching rule wins. Only caches/metadata are pruned as directories.
+- .git/**
+- .Rproj.user/**
+- __pycache__/**
+- .pytest_cache/**
+- .DS_Store
+- ~$*
+- *.pyc
+- *.pyo
+- .Rhistory
+- Rplots.pdf
+
+# Preserve CSVs everywhere else, including archives and unfinished build trees.
+# Do not replace the image rules below with whole-directory exclusions.
++ *.csv
+
+# Generated serialized R objects: fits, bundles, workspaces and audit objects.
+- *.{rds,rdata,rda}
+
+# Superseded figures within the generated-output trees (at any depth).
+- /{plots,analysis_outputs}/**{archive,archives}/**.{png,jpg,jpeg,pdf,svg,gif,tif,tiff,webp}
+- /{plots,analysis_outputs}/**.previous_*/**.{png,jpg,jpeg,pdf,svg,gif,tif,tiff,webp}
+- /{plots,analysis_outputs}/**.*build*/**.{png,jpg,jpeg,pdf,svg,gif,tif,tiff,webp}
+
+# Latest saved report trees, including behavioural reports on the older cohort.
++ /plots/semester2_2026_data/**.{png,jpg,jpeg,pdf,svg,gif,tif,tiff,webp}
++ /plots/semester2_2026_behavioural/**.{png,jpg,jpeg,pdf,svg,gif,tif,tiff,webp}
++ /analysis_outputs/semester2_2026_qc/**.{png,jpg,jpeg,pdf,svg,gif,tif,tiff,webp}
++ /analysis_outputs/semester2_2026_behavioural/**.{png,jpg,jpeg,pdf,svg,gif,tif,tiff,webp}
+
+# Other generated figures: pilots, validation/export runs and scratch outputs.
+- /{plots,analysis_outputs,linear_models,tmp}/**.{png,jpg,jpeg,pdf,svg,gif,tif,tiff,webp}
+
+# Retain code, documents, manifests, task assets and the frozen source bundle.
++ **

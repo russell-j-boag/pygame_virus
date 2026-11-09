@@ -3,14 +3,8 @@
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_name="$(basename "$repo_dir")"
-dropbox_path="dropbox:${repo_name}"
-common_args=(--exclude ".DS_Store" --dry-run -P)
-
-if rclone lsf "$dropbox_path" >/dev/null 2>&1; then
-  echo "Remote directory exists; running dry-run sync to $dropbox_path"
-  rclone sync "$repo_dir" "$dropbox_path" "${common_args[@]}"
-else
-  echo "Remote directory does not exist; running dry-run copy to $dropbox_path"
-  rclone copy "$repo_dir" "$dropbox_path" "${common_args[@]}"
+if (( $# )); then
+  echo "Usage: $0" >&2
+  exit 2
 fi
+exec bash "$repo_dir/sync_to_dropbox.sh" --dry-run
