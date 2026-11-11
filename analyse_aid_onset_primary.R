@@ -24,6 +24,12 @@ run <- function() {
   paired <- ao_holm(bind_rows(lapply(all,`[[`,"paired")))
   ao_check(nrow(filter(tests,primary,correction=="loglinear"))==28,"Expected 28 unique primary comparisons")
   write_csv(tests,file.path(stage,"contrasts.csv"));write_csv(paired,file.path(stage,"participant_sensitivity.csv"))
+  write_csv(ao_rt_cells(p$trials),file.path(stage,"rt_participant_cells.csv"))
+  write_csv(ao_rt_estimates(bind_rows(tests,paired)),file.path(stage,"rt_ratios.csv"))
+  write_csv(ao_rt_estimates(bind_rows(lapply(all,`[[`,"means"))),file.path(stage,"rt_estimates.csv"))
+  trust_cells <- ao_trust_cells(p)
+  write_csv(trust_cells,file.path(stage,"trust_association_cells.csv"))
+  write_csv(ao_trust_correlations(trust_cells),file.path(stage,"trust_associations.csv"))
   for(name in c("means","raw","diagnostics","weights")) write_csv(bind_rows(lapply(all,`[[`,name)),file.path(stage,paste0(name,".csv")))
   legacy <- bind_rows(tests,paired) %>% filter(correction=="loglinear",outcome %in% c("advice_bias","advice_dprime","beneficial","harmful")) %>%
     mutate(family=ifelse(outcome %in% c("advice_bias","advice_dprime"),"legacy_joint_advice_SDT","legacy_joint_revision_quality")) %>% ao_holm()
@@ -42,6 +48,13 @@ run <- function() {
   writeLines(c("Retrospective reorganisation after inspection of prior results; not preregistered.",
     "All 60 canonical participants included. No participant QC policy is read or applied.",
     "28 unique primary comparisons; H4 task discrimination reuses the H1 task-dprime timing test.",
+    "Seven retrospective additional tests: three H1-RT condition contrasts and two condition-specific correlations each for H8/H9.",
+    "H1-RT: correct Decision 1 responses with finite RT >=0.200 s; no upper trimming. Each participant contributes one mean log RT per condition.",
+    "H1-RT model and paired sensitivities use log seconds; displayed means/CIs are exponentiated, contrasts/CIs are RT ratios.",
+    "The loglinear tag on RT tables selects the standard analysis pass only; no SDT correction is applied to RT.",
+    "H8/H9: six-item trust mean correlated across participants within each aided condition with H3 advice bias and H5a revision percentage.",
+    "Pearson correlations and Fisher 95% CIs; Spearman sensitivity. Holm across two conditions within each outcome/method/correction.",
+    "H8 loglinear SDT is main; extreme-only is sensitivity. H9 uses all valid response pairs. Neither association applies an RT filter.",
     "All tests two-sided. Holm separately within hypothesis/outcome; sensitivities separate.",
     "Binary models: participant random intercept, condition fixed effect, response-scale differences in percentage points.",
     "Binary means are conditional predictions at zero participant random effect, not population-marginal probabilities.",

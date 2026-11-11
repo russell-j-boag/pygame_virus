@@ -71,7 +71,7 @@ for(i in seq_len(nrow(cells))) {
     (x$aid_label==x$stimulus)==(r$condition=="Correct advice"),] else x <- x[x$condition==r$condition,]
   o <- r$outcome
   sc <- scores[scores$participant_id==r$participant_id & scores$condition==r$condition & scores$decision=="D2" & scores$correction==r$correction,]
-  value <- switch(o,accuracy=100*mean(x$c2),accuracy_advantage=100*mean(as.numeric(x$c2)-as.numeric(x$aid_label==x$stimulus)),
+  value <- switch(o,decision1_rt=mean(log(x$decision1_rt_s[x$c1 & is.finite(x$decision1_rt_s) & x$decision1_rt_s>=.2])),accuracy=100*mean(x$c2),accuracy_advantage=100*mean(as.numeric(x$c2)-as.numeric(x$aid_label==x$stimulus)),
     task_dprime=sc$dprime[sc$domain=="task"],task_bias=sc$bias[sc$domain=="task"],advice_dprime=sc$dprime[sc$domain=="advice"],
     advice_bias=sc$bias[sc$domain=="advice"],task_dprime_advantage=sc$dprime[sc$domain=="task"]-sc$dprime[sc$domain=="aid_task"],
     switching=100*mean((x$decision1_response!=x$decision2_response)[x$a1 & x$a2]),
@@ -97,7 +97,7 @@ stopifnot(nrow(primary)==28,!anyDuplicated(primary$contrast_id),all(diag$n_parti
 registry <- read("hypothesis_figures")
 ids <- unlist(strsplit(paste(registry$contrast_ids[registry$section=="core"],collapse=";"),";",fixed=TRUE))
 stopifnot(length(ids)==29,setequal(unique(ids),primary$contrast_id),
-  sum(ids=="H1__task_dprime__SF_minus_AF")==2,length(unique(registry$figure))==13)
+  sum(ids=="H1__task_dprime__SF_minus_AF")==2,length(unique(registry$figure))==16)
 for(name in unique(tests$model)) {
   m <- readRDS(file.path(out,"models",paste0(name,".rds")))
   tt <- tests[tests$model==name,];ww <- weights[weights$model==name,];mm <- means[means$model==name,]
@@ -140,6 +140,61 @@ for(x in list(tests,paired,read("historical_family_sensitivity"))) {
     near(g$p_holm,p.adjust(g$p_raw,"holm"));stopifnot(all(g$family_size==nrow(g)))
   }
 }
+# New RT eligibility/aggregation is reconstructed independently from trial fields.
+rt <- read("rt_participant_cells")
+stopifnot(nrow(rt)==180,all(rt$n_eligible>0),sum(tests$outcome=="decision1_rt")==3)
+for(i in seq_len(nrow(rt))) {
+  a <- rt[i,];d <- raw[raw$participant_id==a$participant_id & raw$condition==a$condition,]
+  eligible <- d$c1 & is.finite(d$decision1_rt_s) & d$decision1_rt_s>=.2
+  near(a$n_eligible,sum(eligible));near(a$n_trials,nrow(d));near(a$n_correct,sum(d$c1))
+  near(a$n_nonfinite_correct,sum(d$c1 & !is.finite(d$decision1_rt_s)))
+  near(a$n_fast_correct,sum(d$c1 & is.finite(d$decision1_rt_s) & d$decision1_rt_s<.2,na.rm=TRUE))
+  near(a$mean_log_rt,mean(log(d$decision1_rt_s[eligible])))
+  near(a$geometric_mean_s,exp(mean(log(d$decision1_rt_s[eligible]))))
+}
+for(kind in c("rt_ratios","rt_estimates")) {
+  a <- read(kind)
+  near(a$ratio_or_seconds,exp(a$estimate));near(a$backtransformed_lower,exp(a$lower));near(a$backtransformed_upper,exp(a$upper))
+  reference <- if(kind=="rt_estimates") means[means$outcome=="decision1_rt",] else
+    rbind(tests[tests$outcome=="decision1_rt",],paired[paired$outcome=="decision1_rt",])
+  near(a$estimate,reference$estimate);near(a$p_holm,reference$p_holm)
+}
+fixture <- tibble(participant_id=1,condition="Manual",answered1=TRUE,
+  correct1=c(TRUE,TRUE,TRUE,TRUE,TRUE,FALSE,TRUE,TRUE),
+  decision1_rt_s=c(.199,.2,0,-1,NA,1,Inf,100))
+z <- ao_rt_cells(fixture);near(z$n_eligible,2);near(z$geometric_mean_s,sqrt(.2*100))
+stopifnot(inherits(try(ao_rt_cells(transform(fixture,correct1=FALSE)),silent=TRUE),"try-error"))
+# Trust cells reproduce questionnaire means, H3 final-response bias and H5a denominators.
+tc <- read("trust_association_cells");ct <- read("trust_associations")
+stopifnot(nrow(tc)==360,nrow(ct)==12,sum(ct$main)==4,all(ct$n_participants==60),
+  !anyDuplicated(tc[c("participant_id","condition","outcome","correction")]))
+for(i in seq_len(nrow(tc))) {
+  a <- tc[i,];d <- raw[raw$participant_id==a$participant_id & raw$condition==a$condition,]
+  q <- trust[trust$participant_id==a$participant_id & trust$condition_code==d$condition_code[1],]
+  near(a$trust,mean(q$response));stopifnot(nrow(q)==6)
+  if(a$outcome=="trust_revision") {
+    d <- d[d$a1 & d$a2,];near(a$value,100*mean(d$decision1_response!=d$decision2_response))
+  } else {
+    d <- d[d$a2,];signal <- d$aid_label==d$stimulus;agree <- d$decision2_response==d$aid_label
+    rate <- function(k,n) if(a$correction=="loglinear") (k+.5)/(n+1) else if(k==0) .5/n else if(k==n) 1-.5/n else k/n
+    near(a$value,(qnorm(rate(sum(agree & signal),sum(signal)))+qnorm(rate(sum(agree & !signal),sum(!signal))))/2)
+  }
+  near(a$n_trials,nrow(d))
+}
+for(i in seq_len(nrow(ct))) {
+  a <- ct[i,];d <- tc[tc$outcome==a$outcome & tc$condition==a$condition & tc$correction==a$correction,]
+  test <- cor.test(d$trust,d$value,method=a$analysis,exact=FALSE)
+  near(a$estimate,unname(test$estimate));near(a$p_raw,test$p.value)
+  if(a$analysis=="pearson") near(c(a$lower,a$upper),test$conf.int)
+}
+for(g in split(ct,interaction(ct$outcome,ct$correction,ct$analysis,drop=TRUE))) {
+  near(g$p_holm,p.adjust(g$p_raw,"holm"));stopifnot(all(g$family_size==2))
+}
+for(method in c("pearson","spearman")) {
+  z <- ao_correlation(rep(1,5),1:5,method)
+  stopifnot(!z$inference_available,is.na(z$p_raw),is.na(z$estimate))
+  stopifnot(!ao_correlation(c(1,2,NA,Inf),1:4,method)$inference_available)
+}
 # Asymmetric and extreme SDT fixtures, sign geometry, empty-class failure.
 for(cor in c("loglinear","extreme_only")) {
   a <- ao_score(0,200,40,40,cor);b <- ao_score(200,200,0,40,cor)
@@ -154,7 +209,7 @@ stopifnot(isTRUE(all.equal(as.data.frame(p$counts),counts,check.attributes=FALSE
   isTRUE(all.equal(as.data.frame(p$scores),scores,check.attributes=FALSE,tolerance=1e-12)))
 unlink(fake,recursive=TRUE)
 writeLines(c(paste("artifact_manifest_md5",unname(tools::md5sum(file.path(out,"artifact_manifest.csv"))))),file.path(out,"VALIDATED.txt"))
-cat("PASS: canonical sources; all 60 participants; independent counts, scores and cells; 28 primary tests; model covariance/CIs; Holm families; QC independence.\n")
+cat("PASS: canonical sources; all 60 participants; independent counts, scores and cells; 28 original tests plus seven additions; model covariance/CIs; Holm families; QC independence.\n")
 if(length(args)>=2) {
   source(file.path(ROOT,"R/aid_onset_primary_plots.R"))
   stopifnot(identical(ao_significance(c(.0009,.001,.009,.01,.049,.05,NA)),c("***","**","**","*","*","ns","unavailable")),
@@ -162,8 +217,8 @@ if(length(args)>=2) {
   plots <- args[2]
   pa <- read.csv(file.path(plots,"artifact_manifest.csv"));ao_verify(transform(pa,path=file.path(plots,path)))
   catlog <- read.csv(file.path(plots,"figure_catalog.csv"))
-  stopifnot(nrow(catlog)==13,sum(catlog$section=="core")==8,all(file.exists(file.path(plots,paste0(catlog$figure,".pdf")))))
-  for(fig in unique(registry$figure[registry$section=="core" | registry$order==11])) {
+  stopifnot(nrow(catlog)==16,sum(catlog$section=="core")==8,all(file.exists(file.path(plots,paste0(catlog$figure,".pdf")))))
+  for(fig in unique(registry$figure[registry$section %in% c("core","extension_rt") | registry$order==11])) {
     annotations <- read.csv(file.path(plots,"data",paste0(fig,"_annotations.csv")))
     expected <- unlist(strsplit(paste(registry$contrast_ids[registry$figure==fig],collapse=";"),";",fixed=TRUE))
     stopifnot(identical(annotations$contrast_id,expected))
@@ -172,10 +227,11 @@ if(length(args)>=2) {
     stopifnot(!any(annotations$significant[!annotations$inference_available]))
     plotted <- read.csv(file.path(plots,"data",paste0(fig,"_estimates.csv")))
     z <- means[match(paste(plotted$model,plotted$condition),paste(means$model,means$condition)),]
+    if(all(plotted$outcome=="decision1_rt")) z <- transform(z,estimate=exp(estimate),lower=exp(lower),upper=exp(upper))
     near(plotted$estimate,z$estimate);near(plotted$lower,z$lower);near(plotted$upper,z$upper)
     dots <- read.csv(file.path(plots,"data",paste0(fig,"_participants.csv")))
     z <- cells[match(paste(dots$model,dots$condition,dots$participant_id),paste(cells$model,cells$condition,cells$participant_id)),]
-    near(dots$value,z$value)
+    near(dots$value,if(all(dots$outcome=="decision1_rt")) exp(z$value) else z$value)
     # Check bracket positions against the saved contrast weights, independently
     # of the plotting lookup; pooled and zero-reference tests are not pairwise.
     for(i in seq_len(nrow(annotations))) {
@@ -214,6 +270,30 @@ if(length(args)>=2) {
       stopifnot(identical(sort(labels),sort(tt$label)))
     }
   }
+  for(stem in catlog$figure[catlog$section=="correlation"]) {
+    dots <- read.csv(file.path(plots,"data",paste0(stem,"_participants.csv")))
+    shown <- read.csv(file.path(plots,"data",paste0(stem,"_annotations.csv")))
+    curves <- read.csv(file.path(plots,"data",paste0(stem,"_estimates.csv")))
+    stopifnot(nrow(dots)==120,nrow(shown)==2,nrow(curves)==200)
+    stopifnot(identical(shown$contrast_id,strsplit(registry$contrast_ids[registry$figure==stem],";",fixed=TRUE)[[1]]))
+    z <- tc[match(paste(dots$participant_id,dots$condition,dots$outcome,dots$correction),
+      paste(tc$participant_id,tc$condition,tc$outcome,tc$correction)),]
+    near(dots$value,z$value);near(dots$trust,z$trust)
+    z <- ct[ct$main,];z <- z[match(shown$contrast_id,z$contrast_id),]
+    near(shown$estimate,z$estimate);near(shown$lower,z$lower);near(shown$upper,z$upper);near(shown$p_holm,z$p_holm)
+    for(condition in unique(curves$condition)) {
+      d <- dots[dots$condition==condition,];c <- curves[curves$condition==condition,]
+      pred <- predict(lm(value~trust,d),c,interval="confidence")
+      near(c$fit,pred[,"fit"]);near(c$lwr,pred[,"lwr"]);near(c$upr,pred[,"upr"])
+    }
+    piece <- ao_trust_panel(registry[registry$figure==stem,],tc,ct)
+    for(panel_index in 1:2) {
+      panel <- piece$plot[[panel_index]]
+      # Every condition has participant points and a saved linear confidence band.
+      geoms <- vapply(panel[[1]]$layers,function(l) class(l$geom)[1],character(1))
+      stopifnot(all(c("GeomPoint","GeomRibbon","GeomLine") %in% geoms))
+    }
+  }
   for(stem in catlog$figure) {
     connection <- file(file.path(plots,paste0(stem,".png")),"rb")
     seek(connection,where=16);size <- readBin(connection,"integer",n=2,size=4,endian="big");close(connection)
@@ -247,7 +327,7 @@ if(length(args)>=2) {
   }
   for(stem in c("aid_onset_core_hypotheses","aid_onset_all_hypotheses")) {
     info <- system2("pdfinfo",shQuote(file.path(plots,paste0(stem,".pdf"))),stdout=TRUE)
-    stopifnot(any(grepl(paste0("^Pages: +",if(stem=="aid_onset_core_hypotheses")8 else 13,"$"),info)))
+    stopifnot(any(grepl(paste0("^Pages: +",if(stem=="aid_onset_core_hypotheses")11 else 16,"$"),info)))
   }
   cat("PASS: figure artifacts, catalog and saved annotations.\n")
 }

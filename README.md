@@ -328,9 +328,10 @@ Rscript tests/validate_aid_onset_slides.R
 ```
 
 Open `plots/semester2_2026_key_findings/presentation/index.html`. It contains eight
-core figures and five supporting figures, individual 16:9 vector PDFs and
-3600 x 2025 PNGs at 300 dpi, an eight-page `aid_onset_core_hypotheses.pdf`, and a
-13-page `aid_onset_all_hypotheses.pdf`. Each figure links to its plotted values,
+original core figures, three retrospective additions, and five supporting figures,
+individual 16:9 vector PDFs and
+3600 x 2025 PNGs at 300 dpi, an eleven-page `aid_onset_core_hypotheses.pdf` including
+the three retrospective additions below, and a 16-page `aid_onset_all_hypotheses.pdf`. Each figure links to its plotted values,
 model estimates and tests. The complete preceding gallery, including alternate
 SDT figures, is archived under `plots/semester2_2026_key_findings/archive/` before
 a successful replacement. Earlier analysis outputs remain intact.
@@ -410,6 +411,43 @@ in Manual, aid in the aided conditions. Trust is the mean of six positive 1-5
 items, with no Manual trust cell. Shared responses across accuracy, SDT and
 revision outcomes do not provide independent evidence. Nonsignificance does not
 establish equivalence.
+
+### Retrospective RT and trust additions (November 2026)
+
+H1-RT compares Decision 1 geometric mean RT across Manual, Aid-first and
+Stimulus-first. Eligible responses are correct Decision 1 responses with finite
+RT **>=200 ms**, with no upper trimming. Each participant contributes one mean
+log RT per condition to a linear mixed model with condition fixed effects and a
+participant random intercept. Displayed means and pointwise 95% CIs are
+exponentiated; contrasts are RT ratios (first condition divided by second).
+The three H1-style contrasts use two-sided tests and a separate three-test Holm
+family. Paired tests of participant mean log RTs are sensitivities. The
+`loglinear` suffix on RT model artifacts denotes the standard pipeline pass;
+no SDT correction is applied to RT. Empty eligible cells stop the build.
+
+H8 correlates the six-item mean trust rating with H3's final-response advice
+acceptance bias (-c). H9 correlates trust with H5a's revision percentage over
+all valid initial/final response pairs. Both estimate across-participant Pearson
+correlations separately for Aid-first and Stimulus-first, with Fisher 95% CIs
+and Holm adjustment across the two conditions within each outcome. Spearman
+correlations are separately adjusted sensitivities; H8 also repeats both methods
+under the extreme-only SDT correction. Constant inputs yield unavailable
+inference. These associations apply no RT filter and do not establish causation.
+
+The original 28 comparisons and adjustment families remain intact; these seven
+additional tests are labelled retrospective extensions. The three new figures
+use the existing hypothesis style, with participant points, model diamonds and
+brackets for RT, and two condition panels with fitted trends and confidence
+bands for each correlation. Aid-first Decision 1 already includes advice
+exposure, so initial RTs and revisions begin from different information states.
+
+The analysis exports `rt_participant_cells.csv` (eligibility and geometric means),
+`rt_estimates.csv` (seconds), `rt_ratios.csv` (model/paired ratios),
+`trust_association_cells.csv` (matched values and denominators), and
+`trust_associations.csv` (all correlation methods and correction sensitivities).
+For RT, `estimate`, `lower`, and `upper` retain log units;
+`ratio_or_seconds`, `backtransformed_lower`, and `backtransformed_upper` provide
+the interpretable scale. The gallery links to these tables.
 
 ### Reproducibility and legacy entry points
 

@@ -105,6 +105,50 @@ ao_prepare <- function(root) {
       mutate(included=TRUE,exclusions_applied=FALSE,reason="Full canonical cohort; participant QC not applied"),
     manifest=manifest,inputs=c(manifest_path,file.path(root,"data",files),manifest$source_file))
 }
+# RT eligibility is local to H1-RT; no filtering of other outcomes.
+ao_rt_cells <- function(d) {
+  d <- mutate(d,rt_eligible=answered1 & correct1 & is.finite(decision1_rt_s) & decision1_rt_s>=.2)
+  cells <- d %>% group_by(participant_id,condition) %>% summarise(n_trials=n(),
+    n_correct=sum(correct1),n_nonfinite_correct=sum(correct1 & !is.finite(decision1_rt_s)),
+    n_fast_correct=sum(correct1 & is.finite(decision1_rt_s) & decision1_rt_s<.2,na.rm=TRUE),
+    n_eligible=sum(rt_eligible),mean_log_rt=mean(log(decision1_rt_s[rt_eligible])),.groups="drop")
+  ao_check(all(cells$n_eligible>0),"Empty eligible Decision 1 RT cell")
+  mutate(cells,geometric_mean_s=exp(mean_log_rt))
+}
+ao_trust_cells <- function(p) {
+  bias <- p$scores %>% filter(domain=="advice",decision=="D2") %>%
+    transmute(participant_id,condition,outcome="trust_bias",correction,value=bias,n_trials=nh+nf)
+  revision <- p$trials %>% filter(aided,paired) %>% group_by(participant_id,condition) %>%
+    summarise(value=100*mean(switched),n_trials=n(),.groups="drop") %>%
+    mutate(outcome="trust_revision",correction="none")
+  cells <- bind_rows(bias,revision) %>% left_join(rename(p$trust,trust=response),by=c("participant_id","condition"))
+  ao_check(nrow(cells)==360 && !anyNA(cells) &&
+    !anyDuplicated(cells[c("participant_id","condition","outcome","correction")]),"Invalid trust association cells")
+  cells
+}
+ao_correlation <- function(x,y,method) {
+  complete <- is.finite(x) & is.finite(y);x <- x[complete];y <- y[complete]
+  available <- length(x)>=4 && sd(x)>0 && sd(y)>0
+  test <- if(available) cor.test(x,y,method=method,alternative="two.sided",exact=FALSE) else NULL
+  tibble(n_participants=length(x),estimate=if(available)unname(test$estimate) else NA_real_,
+    lower=if(available && method=="pearson")test$conf.int[1] else NA_real_,
+    upper=if(available && method=="pearson")test$conf.int[2] else NA_real_,
+    p_raw=if(available)test$p.value else NA_real_,inference_available=available,
+    reason=if(available)"" else "Fewer than four complete participants or constant input")
+}
+ao_trust_correlations <- function(cells) {
+  bind_rows(lapply(c("pearson","spearman"),function(method)
+    cells %>% group_by(outcome,condition,correction) %>%
+      group_modify(~ao_correlation(.x$trust,.x$value,method)) %>% ungroup() %>%
+      mutate(analysis=method))) %>%
+    mutate(hypothesis=ifelse(outcome=="trust_bias","H8","H9"),family=paste(hypothesis,outcome,sep="__"),
+      contrast_id=paste(hypothesis,outcome,ifelse(condition=="Aid-first","AF","SF"),sep="__"),
+      primary=FALSE,main=analysis=="pearson" & correction!="extreme_only") %>% ao_holm()
+}
+ao_rt_estimates <- function(x) {
+  x %>% filter(outcome=="decision1_rt") %>%
+    mutate(ratio_or_seconds=exp(estimate),backtransformed_lower=exp(lower),backtransformed_upper=exp(upper))
+}
 ao_specs <- function(p, correction="loglinear") {
   d <- p$trials; s <- filter(p$scores,correction==!!correction)
   score <- function(domain,variable) s %>% filter(.data$domain==!!domain,decision=="D2") %>%
@@ -126,6 +170,7 @@ ao_specs <- function(p, correction="loglinear") {
   }
   add("H1","accuracy",binary(d,"correct2"),TRUE)
   add("H1","task_dprime",task)
+  add("H1-RT","decision1_rt",transmute(ao_rt_cells(d),participant_id,condition,response=mean_log_rt),primary=FALSE)
   add("H2","accuracy_advantage",acc_adv,lev=ao_levels[-1],methods="advantage")
   add("H2","task_dprime_advantage",advantage,lev=ao_levels[-1],methods="advantage")
   add("H3","advice_bias",score("advice","bias"),lev=ao_levels[-1],methods="timing")

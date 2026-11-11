@@ -113,6 +113,9 @@ ao_outcome <- c(accuracy="Accuracy",task_dprime="Task d-prime",accuracy_advantag
   task_dprime_advantage="Task d-prime advantage",advice_bias="Advice bias",task_bias="Task bias",advice_dprime="Advice d-prime",
   switching="Switching",beneficial="Beneficial revisions",harmful="Harmful revisions",selective_uptake="Selective uptake",perceived="Perceived reliability",trust="Trust")
 ao_annotation <- function(t) {
+  if(all(t$outcome=="decision1_rt")) return(paste0(gsub(" - "," / ",unname(ao_comparison[t$comparison]),fixed=TRUE),": ratio ",
+    ifelse(t$inference_available,paste0(sprintf("%.2f",exp(t$estimate))," [",sprintf("%.2f",exp(t$lower)),
+      ", ",sprintf("%.2f",exp(t$upper)),"]; Holm p ",ao_p(t$p_holm),ifelse(t$sensitivity_disagreement," [a]","")),"primary inference unavailable")))
   paste0(unname(ao_comparison[t$comparison]),": ",ifelse(t$inference_available,
     paste0(sprintf("%+.2f",t$estimate)," [",sprintf("%.2f",t$lower),", ",sprintf("%.2f",t$upper),
       "]; Holm p ",ao_p(t$p_holm),ifelse(t$significant,paste0(" ",t$symbol),""),
@@ -159,6 +162,10 @@ ao_panel <- function(row,raw,means,tests) {
   if(row$order==4) lev <- ao_levels[-1]
   r <- filter(r,condition %in% lev) %>% mutate(condition=factor(condition,levels=lev))
   m <- filter(m,condition %in% lev) %>% mutate(condition=factor(condition,levels=lev))
+  if(row$outcome=="decision1_rt") {
+    r$value <- exp(r$value)
+    m <- mutate(m,across(c(estimate,lower,upper),exp))
+  }
   r$x <- match(r$condition,lev);m$x <- match(m$condition,lev)
   zero <- row$outcome %in% c("accuracy_advantage","task_dprime_advantage","advice_bias","task_bias")
   limits <- if(row$order==11)c(0,100) else if(zero)0 else NULL
@@ -214,9 +221,43 @@ ao_context <- function(d,outcome,title) {
   if(outcome=="task_bias") p <- p+geom_hline(yintercept=0,linetype="dashed",color="#9AA4AE")
   list(plot=p,raw=r,means=m)
 }
+# Correlation panels share the report theme; intervals describe the fitted trend.
+ao_trust_panel <- function(row,cells,tests) {
+  r <- filter(cells,outcome==row$outcome,correction!="extreme_only")
+  t <- filter(tests,outcome==row$outcome,main) %>% mutate(label="")
+  predictions <- list();pieces <- list()
+  for(condition_name in ao_levels[-1]) {
+    d <- filter(r,condition==condition_name);a <- filter(t,condition==condition_name)
+    label <- if(a$inference_available) paste0("Pearson r = ",sprintf("%.2f",a$estimate),
+      " [",sprintf("%.2f",a$lower),", ",sprintf("%.2f",a$upper),"]\nHolm p ",ao_p(a$p_holm),"; n = ",a$n_participants) else
+      paste0("Correlation unavailable; n = ",a$n_participants)
+    t$label[t$condition==condition_name] <- label
+    p <- ggplot(d,aes(trust,value))+geom_point(color=ao_palette[[condition_name]],alpha=.5,size=2)+
+      ao_theme()+labs(title=condition_name,x="Trust in the aid (1-5)",y=row$panel_title)+
+      theme(axis.title.x=element_text(),axis.title.y=element_text(angle=90,margin=margin(r=8)))+
+      scale_x_continuous(limits=c(1,5),breaks=1:5)+
+      coord_cartesian(ylim=range(r$value,finite=TRUE)+c(-1,1)*max(diff(range(r$value)),.1)*.12)
+    if(a$inference_available) {
+      fit <- lm(value~trust,data=d)
+      grid <- data.frame(trust=seq(min(d$trust),max(d$trust),length.out=100))
+      pred <- bind_cols(grid,as.data.frame(predict(fit,grid,interval="confidence"))) %>% mutate(condition=condition_name,outcome=row$outcome)
+      predictions[[condition_name]] <- pred
+      p <- p+geom_ribbon(data=pred,aes(x=trust,ymin=lwr,ymax=upr),inherit.aes=FALSE,fill=ao_palette[[condition_name]],alpha=.15)+
+        geom_line(data=pred,aes(trust,fit),inherit.aes=FALSE,color=ao_palette[[condition_name]],linewidth=.8)
+    }
+    foot <- ggplot(tibble(x=0,y=1,label=label),aes(x,y,label=label))+
+      geom_text(hjust=0,size=3.35,family="Helvetica",color="#263746")+
+      coord_cartesian(xlim=c(0,1),ylim=c(.5,1.5),clip="off")+theme_void()+theme(plot.margin=margin(0,14,0,14))
+    pieces[[condition_name]] <- p/foot+plot_layout(heights=c(4,1.15))
+  }
+  list(plot=wrap_plots(pieces,nrow=1),raw=r,means=bind_rows(predictions),tests=t)
+}
 ao_html <- function(x) {x <- gsub("&","&amp;",x,fixed=TRUE);x <- gsub("<","&lt;",x,fixed=TRUE);gsub(">","&gt;",x,fixed=TRUE)}
 # Overall subtitles name measures; sample and method details belong in captions.
 ao_measure_subtitles <- c(
+  "01b_h1_decision1_rt"="Initial decision response time",
+  "08b_h8_trust_bias"="Trust and advice acceptance tendency",
+  "08c_h9_trust_revision"="Trust and response changes",
   "01_h1_performance"="Final accuracy and task discrimination",
   "02_h2_beyond_aid"="Final accuracy and task discrimination",
   "03_h3_bias"="Advice acceptance and task response preference",
@@ -242,6 +283,7 @@ ao_build_plots <- function(root,analysis,out) {
   tests$sensitivity_disagreement <- tests$significant!=paired$significant[match(paste(tests$contrast_id,tests$correction),paste(paired$contrast_id,paired$correction))]
   raw <- read("raw");means <- read("means");context <- read("decision_context")
   primary <- filter(tests,primary,correction=="loglinear")
+  trust_cells <- read("trust_association_cells");trust_tests <- read("trust_associations")
   dir.create(dirname(out),showWarnings=FALSE,recursive=TRUE)
   stage <- tempfile(".presentation_build_",tmpdir=dirname(out));dir.create(file.path(stage,"data"),recursive=TRUE)
   on.exit(if(dir.exists(stage)) unlink(stage,recursive=TRUE))
@@ -254,7 +296,7 @@ ao_build_plots <- function(root,analysis,out) {
     subtitle <- unname(ao_measure_subtitles[[f$figure]])
     context_note <- ""
     caption <- "Faint points and lines: participants. Diamonds: model estimates with pointwise 95% CIs. AF = Aid-first; SF = Stimulus-first."
-    if(f$section=="core" || f$order==11) {
+    if(f$section %in% c("core","extension_rt") || f$order==11) {
       pieces <- lapply(seq_len(nrow(rs)),function(j) ao_panel(rs[j,],filter(raw,correction=="loglinear"),
         filter(means,correction=="loglinear"),filter(tests,correction=="loglinear")))
       p <- wrap_plots(lapply(pieces,`[[`,"plot"),nrow=1)
@@ -263,7 +305,20 @@ ao_build_plots <- function(root,analysis,out) {
       caption <- paste(caption,"Holm within outcome: *** p < .001; ** p < .01; * p < .05; ns p >= .05. Binary estimates condition on zero participant random effect.",sep="\n")
       if(f$order==2) caption <- paste(caption,"Cell labels test human-minus-aid against zero; brackets compare the two timing advantages.",sep="\n")
       if(any(tp$sensitivity_disagreement)) caption <- paste(caption,"[a] Model and paired-participant significance differ; see S5 and the sensitivity tables.",sep="\n")
+      if(f$section=="extension_rt") {
+        context_note <- "Retrospective addition."
+        caption <- "Faint points and lines: participant geometric means. Diamonds: exponentiated model means with pointwise 95% CIs.\nCorrect Decision 1 responses with finite RT >=200 ms; no upper trimming. Model and paired tests use participant mean log RTs.\nContrasts are RT ratios (first condition / second); Holm across three contrasts. *** p < .001; ** p < .01; * p < .05; ns p >= .05.\nAid-first D1 already includes advice exposure; these response windows begin from different information states."
+        if(any(tp$sensitivity_disagreement)) caption <- paste(caption,"[a] Model and paired-participant significance differ; see the RT sensitivity table.")
+      }
       if(f$order==11) context_note <- "Supporting tests. Manual uses the same all-trial data in both panels; it has no advice-correctness category."
+    } else if(f$section=="correlation") {
+      piece <- ao_trust_panel(rs[1,],trust_cells,trust_tests)
+      p <- piece$plot;rp <- piece$raw;mp <- piece$means;tp <- piece$tests
+      context_note <- "Retrospective addition."
+      caption <- "Points: participants. Lines and shaded bands: linear fits with pointwise 95% confidence intervals. Trust is the six-item mean.\nPearson correlations are estimated separately within condition; Holm across the two conditions within this outcome. Spearman results are sensitivities."
+      caption <- paste(caption,if(rs$outcome[1]=="trust_bias")
+        "Advice -c uses final answered trials and loglinear correction (H3); no RT filter. Positive -c indicates acceptance tendency." else
+        "Revision percentage uses all valid initial/final response pairs (H5a); no RT filter. Aid-first D1 already includes advice exposure.",sep="\n")
     } else if(f$order %in% c(9,10)) {
       pieces <- lapply(seq_len(nrow(rs)),function(j) ao_context(context,rs$outcome[j],rs$panel_title[j]))
       p <- wrap_plots(lapply(pieces,`[[`,"plot"),nrow=1)
@@ -312,19 +367,19 @@ ao_build_plots <- function(root,analysis,out) {
     write_csv(rp,file.path(stage,"data",paste0(f$figure,"_participants.csv")))
     write_csv(mp,file.path(stage,"data",paste0(f$figure,"_estimates.csv")))
     write_csv(tp,file.path(stage,"data",paste0(f$figure,"_annotations.csv")))
-    if(nrow(tp) && "contrast_id" %in% names(tp) && f$order<=8) ao_check(all(tp$contrast_id %in% primary$contrast_id),"Unexpected primary annotation")
+    if(nrow(tp) && "contrast_id" %in% names(tp) && f$section=="core") ao_check(all(tp$contrast_id %in% primary$contrast_id),"Unexpected primary annotation")
   }
   combine <- function(stems,path) {
     status <- system2("pdfunite",shQuote(c(file.path(stage,paste0(stems,".pdf")),file.path(stage,path))))
     ao_check(status==0,"PDF combination failed")
   }
-  combine(catalog$figure[catalog$section=="core"],"aid_onset_core_hypotheses.pdf")
+  combine(catalog$figure[catalog$section!="supporting"],"aid_onset_core_hypotheses.pdf")
   combine(catalog$figure,"aid_onset_all_hypotheses.pdf")
-  # Historical filename remains a convenient alias for the eight-page core deck.
+  # Historical filename remains a convenient alias for the eleven-page hypothesis deck.
   file.copy(file.path(stage,"aid_onset_core_hypotheses.pdf"),file.path(stage,"aid_onset_hypotheses_slides.pdf"))
   file.copy(file.path(stage,"aid_onset_core_hypotheses.pdf"),file.path(stage,"primary_hypotheses.pdf"))
   write_csv(catalog,file.path(stage,"figure_catalog.csv"));write_csv(registry,file.path(stage,"data/hypothesis_crosswalk.csv"))
-  for(name in c("contrasts","participant_sensitivity","diagnostics","historical_family_sensitivity","selection")) file.copy(file.path(analysis,paste0(name,".csv")),file.path(stage,"data"))
+  for(name in c("contrasts","participant_sensitivity","diagnostics","historical_family_sensitivity","selection","rt_participant_cells","rt_ratios","rt_estimates","trust_association_cells","trust_associations")) file.copy(file.path(analysis,paste0(name,".csv")),file.path(stage,"data"))
   file.copy(file.path(analysis,"analysis_contract.txt"),file.path(stage,"data"))
   cards <- vapply(seq_len(nrow(catalog)),function(i) {
     f <- catalog[i,]
@@ -344,14 +399,15 @@ ao_build_plots <- function(root,analysis,out) {
     '<title>Aid onset: revised hypotheses</title><style>body{font:17px/1.55 -apple-system,BlinkMacSystemFont,Arial;color:#213544;background:#f5f7fa;margin:0}main{max-width:1240px;margin:auto;padding:36px 24px}h1{font-size:38px}h2{font-size:25px}a{color:#116b98}section,.intro{background:white;border:1px solid #dce4ea;border-radius:12px;padding:24px;margin:28px 0}img{width:100%;height:auto}.section{font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#677c8b}table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;border-bottom:1px solid #e1e7ec;padding:8px}nav a{display:inline-block;margin:0 16px 8px 0}</style></head><body><main>',
     '<h1>Aid onset: revised hypothesis report</h1><p>Performance → bias and discrimination → revisions and uptake → subjective evaluations</p>',
     '<div class="intro"><strong>All 60 canonical participants are included. Participant exclusions have not been applied.</strong>',
-    '<p>This is a retrospective reorganisation after inspection of earlier results, not a preregistered framework. Eight core figures cover H1–H7; five supporting figures provide context and sensitivity checks. There are 28 unique primary comparisons. H4 reuses H1’s task-discrimination timing contrast, model and Holm-adjusted p-value.</p>',
-    '<nav><a href="aid_onset_core_hypotheses.pdf">Core figures (8-page PDF)</a><a href="aid_onset_all_hypotheses.pdf">All figures (13-page PDF)</a><a href="data/hypothesis_crosswalk.csv">Historical crosswalk</a><a href="data/analysis_contract.txt">Analysis definitions</a><a href="data/diagnostics.csv">Model diagnostics</a></nav>',
+    '<p>This is a retrospective reorganisation after inspection of earlier results, not a preregistered framework. Eight original core figures cover H1–H7; three retrospective additions cover H1-RT and H8–H9, with five supporting figures. The original 28 primary comparisons are retained, with seven additional tests in separate Holm families. H4 reuses H1’s task-discrimination timing contrast, model and Holm-adjusted p-value.</p>',
+    '<nav><a href="aid_onset_core_hypotheses.pdf">Hypothesis figures (11-page PDF)</a><a href="aid_onset_all_hypotheses.pdf">All figures (16-page PDF)</a><a href="data/hypothesis_crosswalk.csv">Historical crosswalk</a><a href="data/analysis_contract.txt">Analysis definitions</a><a href="data/diagnostics.csv">Model diagnostics</a></nav>',
     '<p>Primary models include participant random intercepts. Binary results use response-scale percentage-point contrasts and predictions conditional on zero participant random effect; continuous outcomes use linear mixed models with Satterthwaite degrees of freedom. Tests are two-sided, with Holm adjustment within hypothesis/outcome. Brackets use *** p &lt; .001, ** p &lt; .01, * p &lt; .05, and ns p &ge; .05. H2 cell labels test human-minus-aid against zero; H7 groups both aided ratings for the mean-aid versus self comparison. Intervals are pointwise 95%; interval overlap is not a test.</p>',
     '<p>Task SDT: H = BLACK response given BLACK stimulus; F = BLACK response given WHITE stimulus. Advice SDT: H = agreement given correct advice; F = agreement given incorrect advice. Both use loglinear correction. Positive task −c indicates BLACK preference; positive advice −c indicates acceptance tendency, which does not establish inappropriate reliance. Final agreement does not establish active uptake.</p>',
     '<p>Shared responses across outcomes do not provide independent evidence. Nonsignificance does not establish equivalence. Aid-first initial decisions already include advice exposure. Selective uptake is conditional on initial disagreement in Stimulus-first, where advice correctness also determines initial correctness.</p>',
     paste0('<p>',sum(read("diagnostics")$inference_available),' of ',nrow(read("diagnostics")),
       ' fits passed the convergence, singularity and rank checks. Conditional cell dispersion is elevated for several binary models, especially switching and beneficial revisions; inspect the diagnostics and participant sensitivities before interpreting their uncertainty.</p>'),
     '<p><a href="data/contrasts.csv">All model contrasts</a> · <a href="data/participant_sensitivity.csv">Participant sensitivities</a> · <a href="data/historical_family_sensitivity.csv">Historical Holm-family sensitivities</a></p></div>',
+    '<section><h2>RT and trust additions</h2><p>H1-RT models equally weighted participant mean log RTs for correct Decision 1 responses with finite RT &ge;200 ms. Displayed means and intervals are exponentiated; condition contrasts are ratios. H8/H9 correlate trust with H3 advice bias and H5a revision percentage separately within each aided condition, without RT filtering. These associations do not establish causation.</p><p><a href="data/rt_estimates.csv">Geometric RT estimates</a> · <a href="data/rt_ratios.csv">RT ratios and paired sensitivities</a> · <a href="data/rt_participant_cells.csv">RT eligibility counts</a> · <a href="data/trust_associations.csv">Pearson and Spearman results, including SDT sensitivity</a> · <a href="data/trust_association_cells.csv">Trust association data and denominators</a></p></section>',
     cards,'<section><h2>Unique primary comparisons</h2><table><thead><tr><th>Outcome</th><th>Comparison</th><th>Estimate</th><th>Holm p</th></tr></thead><tbody>',
     table,'</tbody></table></section></main></body></html>'),file.path(stage,"index.html"))
   provenance <- ao_hashes(c(inputs$path,file.path(analysis,artifacts$path),file.path(analysis,c("artifact_manifest.csv","VALIDATED.txt")),
