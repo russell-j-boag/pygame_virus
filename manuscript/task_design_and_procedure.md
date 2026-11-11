@@ -2,7 +2,7 @@
 
 Sixty participants completed three within-participant conditions: manual performance without advice, advice before the stimulus (aid-first), and advice after the initial decision (stimulus-first). Each condition comprised 260 trials, with an initial and final classification per trial. Condition order was counterbalanced across six sequences, with ten participants per sequence; response-key assignments were also counterbalanced.
 
-Participants classified samples as V-BLACK or V-WHITE according to which colour predominated among 3,600 moving dots within a circular region on a grey background. Colour proportions remained constant within trials. Samples closer to equal proportions were more difficult; black-majority and white-majority samples were selected with equal probability.
+Participants classified samples as V-BLACK or V-WHITE according to which colour predominated among 3,600 moving dots within a circular region on a grey background. Colour proportions remained constant within trials. Samples closer to equal proportions were more difficult; black-majority and white-majority samples were presented with equal probability.
 
 Participants first completed 60 unaided practice trials. An adaptive staircase targeted 75% final-decision accuracy, increasing difficulty after correct responses and decreasing it after errors. The mean and standard deviation of difficulty over the final 40 practice trials defined the stimulus distribution used throughout the experimental blocks.
 
